@@ -12,9 +12,10 @@ message(STATUS "Python executable: ${Python_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
 message(STATUS "Python libraries: ${Python_LIBRARIES}")
 find_package(pybind11 REQUIRED)
-find_package(fmt REQUIRED)
 
+aux_source_directory(PyExprEngine PyExprEngine_SRCS)
 
-add_executable(Template main.cc)
+add_executable(Template ${PyExprEngine_SRCS} main.cc)
 
+target_include_directories(Template PRIVATE ${PyExprEngine_SRCS})
 target_link_libraries(Template PRIVATE pybind11::embed)

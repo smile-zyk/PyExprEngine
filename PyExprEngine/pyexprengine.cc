@@ -4,12 +4,17 @@
 #include <pylifecycle.h>
 #include <stdexcept>
 
-PyExprEngine::PyEnvConfig config_;
+PyExprEngine::PyEnvConfig PyExprEngine::config_;
 
 PyExprEngine& PyExprEngine::Instance()
 {
     static PyExprEngine instance;
     return instance;
+}
+
+void PyExprEngine::SetPyEnvConfig(const PyEnvConfig& config)
+{
+    config_ = config;
 }
 
 PyExprEngine::PyExprEngine()
