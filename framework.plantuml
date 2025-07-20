@@ -1,0 +1,101 @@
+@startuml ExprEngine
+
+class ExprEngine
+{
+    +ExprEvalResult Evaluate(Equation equation);
+    +ExprEvalResult Evaluate(Expression expression);
+    +ExprEvalResult Evaluate(string expression_string);
+    -unordered_map<string, ExprContext> contexts_;
+    -ExprContext current_context_;
+}
+
+class ExprContext
+{
+    +ExprEvalResult Evaluate(Equation equation);
+    +ExprEvalResult Evaluate(Expression expression);
+    +ExprEvalResult Evaluate(string expression_string);
+    -unordered_map<string, ExprResult> variables_;
+    -unordered_map<string, Equation> equations_;
+}
+
+enum ExprResultType
+{
+    STRING,
+    INTEGER,
+    FLOAT,
+    BOOLEAN,
+    LIST,
+    DICT,
+    FUNCTION,
+    TUPLE,
+    SET,
+    UNKNOWN
+}
+
+class ExprResult
+{
+    +string ToString() = 0;
+    +int ToInt() = 0;
+    +float ToFloat() = 0;
+    +bool ToBool() = 0;
+    +list ToList() = 0;
+    +vector ToVector() = 0;
+    +unordered_map ToDict() = 0;
+    +functional ToFunction() = 0;
+    +unordered_set ToSet() = 0;
+    -ExprResultType type_;
+}
+
+enum ExprErrorType
+{
+    SYNTAX_ERROR,
+    TYPE_ERROR,
+    RUNTIME_ERROR,
+    EVALUATION_ERROR
+}
+
+struct ExprEvalResult
+{
+    - ExprResult result_;
+    - bool is_success_;
+    - ExprErrorType error_type_;
+    - string error_message_;
+}
+
+class Expression
+{
+    +bool is_success() const;
+    +ExprErrorType error_type() const;
+    +string error_message() const;
+    +ExprResult result() const;
+    -bool Evaluate(ExprContext*);
+    -bool Evaluate(ExprEngine*);
+    -string original_string_;
+    -ExprResult result_;
+    -bool is_success_;
+    -ExprErrorType error_type_;
+    -string error_message_;
+}
+
+class Equation
+{
+    +string name() const;
+    +Expression expression() const;
+    +vector<string> dependencies() const;
+    +vector<string> dependent() const;
+    +bool is_dirty() const;
+    +void set_dirty(bool dirty);
+    -string name_;
+    -Expression expression_;
+    -vector<string> dependencies_;
+    -vector<string> dependent_;
+    -bool is_dirty_;
+}
+
+class PyExprEngine;
+
+class PyExprContext;
+
+class PyExprResult;
+
+@enduml
