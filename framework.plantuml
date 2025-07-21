@@ -2,19 +2,21 @@
 
 class ExprEngine
 {
-    +ExprEvalResult Evaluate(Equation equation);
-    +ExprEvalResult Evaluate(Expression expression);
-    +ExprEvalResult Evaluate(string expression_string);
-    -unordered_map<string, ExprContext> contexts_;
-    -ExprContext current_context_;
+    +ExprEvalResult Evaluate(string expression_string, ExprContext* context = nullptr);
+    +void SetCurrentContext()
+    +ExprContext* current_context() const;
+    -unordered_map<string, ExprContext> context_map_;
 }
 
 class ExprContext
 {
-    +ExprEvalResult Evaluate(Equation equation);
-    +ExprEvalResult Evaluate(Expression expression);
-    +ExprEvalResult Evaluate(string expression_string);
-    -unordered_map<string, ExprResult> variables_;
+    +void AddEquation(Equation equation);
+    +void AddEquation(const string& name, Expression expression);
+    +void AddEquation(const string& name, string expression_string);
+    +Equation GetEquation(string name);
+    +vector<string> GetEquationNames();
+    +bool UpdateAllEquations();
+    +bool UpdateEquation(string name);
     -unordered_map<string, Equation> equations_;
 }
 
@@ -64,17 +66,20 @@ struct ExprEvalResult
 
 class Expression
 {
-    +bool is_success() const;
-    +ExprErrorType error_type() const;
-    +string error_message() const;
+    +Expression(string expression_string, ExprContext* context);
+    +string expression_string() const;
+    -ExprContext* context() const;
+    -string expression_string_;
+    -ExprContext* context_;
+    -ExprEvalResult eval_result_;
+}
+
+class Variable
+{
+    +string name() const;
     +ExprResult result() const;
-    -bool Evaluate(ExprContext*);
-    -bool Evaluate(ExprEngine*);
-    -string original_string_;
+    -string name;
     -ExprResult result_;
-    -bool is_success_;
-    -ExprErrorType error_type_;
-    -string error_message_;
 }
 
 class Equation
