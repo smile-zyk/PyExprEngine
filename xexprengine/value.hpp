@@ -36,7 +36,7 @@ public:
         if(std::is_arithmetic<T>::value) {
             return std::to_string(value_);
         } else if(std::is_same<T, std::string>::value) {
-            return value_;
+            return std::string(value_);
         }
         return "Unsupported type";
     }
