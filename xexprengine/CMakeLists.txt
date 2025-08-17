@@ -1,13 +1,15 @@
 find_package(Python REQUIRED COMPONENTS Development Interpreter)
+find_package(pybind11 REQUIRED)
 
 message(STATUS "Python executable: ${Python_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
 message(STATUS "Python libraries: ${Python_LIBRARIES}")
-find_package(pybind11 REQUIRED)
 
-aux_source_directory(. XEXPRENGINE_SRC)
+set(XEXPRENGINE_SRC
+    exprvalue.cc
+)
 
 add_library(xexprengine SHARED ${XEXPRENGINE_SRC})
 
-target_include_directories(xexprengine PUBLIC .)
-target_link_libraries(xexprengine PRIVATE pybind11::embed)
+target_include_directories(xexprengine PUBLIC . ${Python_INCLUDE_DIRS})
+target_link_libraries(xexprengine PRIVATE pybind11::embed ${Python_LIBRARIES})

@@ -25,9 +25,9 @@ const std::type_info& ExprValue::Type() const
     return value_ptr_->Type();
 }
 
-std::string ExprValue::ToString()
+std::string ExprValue::ToString() const
 {
-    return value_ptr_->ToString();
+    return value_ptr_.get()->ToString();
 }
 
 

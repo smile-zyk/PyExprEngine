@@ -1,7 +1,8 @@
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <typeinfo>
+
+#include "value_helper.hpp"
 
 class ValueBase {
 public:
@@ -30,15 +31,11 @@ template <typename T>
 class Value : public ValueBase {
 public:
     explicit Value(const T& val) : value_(val) {}
+    explicit Value(const char* val) : value_(std::string(val)) {}
     const std::type_info& Type() const override { return typeid(T); }
     std::string ToString() const override
     {
-        if(std::is_arithmetic<T>::value) {
-            return std::to_string(value_);
-        } else if(std::is_same<T, std::string>::value) {
-            return std::string(value_);
-        }
-        return "Unsupported type";
+        return ConvertToString(value_);
     }
     std::shared_ptr<ValueBase> Clone() const override {
         return std::make_shared<Value<T>>(value_);

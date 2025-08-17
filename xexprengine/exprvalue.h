@@ -5,7 +5,7 @@
 class ExprValue {
 public:
     ExprValue();
-    ~ExprValue();
+    ~ExprValue(){}
 
     template <typename T>
     ExprValue(const T& val) : value_ptr_(new Value<T>(val)) {}
@@ -32,7 +32,7 @@ public:
         return derived->value();
     }
 
-    std::string ToString();
+    std::string ToString() const;
 
 private:
     std::shared_ptr<ValueBase> value_ptr_;
