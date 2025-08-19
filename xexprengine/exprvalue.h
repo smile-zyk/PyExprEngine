@@ -1,10 +1,11 @@
 #include "value.hpp"
 
 #include <stdexcept>
+#include <memory>
 
 class ExprValue {
 public:
-    ExprValue();
+    ExprValue() : value_ptr_(new NullValue()) {}
     ~ExprValue(){}
 
     template <typename T>
@@ -15,6 +16,14 @@ public:
     static ExprValue Null() {
         return ExprValue();
     }
+
+    operator bool() const {
+        return !IsNull();
+    }
+
+    bool operator==(const ExprValue& other) const;
+
+    bool operator<(const ExprValue& other) const;
 
     ExprValue(const ExprValue& other) = default;
     ExprValue& operator=(const ExprValue& other) = default;
@@ -39,3 +48,12 @@ public:
 private:
     std::shared_ptr<ValueBase> value_ptr_;
 };
+
+namespace std {
+    template <>
+    struct hash<ExprValue> {
+        size_t operator()(const ExprValue& value) const {
+            return std::hash<std::string>()(value.ToString());
+        }
+    };
+}
