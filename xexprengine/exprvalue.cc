@@ -1,6 +1,8 @@
 #include "exprvalue.h"
 #include <utility>
 
+using namespace xexprengine;
+
 ExprValue::ExprValue(ExprValue&& other)
 {
     value_ptr_ = std::move(other.value_ptr_);

@@ -4,6 +4,8 @@
 
 #include "exprvalue.h"
 
+using namespace xexprengine;
+
 TEST(ExprValue, InitializationAndNullCheck) 
 {
     ExprValue ev1;
@@ -40,7 +42,7 @@ TEST(ExprValue, InitializationAndNullCheck)
     EXPECT_EQ(ev8.Cast<std::set<std::string>>(), std::set<std::string>({"apple", "banana"}));
 }
 
-TEST(ExprValue, NestedTypes) 
+TEST(ExprValue, NestedExprValue) 
 {
     ExprValue ev1 = std::vector<ExprValue>{ExprValue(1), ExprValue(2.5), ExprValue("test")};
     EXPECT_FALSE(ev1.IsNull());
@@ -49,14 +51,14 @@ TEST(ExprValue, NestedTypes)
     EXPECT_EQ(vec_value[0].Cast<int>(), 1);
     EXPECT_EQ(vec_value[1].Cast<double>(), 2.5);
     EXPECT_EQ(vec_value[2].Cast<std::string>(), "test");
-    EXPECT_STREQ(ConvertToString(vec_value).c_str(), "[1, 2.500000, test]");
+    EXPECT_STREQ(ev1.ToString().c_str(), "[1, 2.500000, test]");
 
-    ExprValue ev2 = std::map<std::string, ExprValue>{{"key1", ExprValue(100)}, {"key2", ExprValue("value")}};
+    ExprValue ev2 = std::map<ExprValue, ExprValue>{{"key1", ExprValue(100)}, {5, ExprValue("value")}};
     EXPECT_FALSE(ev2.IsNull());
-    auto map_value = ev2.Cast<std::map<std::string, ExprValue>>();
+    auto map_value = ev2.Cast<std::map<ExprValue, ExprValue>>();
     EXPECT_EQ(map_value["key1"].Cast<int>(), 100);
-    EXPECT_EQ(map_value["key2"].Cast<std::string>(), "value");
-    EXPECT_STREQ(ConvertToString(map_value).c_str(), "{key1: 100, key2: value}");
+    EXPECT_EQ(map_value[5].Cast<std::string>(), "value");
+    EXPECT_STREQ(ev2.ToString().c_str(), "{key1: 100, 5: value}");
 
     ExprValue ev3 = std::set<ExprValue>{ExprValue(1), ExprValue(2), ExprValue(3)};
     EXPECT_FALSE(ev3.IsNull());
@@ -65,7 +67,7 @@ TEST(ExprValue, NestedTypes)
     EXPECT_TRUE(set_value.find(ExprValue(1)) != set_value.end());
     EXPECT_TRUE(set_value.find(ExprValue(2)) != set_value.end());
     EXPECT_TRUE(set_value.find(ExprValue(3)) != set_value.end());
-    EXPECT_STREQ(ConvertToString(set_value).c_str(), "{1, 2, 3}");
+    EXPECT_STREQ(ev3.ToString().c_str(), "{1, 2, 3}");
 }
 
 int main(int argc, char **argv) {

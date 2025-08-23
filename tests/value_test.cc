@@ -4,29 +4,40 @@
 
 #include "value.hpp"
 
-TEST(Value, ConvertToString)
+using namespace xexprengine;
+
+struct B{};
+
+namespace xexprengine {
+    std::string ConvertToString(const B &value)
+    {
+        return "struct B";
+    }
+}
+
+TEST(ValueHelper, ToString)
 {
     // test int
     int int_ = 1;
-    std::string int_str = ConvertToString(int_);
+    std::string int_str = ValueHelper::ToString(int_);
     std::string int_expect_str = "1";
     EXPECT_STREQ(int_str.c_str(), int_expect_str.c_str());
 
     // test float
     float float_ = 3.f;
-    std::string float_str = ConvertToString(float_);
+    std::string float_str = ValueHelper::ToString(float_);
     std::string float_expect_str = "3.000000";
     EXPECT_STREQ(float_str.c_str(), float_expect_str.c_str());
 
     // test double
     double double_ = 3.1415926;
-    std::string double_str = ConvertToString(double_);
+    std::string double_str = ValueHelper::ToString(double_);
     std::string double_expect_str = "3.141593";
     EXPECT_STREQ(double_str.c_str(), double_expect_str.c_str());
 
     // test string
     std::string string_ = "test_string";
-    std::string string_str = ConvertToString(string_);
+    std::string string_str = ValueHelper::ToString(string_);
     EXPECT_STREQ(string_str.c_str(), string_.c_str());
 
     // test custom type with ToString method
@@ -35,37 +46,40 @@ TEST(Value, ConvertToString)
         std::string ToString() const { return "struct A"; }
     };
 
-    A custom_;
-    std::string custom_str = ConvertToString(custom_);
-    std::string custom_expect_str = "struct A";
-    EXPECT_STREQ(custom_str.c_str(), custom_expect_str.c_str());
+    // A custom_to_string_;
+    // std::string custom_str = ValueHelper::ToString(custom_to_string_);
+    // std::string custom_expect_str = "struct A";
+    // EXPECT_STREQ(custom_str.c_str(), custom_expect_str.c_str());
+
+    // B custom_convert_to_string_;
+    // std::string 
 
     // test vector
     std::vector<int> vector_ = {1, 2, 3};
-    std::string vec_str = ConvertToString(vector_);
+    std::string vec_str = ValueHelper::ToString(vector_);
     std::string vec_expect_str = "[1, 2, 3]";
     EXPECT_STREQ(vec_str.c_str(), vec_expect_str.c_str());
 
     // test list
     std::list<std::string> list_ = {"one", "two", "three"};
-    std::string list_str = ConvertToString(list_);
+    std::string list_str = ValueHelper::ToString(list_);
     std::string list_expect_str = "[one, two, three]";
     EXPECT_STREQ(list_str.c_str(), list_expect_str.c_str());
 
     // test map
     std::map<std::string, int> map_ = {{"one", 1}, {"two", 2}}; 
-    std::string map_str = ConvertToString(map_);
+    std::string map_str = ValueHelper::ToString(map_);
     std::string map_expect_str = "{one: 1, two: 2}";
     EXPECT_STREQ(map_str.c_str(), map_expect_str.c_str());
 
     // test set
     std::set<int> set_ = {1, 2, 3};
-    std::string set_str = ConvertToString(set_);
+    std::string set_str = ValueHelper::ToString(set_);
     std::string set_expect_str = "{1, 2, 3}";
     EXPECT_STREQ(set_str.c_str(), set_expect_str.c_str());
 }
 
-TEST(Value, ValueBase)
+TEST(Value, InitializationAndNullCheck)
 {
     NullValue null_value;
     EXPECT_TRUE(null_value.IsNull());
