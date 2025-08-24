@@ -46,13 +46,17 @@ TEST(ValueHelper, ToString)
         std::string ToString() const { return "struct A"; }
     };
 
-    // A custom_to_string_;
-    // std::string custom_str = ValueHelper::ToString(custom_to_string_);
-    // std::string custom_expect_str = "struct A";
-    // EXPECT_STREQ(custom_str.c_str(), custom_expect_str.c_str());
+    // test custom type with ToString method
+    A custom_to_string_;
+    std::string custom_str = ValueHelper::ToString(custom_to_string_);
+    std::string custom_expect_str = "struct A";
+    EXPECT_STREQ(custom_str.c_str(), custom_expect_str.c_str());
 
-    // B custom_convert_to_string_;
-    // std::string 
+    // test custom type with ConvertToString function
+    B custom_convert_to_string_;
+    std::string convert_str = ValueHelper::ToString(custom_convert_to_string_);
+    std::string convert_expect_str = "struct B";
+    EXPECT_STREQ(convert_str.c_str(), convert_expect_str.c_str());
 
     // test vector
     std::vector<int> vector_ = {1, 2, 3};

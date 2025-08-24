@@ -22,13 +22,10 @@ namespace xexprengine {
     };
 
     template<typename T>
-    std::string ConvertToString(const T& value);
-
-    template<typename T>
     struct has_convert_to_string {
     private:
         template<typename U>
-        static auto test(int) -> decltype(xexprengine::ConvertToString(std::declval<U>()), std::true_type());
+        static auto test(int) -> decltype(ConvertToString(std::declval<U>()), std::true_type());
 
         template<typename U>
         static std::false_type test(...);
@@ -98,6 +95,13 @@ namespace xexprengine {
     struct ToStringHelper<T, typename std::enable_if<has_to_string<T>::value>::type> {
         static std::string convert(const T& value) {
             return value.ToString();
+        }
+    };
+
+    template<typename T>
+    struct ToStringHelper<T, typename std::enable_if<has_convert_to_string<T>::value>::type> {
+        static std::string convert(const T& value) {
+            return ConvertToString(value);
         }
     };
 

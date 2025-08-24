@@ -7,7 +7,8 @@ namespace xexprengine
 {
     class ValueBase {
     public:
-        virtual ~ValueBase() = default;
+        ValueBase() noexcept = default;
+        virtual ~ValueBase() noexcept = default;
         virtual const std::type_info& Type() const = 0;
         virtual std::string ToString() const = 0;
         virtual bool IsNull() const { return false; } 
@@ -17,7 +18,8 @@ namespace xexprengine
     template <typename T>
     class Value : public ValueBase {
     public:
-        explicit Value(const T& val) : value_(val) {}
+        explicit Value(const T& val) noexcept : value_(val) {}
+        ~Value() noexcept = default;
         const std::type_info& Type() const override { return typeid(T); }
         std::string ToString() const override
         {
@@ -32,8 +34,8 @@ namespace xexprengine
     template <>
     class Value<void> : public ValueBase {
     public:
-        Value() = default;
-
+        Value() noexcept = default;
+        ~Value() noexcept = default;
         const std::type_info& Type() const override {
             return typeid(void);
         }
