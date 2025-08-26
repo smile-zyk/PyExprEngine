@@ -1,8 +1,7 @@
 #pragma once
 #include <string>
-#include "eval_result.hpp"
 #include "expr_value.h"
-#include "eval_result.hpp"
+#include "expr_common.h"
 
 namespace xexprengine {
 

@@ -2,8 +2,8 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include "expr_common.h"
 #include "expr_context.h"
-#include "eval_result.hpp"
 
 namespace xexprengine {
 
@@ -13,8 +13,8 @@ namespace xexprengine {
             ~ExprEngine() = default;
 
             virtual EvalResult Evaluate(const std::string& expr, ExprContext* context = nullptr) = 0;
-            virtual std::vector<std::string> GetDependencies(const std::string& expr, ExprContext* context = nullptr) = 0;
-            
+            virtual AnalyzeResult Analyze(const std::string& expr) = 0;
+
             void RegisterContext(const std::string& name, std::unique_ptr<ExprContext> context);
             void SetCurrentContext(ExprContext* context);
             void SetCurrentContext(const std::string& name);
@@ -23,6 +23,11 @@ namespace xexprengine {
 
             ExprContext* GetCurrentContext() const;
             ExprContext* GetContext(const std::string& name) const;
+        protected:
+            void SetVariable(const std::string& var_name, const ExprValue& value, ExprContext* context);
+            void RemoveVariable(const std::string& var_name, ExprContext* context);
+            void RenameVariable(const std::string& old_name, const std::string& new_name, ExprContext* context);
+            friend class ExprContext;
         private:
             std::unordered_map<std::string, std::unique_ptr<ExprContext>> context_map_;
             ExprContext* current_context_ = nullptr;
