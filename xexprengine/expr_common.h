@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_set>
-#include "expr_value.h"
+#include "value.h"
 
 namespace xexprengine {
     enum class ErrorCode {
@@ -20,7 +20,7 @@ namespace xexprengine {
 
     struct EvalResult
     {
-        ExprValue value;
+        Value value;
         ErrorCode error_code = ErrorCode::Success;
         std::string error_message;
     };

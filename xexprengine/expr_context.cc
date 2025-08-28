@@ -1,10 +1,10 @@
 #include "expr_context.h"
 #include "expr_engine.h"
-#include "expr_value.h"
+#include "value.h"
 
 using namespace xexprengine;
 
-void ExprContext::SetVariable(const std::string& var_name, const ExprValue& value)
+void ExprContext::SetVariable(const std::string& var_name, const Value& value)
 {
     engine_->SetVariable(var_name, value, this);
     var_set_.insert(var_name);
@@ -22,7 +22,7 @@ void ExprContext::SetVariable(const std::string& var_name, const ExprValue& valu
     }
 }
 
-ExprValue ExprContext::GetVariable(const std::string& var_name)
+Value ExprContext::GetVariable(const std::string& var_name)
 {
     if(var_set_.count(var_name))
     {
@@ -30,7 +30,7 @@ ExprValue ExprContext::GetVariable(const std::string& var_name)
     }
     else
     {
-        return ExprValue::Null();
+        return Value::Null();
     }
 }
 

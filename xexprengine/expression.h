@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "expr_value.h"
+#include "value.h"
 #include "expr_common.h"
 
 namespace xexprengine {
@@ -22,7 +22,7 @@ namespace xexprengine {
 
         ~Expression() = default;
 
-        ExprValue Evaluate() const;
+        Value Evaluate() const;
 
         void set_context(ExprContext* context) noexcept { context_ = context; }
         void set_expression_str(const std::string& expression_str) noexcept 

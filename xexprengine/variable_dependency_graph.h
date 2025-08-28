@@ -26,7 +26,6 @@ protected:
     std::unordered_set<std::string> active_dependencies;
     std::unordered_set<std::string> active_dependents;
     bool is_dirty;
-    bool is_cyclic;
   };
   void AddNode(const std::string &name);
   void RemoveNode(const std::string &name);

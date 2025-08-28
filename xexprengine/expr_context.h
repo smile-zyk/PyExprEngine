@@ -5,7 +5,7 @@
 #include <functional>
 #include <unordered_set>
 #include "expr_common.h"
-#include "expr_value.h"
+#include "value.h"
 #include "expression.h"
 
 namespace xexprengine 
@@ -17,8 +17,8 @@ namespace xexprengine
         public:
             ExprContext() = default;
 
-            void SetVariable(const std::string& var_name, const ExprValue& value);
-            ExprValue GetVariable(const std::string& var_name);
+            void SetVariable(const std::string& var_name, const Value& value);
+            Value GetVariable(const std::string& var_name);
             void RemoveVariable(const std::string& var_name);
             void RenameVariable(const std::string& old_name, const std::string& new_name);
             
@@ -37,7 +37,7 @@ namespace xexprengine
             void UpdateVariableGraph();
 
             EvalResult Evaluate(const std::string& expr_str);
-            ExprValue Evaluate(Expression* expr);
+            Value Evaluate(Expression* expr);
 
             const std::string& name() { return name_; }
         private:
