@@ -66,19 +66,8 @@ TEST(Value, TypeInfo)
 
 TEST(Value, CastThrowsOnWrongType)
 {
-    try {
-        Value v = 123;
-        v.Cast<double>();
-    } catch (const std::runtime_error &e) {
-        EXPECT_STREQ(e.what(), "Bad cast from int to double");
-    }
-
-    try {
-        Value v = 123;
-        v.Cast<double>();
-    } catch (const std::runtime_error &e) {
-        EXPECT_STREQ(e.what(), "Bad cast from int to double");
-    }
+    Value v = 123;
+    EXPECT_THROW(v.Cast<double>(), std::runtime_error);
 }
 
 TEST(Value, NestedContainers)

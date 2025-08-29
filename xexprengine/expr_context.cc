@@ -4,27 +4,27 @@
 
 using namespace xexprengine;
 
-void ExprContext::SetVariable(const std::string& var_name, const Value& value)
+void ExprContext::SetVariable(const std::string &var_name, const Value &value)
 {
     engine_->SetVariable(var_name, value, this);
     var_set_.insert(var_name);
-    
+
     // add to graph
-    if(!var_graph_.count(var_name))
+    if (!var_graph_.count(var_name))
     {
         var_graph_.insert({var_name, ExprNode()});
     }
 
     // remove expression
-    if(expr_map_.count(var_name))
+    if (expr_map_.count(var_name))
     {
         expr_map_.erase(var_name);
     }
 }
 
-Value ExprContext::GetVariable(const std::string& var_name)
+Value ExprContext::GetVariable(const std::string &var_name)
 {
-    if(var_set_.count(var_name))
+    if (var_set_.count(var_name))
     {
         return engine_->GetVariable(var_name, this);
     }
@@ -34,14 +34,14 @@ Value ExprContext::GetVariable(const std::string& var_name)
     }
 }
 
-void ExprContext::RemoveVariable(const std::string& var_name)
+void ExprContext::RemoveVariable(const std::string &var_name)
 {
-    if(var_set_.count(var_name))
+    if (var_set_.count(var_name))
     {
         engine_->RemoveVariable(var_name, this);
     }
 }
 
-void ExprContext::RenameVariable(const std::string& old_name, const std::string& new_name)
+void ExprContext::RenameVariable(const std::string &old_name, const std::string &new_name)
 {
 }
