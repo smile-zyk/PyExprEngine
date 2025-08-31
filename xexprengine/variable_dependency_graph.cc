@@ -46,9 +46,9 @@ void VariableDependencyGraph::AddNode(const std::string &name)
     {
         for (const auto &edge : node_dependency_edge_cache_[name])
         {
-            node_map_[name].active_dependencies.insert(edge.second);
             if (node_map_.count(edge.second))
             {
+                node_map_[name].active_dependencies.insert(edge.second);
                 node_map_[edge.second].active_dependents.insert(name);
             }
         }
@@ -58,9 +58,9 @@ void VariableDependencyGraph::AddNode(const std::string &name)
     {
         for (const auto &edge : node_dependent_edge_cache_[name])
         {
-            node_map_[name].active_dependents.insert(edge.first);
             if (node_map_.count(edge.first))
             {
+                node_map_[name].active_dependents.insert(edge.first);
                 node_map_[edge.first].active_dependencies.insert(name);
             }
         }
