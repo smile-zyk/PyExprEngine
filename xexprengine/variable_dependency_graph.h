@@ -1,11 +1,13 @@
 #include "value.h"
 
+#include <functional>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
 
 namespace xexprengine
 {
@@ -49,7 +51,6 @@ class VariableDependencyGraph
     std::unordered_set<std::string> GetNodeActiveDependencies(const std::string &var_name) const;
     std::unordered_set<std::string> GetNodeActiveDependents(const std::string &var_name) const;
 
-  protected:
     typedef std::pair<std::string, std::string> Edge;
     struct Node
     {
@@ -62,6 +63,8 @@ class VariableDependencyGraph
     void ClearNodeEdge(const std::string &name);
     void AddEdge(const Edge &edge);
     void RemoveEdge(const Edge &edge);
+    bool IsNodeExist(const std::string &name) const;
+    void UpdateGraph(std::function<void(const std::string &)> update_callback);
 
   private:
     Value CheckNodeCycle(const std::string &node);
@@ -70,6 +73,7 @@ class VariableDependencyGraph
         const std::string &node, std::unordered_set<std::string> &visited,
         std::unordered_set<std::string> &recursionStack, std::vector<std::string> &cyclePath
     );
+    void MarkDependentsDirty(const std::string &node_name, std::unordered_set<std::string> &processed_nodes);
     std::set<Edge> edge_set_;
     std::unordered_map<std::string, Node> node_map_;
     std::unordered_map<std::string, std::set<Edge>> node_dependency_edge_cache_;
