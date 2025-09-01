@@ -129,11 +129,11 @@ void VariableDependencyGraph::RemoveEdge(const Edge &edge)
         node_map_[edge.second].active_dependents.erase(edge.first);
     }
 
-    if(node_dependency_edge_cache_.count(edge.first))
+    if (node_dependency_edge_cache_.count(edge.first))
     {
         node_dependency_edge_cache_[edge.first].erase(edge);
     }
-    if(node_dependent_edge_cache_.count(edge.second))
+    if (node_dependent_edge_cache_.count(edge.second))
     {
         node_dependent_edge_cache_[edge.second].erase(edge);
     }
@@ -141,10 +141,12 @@ void VariableDependencyGraph::RemoveEdge(const Edge &edge)
 
 Value VariableDependencyGraph::CheckNodeCycle(const std::string &node)
 {
-    if (node_map_.find(node) == node_map_.end())
-    {
+    if (!IsNodeExist(node))
         return Value::Null();
-    }
+
+    if (!HasCycle())
+        return Value::Null();
+
     std::unordered_set<std::string> visited;
     std::unordered_set<std::string> recursion_stack;
     std::vector<std::string> cycle_path;
@@ -159,36 +161,36 @@ Value VariableDependencyGraph::CheckNodeCycle(const std::string &node)
 }
 
 bool VariableDependencyGraph::CheckCycleDFS(
-    const std::string &node, std::unordered_set<std::string> &visited, std::unordered_set<std::string> &recursionStack,
-    std::vector<std::string> &cyclePath
+    const std::string &node, std::unordered_set<std::string> &visited,
+    std::unordered_set<std::string> &current_path_set, std::vector<std::string> &cycle_path
 )
 {
     if (!visited.count(node))
     {
         visited.insert(node);
-        recursionStack.insert(node);
-        cyclePath.push_back(node);
+        current_path_set.insert(node);
+        cycle_path.push_back(node);
 
         for (const auto &dependency : node_map_[node].active_dependencies)
         {
-            if (!visited.count(dependency) && CheckCycleDFS(dependency, visited, recursionStack, cyclePath))
+            if (!visited.count(dependency) && CheckCycleDFS(dependency, visited, current_path_set, cycle_path))
             {
                 return true;
             }
-            else if (recursionStack.count(dependency))
+            else if (current_path_set.count(dependency))
             {
-                auto it = std::find(cyclePath.begin(), cyclePath.end(), dependency);
-                if (it != cyclePath.end())
+                auto it = std::find(cycle_path.begin(), cycle_path.end(), dependency);
+                if (it != cycle_path.end())
                 {
-                    cyclePath.erase(cyclePath.begin(), it);
+                    cycle_path.erase(cycle_path.begin(), it);
                 }
-                cyclePath.push_back(dependency);
+                cycle_path.push_back(dependency);
                 return true;
             }
         }
 
-        cyclePath.pop_back();
-        recursionStack.erase(node);
+        cycle_path.pop_back();
+        current_path_set.erase(node);
     }
     return false;
 }
@@ -196,7 +198,7 @@ bool VariableDependencyGraph::CheckCycleDFS(
 void VariableDependencyGraph::AddEdge(const Edge &edge)
 {
     edge_set_.insert(edge);
-    if (node_map_.count(edge.first) && node_map_.count(edge.first))
+    if (node_map_.count(edge.first) && node_map_.count(edge.second))
     {
         node_map_[edge.first].active_dependencies.insert(edge.second);
         node_map_[edge.second].active_dependents.insert(edge.first);
@@ -214,65 +216,43 @@ void VariableDependencyGraph::AddEdge(const Edge &edge)
 
 bool VariableDependencyGraph::HasCycle()
 {
-    std::unordered_set<std::string> visited;
-    std::vector<std::string> dummyPath;
+    std::vector<std::string> top_order = TopologicalSort();
 
-    for (const auto &entry : node_map_)
-    {
-        const auto &node = entry.first;
-        if (!visited.count(node))
-        {
-            std::unordered_set<std::string> recursionStack;
-            if (CheckCycleDFS(node, visited, recursionStack, dummyPath))
-            {
-                return true;
-            }
-        }
-    }
-    return false;
+    return top_order.size() != node_map_.size();
 }
 
 std::vector<std::string> VariableDependencyGraph::TopologicalSort()
 {
-    if (HasCycle())
-    {
-        return {};
-    }
-
-    std::unordered_map<std::string, int> inDegree;
-    std::vector<std::string> topoOrder;
+    // Kahn's Algorithm
+    std::unordered_map<std::string, int> in_degree;
+    std::queue<std::string> zero_in_degree_queue;
+    std::vector<std::string> topo_order;
 
     for (const auto &entry : node_map_)
     {
-        inDegree[entry.first] = entry.second.active_dependencies.size();
-    }
-
-    std::queue<std::string> q;
-    for (const auto &entry : inDegree)
-    {
-        if (entry.second == 0)
+        in_degree[entry.first] = entry.second.active_dependencies.size();
+        if (in_degree[entry.first] == 0)
         {
-            q.push(entry.first);
+            zero_in_degree_queue.push(entry.first);
         }
     }
 
-    // Kahn's Algorithm
-    while (!q.empty())
+    while (!zero_in_degree_queue.empty())
     {
-        std::string node = q.front();
-        q.pop();
-        topoOrder.push_back(node);
+        auto node = zero_in_degree_queue.front();
+        zero_in_degree_queue.pop();
+        topo_order.push_back(node);
 
         for (const auto &dependent : node_map_[node].active_dependents)
         {
-            if (--inDegree[dependent] == 0)
+            if (--in_degree[dependent] == 0)
             {
-                q.push(dependent);
+                zero_in_degree_queue.push(dependent);
             }
         }
     }
 
-    return topoOrder;
+    return topo_order;
 }
 
 bool VariableDependencyGraph::IsNodeExist(const std::string &name) const
@@ -290,6 +270,11 @@ void VariableDependencyGraph::MakeNodeDirty(const std::string &var_name)
 
 void VariableDependencyGraph::UpdateGraph(std::function<void(const std::string &)> update_callback)
 {
+    if (HasCycle())
+    {
+        return;
+    }
+
     std::unordered_set<std::string> processed_nodes;
     for (auto &entry : node_map_)
     {
@@ -298,26 +283,24 @@ void VariableDependencyGraph::UpdateGraph(std::function<void(const std::string &
 
         if (node.is_dirty)
         {
-            MarkDependentsDirty(node_name, processed_nodes);
+            MakeNodeDependentsDirty(node_name, processed_nodes);
         }
     }
 
-    for (auto &entry : node_map_)
-    {
-        const std::string &node_name = entry.first;
-        Node &node = entry.second;
+    auto topo_order = TopologicalSort();
 
-        if (node.is_dirty)
+    for (const auto &node_name : topo_order)
+    {
+        if (processed_nodes.count(node_name))
         {
             update_callback(node_name);
-            node.is_dirty = false;
+            node_map_[node_name].is_dirty = false;
         }
     }
 }
 
-void VariableDependencyGraph::MarkDependentsDirty(
-    const std::string &node_name, std::unordered_set<std::string> &processed_nodes
-)
+void VariableDependencyGraph::MakeNodeDependentsDirty(
+    const std::string &node_name, std::unordered_set<std::string> &processed_nodes)
 {
     if (processed_nodes.count(node_name))
     {
@@ -330,6 +313,6 @@ void VariableDependencyGraph::MarkDependentsDirty(
 
     for (const auto &dependent : node.active_dependents)
     {
-        MarkDependentsDirty(dependent, processed_nodes);
+        MakeNodeDependentsDirty(dependent, processed_nodes);
     }
 }

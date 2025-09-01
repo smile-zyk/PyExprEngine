@@ -43,7 +43,7 @@ TEST(Value, ComparisonOperators)
 
 TEST(Value, MoveConstructorAndAssignment)
 {
-    Value v1 = std::string("move_test");
+    Value v1 = "move_test";
     Value v2 = std::move(v1);
     EXPECT_TRUE(v1.IsNull());
     EXPECT_EQ(v2.ToString(), "move_test");
