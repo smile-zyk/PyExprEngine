@@ -103,7 +103,7 @@ void VariableDependencyGraph::RemoveNode(const std::string &name)
     }
 }
 
-void VariableDependencyGraph::ClearNodeEdge(const std::string &name)
+void VariableDependencyGraph::ClearNodeDependencyEdges(const std::string &name)
 {
     if (node_map_.count(name))
     {
@@ -132,10 +132,14 @@ void VariableDependencyGraph::RemoveEdge(const Edge &edge)
     if (node_dependency_edge_cache_.count(edge.first))
     {
         node_dependency_edge_cache_[edge.first].erase(edge);
+        if(node_dependency_edge_cache_.at(edge.first).size() == 0)
+            node_dependency_edge_cache_.erase(edge.first);
     }
     if (node_dependent_edge_cache_.count(edge.second))
     {
         node_dependent_edge_cache_[edge.second].erase(edge);
+       if(node_dependency_edge_cache_.at(edge.first).size() == 0)
+            node_dependency_edge_cache_.erase(edge.first);
     }
 }
 
@@ -265,6 +269,14 @@ void VariableDependencyGraph::MakeNodeDirty(const std::string &var_name)
     if (node_map_.count(var_name))
     {
         node_map_[var_name].is_dirty = true;
+    }
+}
+
+void VariableDependencyGraph::ClearNodeDirty(const std::string &var_name)
+{
+    if (node_map_.count(var_name))
+    {
+        node_map_[var_name].is_dirty = false;
     }
 }
 

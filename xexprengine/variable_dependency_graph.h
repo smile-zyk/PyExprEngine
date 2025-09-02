@@ -1,15 +1,15 @@
 #include "value.h"
 
 #include <functional>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-
 namespace xexprengine
+{
+namespace dependencygraph
 {
 class DependencyCycleException : public std::runtime_error
 {
@@ -37,41 +37,88 @@ class DependencyCycleException : public std::runtime_error
     std::vector<std::string> cycle_path_;
 };
 
+class VariableDependencyGraph;
+
+class Edge
+{
+  public:
+    Edge(const std::string &from, const std::string &to) : from_(from), to_(to) {}
+    const std::string &from() const { return from_; }
+    const std::string &to() const { return to_; }
+
+  protected:
+    std::string from_;
+    std::string to_;
+    friend class VariableDependencyGraph;
+};
+
+struct EdgeHash {
+    size_t operator()(const Edge& edge) const {
+        return std::hash<std::string>()(edge.from()) ^ 
+               (std::hash<std::string>()(edge.to()) << 1);
+    }
+};
+
+struct EdgeEqual {
+    bool operator()(const Edge& lhs, const Edge& rhs) const {
+        return lhs.from() == rhs.from() && lhs.to() == rhs.to();
+    }
+};
+
+class Node
+{
+  public:
+    Node(bool is_dirty = false) : is_dirty_(is_dirty) {}
+    const std::unordered_set<std::string> &dependencies() const { return dependencies_; }
+    const std::unordered_set<std::string> &dependents() const { return dependents_; }
+    bool is_dirty() const { return is_dirty_; }
+
+  private:
+    std::unordered_set<std::string> dependencies_;
+    std::unordered_set<std::string> dependents_;
+    bool is_dirty_;
+    friend class VariableDependencyGraph;
+};
+
 class VariableDependencyGraph
 {
   public:
-    void MakeNodeDirty(const std::string &var_name);
-    void ClearNodeDirty(const std::string &var_name);
+    std::vector<std::string> TopologicalSort() const;
 
-    std::vector<std::string> TopologicalSort();
-    std::unordered_set<std::string> GetNodeActiveDependencies(const std::string &var_name) const;
-    std::unordered_set<std::string> GetNodeActiveDependents(const std::string &var_name) const;
+    const std::unordered_set<std::string> &GetNodeDependencies(const std::string &node) const;
+    const std::unordered_set<std::string> &GetNodeDependents(const std::string &node) const;
+    const Node &GetNode() const;
 
-    typedef std::pair<std::string, std::string> Edge;
-    struct Node
-    {
-        std::unordered_set<std::string> active_dependencies;
-        std::unordered_set<std::string> active_dependents;
-        bool is_dirty;
-    };
-    void AddNode(const std::string &name);
-    void RemoveNode(const std::string &name);
-    void ClearNodeEdge(const std::string &name);
+    void AddNode(const std::string &node, bool is_dirty = false);
+    void AddNodes(const std::vector<std::string>& node_list);
+    void RemoveNode(const std::string &node);
+    void RemoveNodes(const std::vector<std::string>& node_list);
+    void SetNodeDirty(const std::string& node, bool dirty);
+    void ClearNodeDependencyEdges(const std::string &node);
+    void AddEdge(const std::string &from, const std::string &to);
     void AddEdge(const Edge &edge);
+    void AddEdges(const std::vector<Edge>& edge_list);
     void RemoveEdge(const Edge &edge);
-    bool IsNodeExist(const std::string &name) const;
+    void RemoveEdges(const std::vector<Edge>& edge_list);
     void UpdateGraph(std::function<void(const std::string &)> update_callback);
+
+    bool IsNodeExist(const std::string &node) const;
+    bool IsNodeDirty(const std::string& node) const;
+
   private:
-    bool HasCycle();
-    Value CheckNodeCycle(const std::string &node);
+    bool HasCycle() const;
+    Value CheckNodeCycle(const std::string &node) const;
     bool CheckCycleDFS(
         const std::string &node, std::unordered_set<std::string> &visited,
         std::unordered_set<std::string> &recursionStack, std::vector<std::string> &cycle_path
-    );
+    ) const;
     void MakeNodeDependentsDirty(const std::string &node_name, std::unordered_set<std::string> &processed_nodes);
-    std::set<Edge> edge_set_;
+
     std::unordered_map<std::string, Node> node_map_;
-    std::unordered_map<std::string, std::set<Edge>> node_dependency_edge_cache_;
-    std::unordered_map<std::string, std::set<Edge>> node_dependent_edge_cache_;
+
+    std::unordered_set<Edge, EdgeHash, EdgeEqual> edge_set_;
+    std::unordered_map<std::string, std::vector<Edge>> node_dependency_edge_cache_;
+    std::unordered_map<std::string, std::vector<Edge>> node_dependent_edge_cache_;
 };
+} // namespace dependencygraph
 } // namespace xexprengine
