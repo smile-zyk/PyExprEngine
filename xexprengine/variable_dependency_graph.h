@@ -1,6 +1,4 @@
-#include "value.h"
-
-#include <cstddef>
+#pragma once
 #include <functional>
 #include <stdexcept>
 #include <string>
@@ -14,38 +12,39 @@
 
 namespace xexprengine
 {
-namespace dependencygraph
-{
 class DependencyCycleException : public std::runtime_error
 {
   public:
-    explicit DependencyCycleException(const std::vector<std::string> &cycle_path)
-        : std::runtime_error(buildErrorMessage(cycle_path)), cycle_path_(cycle_path)
+    explicit DependencyCycleException(const std::vector<std::vector<std::string>> &cycle_path_list)
+        : std::runtime_error(BuildErrorMessage(cycle_path_list)), cycle_path_list_(cycle_path_list)
     {
     }
 
-    const std::vector<std::string> &getCyclePath() const noexcept
+    const std::vector<std::vector<std::string>> &GetCyclePath() const noexcept
     {
-        return cycle_path_;
+        return cycle_path_list_;
     }
 
   private:
-    static std::string buildErrorMessage(const std::vector<std::string> &cycle_path)
+    static std::string BuildErrorMessage(const std::vector<std::vector<std::string>> &cycle_path_list)
     {
         std::string msg = "Dependency cycle detected: ";
-        for (size_t i = 0; i < cycle_path.size(); ++i)
+        for (const std::vector<std::string> &cycle_path : cycle_path_list)
         {
-            if (i != 0)
-                msg += " -> ";
-            msg += cycle_path[i];
+            msg += "{";
+            for (size_t i = 0; i < cycle_path.size(); ++i)
+            {
+                if (i != 0)
+                    msg += " -> ";
+                msg += cycle_path[i];
+            }
+            msg += "}";
         }
         return msg;
     }
 
-    std::vector<std::string> cycle_path_;
+    std::vector<std::vector<std::string>> cycle_path_list_;
 };
-
-class VariableDependencyGraph;
 
 class VariableDependencyGraph
 {
@@ -95,56 +94,68 @@ class VariableDependencyGraph
 
     std::vector<std::string> TopologicalSort() const;
 
-    std::unordered_set<std::string> GetNodeDependencies(const std::string &node) const;
-    std::unordered_set<std::string> GetNodeDependents(const std::string &node) const;
-    bool IsNodeExist(const std::string &node) const;
-    bool IsNodeDirty(const std::string &node) const;
+    std::unordered_set<std::string> GetNodeDependencies(const std::string &node_name) const;
+    std::unordered_set<std::string> GetNodeDependents(const std::string &node_name) const;
+    bool IsNodeExist(const std::string &node_name) const;
+    bool IsNodeDirty(const std::string &node_name) const;
 
-    Node GetNode(const std::string& node) const;
-    size_t GetNodeCount() const;
-    std::vector<std::string> GetNodeNames() const;
-    
-    std::vector<Edge> GetEdgesByFrom(const std::string& from) const;
-    std::vector<Edge> GetEdgesByTo(const std::string& to) const;
+  protected:
+    std::vector<Edge> GetEdgesByFrom(const std::string &from) const;
+    std::vector<Edge> GetEdgesByFrom(const std::vector<std::string> &from_list);
+    std::vector<Edge> GetEdgesByTo(const std::string &to) const;
+    std::vector<Edge> GetEdgesByTo(const std::vector<std::string> &to_list) const;
     std::vector<Edge> GetAllEdges() const;
-    size_t GetEdgeCount() const;
 
-    void AddNode(const std::string &node, bool is_dirty = false);
-    void AddNodes(const std::vector<std::string> &node_list);
-    void RemoveNode(const std::string &node);
-    void RemoveNodes(const std::vector<std::string> &node_list);
-    void SetNodeDirty(const std::string &node, bool dirty);
-    void ClearNodeDependencyEdges(const std::string &node);
-    void AddEdge(const std::string &from, const std::string &to);
-    void AddEdge(const Edge &edge);
-    void AddEdges(const std::vector<Edge> &edge_list);
-    void RemoveEdge(const Edge &edge);
-    void RemoveEdges(const std::vector<Edge> &edge_list);
+    bool AddNode(const std::string &node_name, bool is_dirty = false);
+    bool AddNodes(const std::vector<std::string> &node_list);
+    bool RemoveNode(const std::string &node_name);
+    bool RemoveNodes(const std::vector<std::string> &node_list);
+    bool SetNodeDirty(const std::string &node_name, bool dirty);
+    bool ClearNodeDependencyEdges(const std::string &node_name);
+    bool AddEdge(const std::string &from, const std::string &to);
+    bool AddEdge(const Edge &edge);
+    bool AddEdges(const std::vector<Edge> &edge_list);
+    bool RemoveEdge(const Edge &edge);
+    bool RemoveEdges(const std::vector<Edge> &edge_list);
     void UpdateGraph(std::function<void(const std::string &)> update_callback);
+    void Reset();
+
+    friend class ExprContext;
 
   private:
+    void ActiveEdgeToNodes(const Edge &edge);
+    void DeactiveEdgeToNodes(const Edge &edge);
+    bool HasCycle() const;
+    std::vector<std::string> FindNodeCyclePath(const std::string &node_name) const;
+    std::vector<std::vector<std::string>> FindCyclePath() const;
+    bool FindCycleDFS(
+        const std::string &node_name, std::unordered_set<std::string> &visited,
+        std::unordered_set<std::string> &recursionStack, std::vector<std::string> &cycle_path
+    ) const;
+    void MakeNodeDependentsDirty(const std::string &node_name, std::unordered_set<std::string> &processed_nodes);
+
+    struct EdgeHash
+    {
+        size_t operator()(const Edge &edge) const
+        {
+            return std::hash<std::string>()(edge.from()) ^ (std::hash<std::string>()(edge.to()) << 1);
+        }
+    };
+
+    struct EdgeEqual
+    {
+        bool operator()(const Edge &lhs, const Edge &rhs) const
+        {
+            return lhs.from() == rhs.from() && lhs.to() == rhs.to();
+        }
+    };
+
     struct EdgeContainer
     {
         struct ByFrom
         {};
         struct ByTo
         {};
-
-        struct EdgeHash
-        {
-            size_t operator()(const Edge &edge) const
-            {
-                return std::hash<std::string>()(edge.from()) ^ (std::hash<std::string>()(edge.to()) << 1);
-            }
-        };
-
-        struct EdgeEqual
-        {
-            bool operator()(const Edge &lhs, const Edge &rhs) const
-            {
-                return lhs.from() == rhs.from() && lhs.to() == rhs.to();
-            }
-        };
 
         typedef boost::multi_index::multi_index_container<
             Edge, boost::multi_index::indexed_by<
@@ -156,17 +167,7 @@ class VariableDependencyGraph
             Type;
     };
 
-    bool HasCycle() const;
-    Value CheckNodeCycle(const std::string &node) const;
-    bool CheckCycleDFS(
-        const std::string &node, std::unordered_set<std::string> &visited,
-        std::unordered_set<std::string> &recursionStack, std::vector<std::string> &cycle_path
-    ) const;
-    void MakeNodeDependentsDirty(const std::string &node_name, std::unordered_set<std::string> &processed_nodes);
-
     std::unordered_map<std::string, Node> node_map_;
-
     EdgeContainer::Type edges_;
 };
-} // namespace dependencygraph
 } // namespace xexprengine

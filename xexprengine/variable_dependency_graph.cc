@@ -6,178 +6,368 @@
 
 using namespace xexprengine;
 
-std::unordered_set<std::string> VariableDependencyGraph::GetNodeActiveDependencies(const std::string &var_name) const
+std::unordered_set<std::string> VariableDependencyGraph::GetNodeDependencies(const std::string &node_name) const
 {
-    auto it = node_map_.find(var_name);
-    if (it != node_map_.end())
+    if (IsNodeExist(node_name) == true)
     {
-        return it->second.active_dependencies;
+        return node_map_.at(node_name).dependencies_;
     }
+    else
     {
         return {};
     }
 }
 
-std::unordered_set<std::string> VariableDependencyGraph::GetNodeActiveDependents(const std::string &var_name) const
+std::unordered_set<std::string> VariableDependencyGraph::GetNodeDependents(const std::string &node_name) const
 {
-    auto it = node_map_.find(var_name);
-    if (it != node_map_.end())
+    if (IsNodeExist(node_name) == true)
     {
-        return it->second.active_dependents;
+        return node_map_.at(node_name).dependents_;
     }
+    else
     {
         return {};
     }
 }
 
-void VariableDependencyGraph::AddNode(const std::string &name)
+bool VariableDependencyGraph::IsNodeExist(const std::string &node_name) const
 {
-    if (name.empty())
-    {
-        return;
-    }
+    return node_map_.find(node_name) != node_map_.end();
+}
 
-    if (!node_map_.count(name))
+bool VariableDependencyGraph::IsNodeDirty(const std::string &node_name) const
+{
+    if (IsNodeExist(node_name) == true)
     {
-        node_map_[name] = Node{};
+        return node_map_.at(node_name).is_dirty_;
     }
+    return false;
+}
 
-    if (node_dependency_edge_cache_.count(name))
+std::vector<VariableDependencyGraph::Edge> VariableDependencyGraph::GetEdgesByFrom(const std::string &from) const
+{
+    std::vector<Edge> result;
+    auto &idx = edges_.get<EdgeContainer::ByFrom>();
+    auto range = idx.equal_range(from);
+    for (auto it = range.first; it != range.second; ++it)
     {
-        for (const auto &edge : node_dependency_edge_cache_[name])
+        result.push_back(*it);
+    }
+    return result;
+}
+
+std::vector<VariableDependencyGraph::Edge>
+VariableDependencyGraph::GetEdgesByFrom(const std::vector<std::string> &from_list)
+{
+    std::vector<Edge> result;
+
+    // remove duplicate
+    std::vector<std::string> unique_froms = from_list;
+    std::sort(unique_froms.begin(), unique_froms.end());
+    unique_froms.erase(std::unique(unique_froms.begin(), unique_froms.end()), unique_froms.end());
+
+    auto &idx = edges_.get<EdgeContainer::ByFrom>();
+    for (const auto &from : unique_froms)
+    {
+        auto range = idx.equal_range(from);
+        for (auto it = range.first; it != range.second; ++it)
         {
-            if (node_map_.count(edge.second))
+            result.push_back(*it);
+        }
+    }
+
+    return result;
+}
+
+std::vector<VariableDependencyGraph::Edge> VariableDependencyGraph::GetEdgesByTo(const std::string &to) const
+{
+    std::vector<Edge> result;
+    auto &idx = edges_.get<EdgeContainer::ByTo>();
+    auto range = idx.equal_range(to);
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        result.push_back(*it);
+    }
+    return result;
+}
+
+std::vector<VariableDependencyGraph::Edge> VariableDependencyGraph::GetEdgesByTo(const std::vector<std::string> &to_list
+) const
+{
+    std::vector<Edge> result;
+
+    // remove duplicate
+    std::vector<std::string> unique_tos = to_list;
+    std::sort(unique_tos.begin(), unique_tos.end());
+    unique_tos.erase(std::unique(unique_tos.begin(), unique_tos.end()), unique_tos.end());
+
+    auto &idx = edges_.get<EdgeContainer::ByTo>();
+    for (const auto &to : unique_tos)
+    {
+        auto range = idx.equal_range(to);
+        for (auto it = range.first; it != range.second; ++it)
+        {
+            result.push_back(*it);
+        }
+    }
+
+    return result;
+}
+
+std::vector<VariableDependencyGraph::Edge> VariableDependencyGraph::GetAllEdges() const
+{
+    return std::vector<Edge>(edges_.begin(), edges_.end());
+}
+
+bool VariableDependencyGraph::AddNode(const std::string &node_name, bool is_dirty)
+{
+    if (IsNodeExist(node_name) == true)
+    {
+        return false;
+    }
+
+    node_map_.insert({node_name, Node{is_dirty}});
+
+    auto node_dependency_edges = GetEdgesByFrom(node_name);
+    for (const auto &edge : node_dependency_edges)
+    {
+        ActiveEdgeToNodes(edge);
+    }
+
+    auto node_dependent_edges = GetEdgesByTo(node_name);
+    for (const auto &edge : node_dependent_edges)
+    {
+        ActiveEdgeToNodes(edge);
+    }
+
+    if (HasCycle())
+    {
+        auto cycle_path = FindNodeCyclePath(node_name);
+        RemoveNode(node_name);
+        throw DependencyCycleException({cycle_path});
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::AddNodes(const std::vector<std::string> &node_list)
+{
+    // remove duplicate
+    std::vector<std::string> unique_nodes = node_list;
+    std::sort(unique_nodes.begin(), unique_nodes.end());
+    unique_nodes.erase(std::unique(unique_nodes.begin(), unique_nodes.end()), unique_nodes.end());
+
+    size_t unique_size = unique_nodes.size();
+
+    unique_nodes.erase(
+        std::remove_if(
+            unique_nodes.begin(), unique_nodes.end(),
+            [this](const std::string &node_name) { return IsNodeExist(node_name); }
+        ),
+        unique_nodes.end()
+    );
+
+    if (unique_nodes.size() != unique_size)
+    {
+        // some node is already in node_map
+        return false;
+    }
+
+    for (const std::string &node_name : unique_nodes)
+    {
+        node_map_.insert({node_name, Node()});
+    }
+
+    std::vector<Edge> dependency_edge_list = GetEdgesByFrom(unique_nodes);
+    for (const Edge &edge : dependency_edge_list)
+    {
+        ActiveEdgeToNodes(edge);
+    }
+
+    std::vector<Edge> dependent_edge_list = GetEdgesByTo(unique_nodes);
+    for (const Edge &edge : dependent_edge_list)
+    {
+        ActiveEdgeToNodes(edge);
+    }
+
+    if (HasCycle())
+    {
+        auto cycle_path_list = FindCyclePath();
+        RemoveNodes(unique_nodes);
+        throw DependencyCycleException(cycle_path_list);
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::RemoveNode(const std::string &node_name)
+{
+    if (IsNodeExist(node_name) == false)
+    {
+        return false;
+    }
+
+    node_map_.erase(node_name);
+
+    auto node_dependency_edges = GetEdgesByFrom(node_name);
+    for (const auto &edge : node_dependency_edges)
+    {
+        DeactiveEdgeToNodes(edge);
+    }
+
+    auto node_dependent_edges = GetEdgesByTo(node_name);
+    for (const auto &edge : node_dependent_edges)
+    {
+        DeactiveEdgeToNodes(edge);
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::RemoveNodes(const std::vector<std::string> &node_list)
+{
+    // remove duplicate
+    std::vector<std::string> unique_nodes = node_list;
+    std::sort(unique_nodes.begin(), unique_nodes.end());
+    unique_nodes.erase(std::unique(unique_nodes.begin(), unique_nodes.end()), unique_nodes.end());
+
+    size_t unique_size = unique_nodes.size();
+
+    unique_nodes.erase(
+        std::remove_if(
+            unique_nodes.begin(), unique_nodes.end(),
+            [this](const std::string &node_name) { return !IsNodeExist(node_name); }
+        ),
+        unique_nodes.end()
+    );
+
+    if (unique_nodes.size() != unique_size)
+    {
+        // some node is already in node_map
+        return false;
+    }
+
+    for (const std::string &node_name : unique_nodes)
+    {
+        node_map_.erase(node_name);
+    }
+
+    auto node_dependency_edges = GetEdgesByFrom(unique_nodes);
+    for (const auto &edge : node_dependency_edges)
+    {
+        DeactiveEdgeToNodes(edge);
+    }
+
+    auto node_dependent_edges = GetEdgesByTo(unique_nodes);
+    for (const auto &edge : node_dependent_edges)
+    {
+        DeactiveEdgeToNodes(edge);
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::AddEdge(const std::string &from, const std::string &to)
+{
+    return AddEdge({from, to});
+}
+
+bool VariableDependencyGraph::SetNodeDirty(const std::string &node_name, bool dirty)
+{
+    if (IsNodeExist(node_name) == false)
+    {
+        return false;
+    }
+
+    node_map_[node_name].is_dirty_ = dirty;
+    return true;
+}
+
+bool VariableDependencyGraph::ClearNodeDependencyEdges(const std::string &node_name)
+{
+    if (IsNodeExist(node_name) == false)
+    {
+        return false;
+    }
+
+    bool res = true;
+
+    auto node_dependency_edges = GetEdgesByFrom(node_name);
+    for (const auto &edge : node_dependency_edges)
+    {
+        res &= RemoveEdge(edge);
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::RemoveEdge(const Edge &edge)
+{
+    if (edges_.contains(edge) == false)
+    {
+        return false;
+    }
+
+    edges_.erase(edge);
+    DeactiveEdgeToNodes(edge);
+    return true;
+}
+
+std::vector<std::vector<std::string>> VariableDependencyGraph::FindCyclePath() const
+{
+    std::vector<std::vector<std::string>> result;
+    std::unordered_set<std::string> visited;
+    std::unordered_set<std::string> recursion_stack;
+    std::vector<std::string> cycle_path;
+
+    for (const auto &entry : node_map_)
+    {
+        const std::string &node_name = entry.first;
+        if (!visited.count(node_name))
+        {
+            if (FindCycleDFS(node_name, visited, recursion_stack, cycle_path))
             {
-                node_map_[name].active_dependencies.insert(edge.second);
-                node_map_[edge.second].active_dependents.insert(name);
+                result.push_back(cycle_path);
+                cycle_path.clear();
+                recursion_stack.clear();
             }
         }
     }
-
-    if (node_dependent_edge_cache_.count(name))
-    {
-        for (const auto &edge : node_dependent_edge_cache_[name])
-        {
-            if (node_map_.count(edge.first))
-            {
-                node_map_[name].active_dependents.insert(edge.first);
-                node_map_[edge.first].active_dependencies.insert(name);
-            }
-        }
-    }
-
-    if (Value res = CheckNodeCycle(name))
-    {
-        RemoveNode(name);
-        throw DependencyCycleException(res.Cast<std::vector<std::string>>());
-    }
+    return result;
 }
 
-void VariableDependencyGraph::RemoveNode(const std::string &name)
+std::vector<std::string> VariableDependencyGraph::FindNodeCyclePath(const std::string &node_name) const
 {
-    if (node_map_.count(name))
-    {
-        node_map_.erase(name);
-    }
-
-    if (node_dependency_edge_cache_.count(name))
-    {
-        for (const auto &edge : node_dependency_edge_cache_[name])
-        {
-            if (node_map_.count(edge.second))
-            {
-                node_map_[edge.second].active_dependents.erase(name);
-            }
-        }
-    }
-
-    if (node_dependent_edge_cache_.count(name))
-    {
-        for (const auto &edge : node_dependent_edge_cache_[name])
-        {
-            if (node_map_.count(edge.first))
-            {
-                node_map_[edge.first].active_dependencies.erase(name);
-            }
-        }
-    }
-}
-
-void VariableDependencyGraph::ClearNodeDependencyEdges(const std::string &name)
-{
-    if (node_map_.count(name))
-    {
-        node_map_[name].active_dependencies.clear();
-    }
-
-    if (node_dependency_edge_cache_.count(name))
-    {
-        for (const auto &edge : node_dependency_edge_cache_[name])
-        {
-            RemoveEdge(edge);
-        }
-        node_dependency_edge_cache_.erase(name);
-    }
-}
-
-void VariableDependencyGraph::RemoveEdge(const Edge &edge)
-{
-    edge_set_.erase(edge);
-    if (node_map_.count(edge.first) && node_map_.count(edge.second))
-    {
-        node_map_[edge.first].active_dependencies.erase(edge.second);
-        node_map_[edge.second].active_dependents.erase(edge.first);
-    }
-
-    if (node_dependency_edge_cache_.count(edge.first))
-    {
-        node_dependency_edge_cache_[edge.first].erase(edge);
-        if(node_dependency_edge_cache_.at(edge.first).size() == 0)
-            node_dependency_edge_cache_.erase(edge.first);
-    }
-    if (node_dependent_edge_cache_.count(edge.second))
-    {
-        node_dependent_edge_cache_[edge.second].erase(edge);
-       if(node_dependency_edge_cache_.at(edge.first).size() == 0)
-            node_dependency_edge_cache_.erase(edge.first);
-    }
-}
-
-Value VariableDependencyGraph::CheckNodeCycle(const std::string &node)
-{
-    if (!IsNodeExist(node))
-        return Value::Null();
-
-    if (!HasCycle())
-        return Value::Null();
+    if (!IsNodeExist(node_name))
+        return {};
 
     std::unordered_set<std::string> visited;
     std::unordered_set<std::string> recursion_stack;
     std::vector<std::string> cycle_path;
-    if (CheckCycleDFS(node, visited, recursion_stack, cycle_path))
+    if (FindCycleDFS(node_name, visited, recursion_stack, cycle_path))
     {
         return cycle_path;
     }
     else
     {
-        return Value::Null();
+        return {};
     }
 }
 
-bool VariableDependencyGraph::CheckCycleDFS(
-    const std::string &node, std::unordered_set<std::string> &visited,
+bool VariableDependencyGraph::FindCycleDFS(
+    const std::string &node_name, std::unordered_set<std::string> &visited,
     std::unordered_set<std::string> &current_path_set, std::vector<std::string> &cycle_path
-)
+) const
 {
-    if (!visited.count(node))
+    if (!visited.count(node_name) && IsNodeExist(node_name))
     {
-        visited.insert(node);
-        current_path_set.insert(node);
-        cycle_path.push_back(node);
+        visited.insert(node_name);
+        current_path_set.insert(node_name);
+        cycle_path.push_back(node_name);
 
-        for (const auto &dependency : node_map_[node].active_dependencies)
+        for (const auto &dependency : node_map_.at(node_name).dependencies_)
         {
-            if (!visited.count(dependency) && CheckCycleDFS(dependency, visited, current_path_set, cycle_path))
+            if (!visited.count(dependency) && FindCycleDFS(dependency, visited, current_path_set, cycle_path))
             {
                 return true;
             }
@@ -194,38 +384,108 @@ bool VariableDependencyGraph::CheckCycleDFS(
         }
 
         cycle_path.pop_back();
-        current_path_set.erase(node);
+        current_path_set.erase(node_name);
     }
     return false;
 }
 
-void VariableDependencyGraph::AddEdge(const Edge &edge)
+bool VariableDependencyGraph::AddEdge(const Edge &edge)
 {
-    edge_set_.insert(edge);
-    if (node_map_.count(edge.first) && node_map_.count(edge.second))
+    if (edges_.contains(edge) == true)
     {
-        node_map_[edge.first].active_dependencies.insert(edge.second);
-        node_map_[edge.second].active_dependents.insert(edge.first);
+        return false;
     }
 
-    node_dependency_edge_cache_[edge.first].insert(edge);
-    node_dependent_edge_cache_[edge.second].insert(edge);
+    edges_.insert(edge);
 
-    if (Value res = CheckNodeCycle(edge.first))
+    ActiveEdgeToNodes(edge);
+
+    if (HasCycle())
     {
+        auto cycle_path = FindNodeCyclePath(edge.from_);
         RemoveEdge(edge);
-        throw DependencyCycleException(res.Cast<std::vector<std::string>>());
+        throw DependencyCycleException({cycle_path});
     }
+    return true;
 }
 
-bool VariableDependencyGraph::HasCycle()
+bool VariableDependencyGraph::AddEdges(const std::vector<Edge> &edge_list)
+{
+    std::vector<Edge> unique_edges = edge_list;
+    std::unordered_set<Edge, EdgeHash, EdgeEqual> seen;
+    auto predicate = [&seen](const Edge &e) { return !seen.insert(e).second; };
+    unique_edges.erase(std::remove_if(unique_edges.begin(), unique_edges.end(), predicate), unique_edges.end());
+
+    size_t unique_size = unique_edges.size();
+
+    unique_edges.erase(
+        std::remove_if(
+            unique_edges.begin(), unique_edges.end(), [this](const Edge &edge) { return edges_.contains(edge); }
+        ),
+        unique_edges.end()
+    );
+
+    if (unique_edges.size() != unique_size)
+    {
+        // some node is already in node_map
+        return false;
+    }
+
+    for (const Edge &edge : unique_edges)
+    {
+        edges_.insert(edge);
+        ActiveEdgeToNodes(edge);
+    }
+
+    if (HasCycle())
+    {
+        auto cycle_path_list = FindCyclePath();
+        RemoveEdges(unique_edges);
+        throw DependencyCycleException(cycle_path_list);
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::RemoveEdges(const std::vector<Edge> &edge_list)
+{
+    std::vector<Edge> unique_edges = edge_list;
+    std::unordered_set<Edge, EdgeHash, EdgeEqual> seen;
+    auto predicate = [&seen](const Edge &e) { return !seen.insert(e).second; };
+    unique_edges.erase(std::remove_if(unique_edges.begin(), unique_edges.end(), predicate), unique_edges.end());
+
+    size_t unique_size = unique_edges.size();
+
+    unique_edges.erase(
+        std::remove_if(
+            unique_edges.begin(), unique_edges.end(), [this](const Edge &edge) { return !edges_.contains(edge); }
+        ),
+        unique_edges.end()
+    );
+
+    if (unique_edges.size() != unique_size)
+    {
+        // some node is already in node_map
+        return false;
+    }
+
+    for (const Edge &edge : unique_edges)
+    {
+        edges_.erase(edge);
+        DeactiveEdgeToNodes(edge);
+    }
+
+    return true;
+}
+
+bool VariableDependencyGraph::HasCycle() const
 {
     std::vector<std::string> top_order = TopologicalSort();
 
     return top_order.size() != node_map_.size();
 }
 
-std::vector<std::string> VariableDependencyGraph::TopologicalSort()
+std::vector<std::string> VariableDependencyGraph::TopologicalSort() const
 {
     // Kahn's Algorithm
     std::unordered_map<std::string, int> in_degree;
@@ -234,7 +494,7 @@ std::vector<std::string> VariableDependencyGraph::TopologicalSort()
 
     for (const auto &entry : node_map_)
     {
-        in_degree[entry.first] = entry.second.active_dependencies.size();
+        in_degree[entry.first] = entry.second.dependencies_.size();
         if (in_degree[entry.first] == 0)
         {
             zero_in_degree_queue.push(entry.first);
@@ -243,11 +503,11 @@ std::vector<std::string> VariableDependencyGraph::TopologicalSort()
 
     while (!zero_in_degree_queue.empty())
     {
-        auto node = zero_in_degree_queue.front();
+        auto node_name = zero_in_degree_queue.front();
         zero_in_degree_queue.pop();
-        topo_order.push_back(node);
+        topo_order.push_back(node_name);
 
-        for (const auto &dependent : node_map_[node].active_dependents)
+        for (const auto &dependent : node_map_.at(node_name).dependents_)
         {
             if (--in_degree[dependent] == 0)
             {
@@ -257,27 +517,6 @@ std::vector<std::string> VariableDependencyGraph::TopologicalSort()
     }
 
     return topo_order;
-}
-
-bool VariableDependencyGraph::IsNodeExist(const std::string &name) const
-{
-    return node_map_.find(name) != node_map_.end();
-}
-
-void VariableDependencyGraph::MakeNodeDirty(const std::string &var_name)
-{
-    if (node_map_.count(var_name))
-    {
-        node_map_[var_name].is_dirty = true;
-    }
-}
-
-void VariableDependencyGraph::ClearNodeDirty(const std::string &var_name)
-{
-    if (node_map_.count(var_name))
-    {
-        node_map_[var_name].is_dirty = false;
-    }
 }
 
 void VariableDependencyGraph::UpdateGraph(std::function<void(const std::string &)> update_callback)
@@ -293,7 +532,7 @@ void VariableDependencyGraph::UpdateGraph(std::function<void(const std::string &
         const std::string &node_name = entry.first;
         Node &node = entry.second;
 
-        if (node.is_dirty)
+        if (node.is_dirty_)
         {
             MakeNodeDependentsDirty(node_name, processed_nodes);
         }
@@ -306,25 +545,59 @@ void VariableDependencyGraph::UpdateGraph(std::function<void(const std::string &
         if (processed_nodes.count(node_name))
         {
             update_callback(node_name);
-            node_map_[node_name].is_dirty = false;
+            node_map_[node_name].is_dirty_ = false;
         }
     }
 }
 
 void VariableDependencyGraph::MakeNodeDependentsDirty(
-    const std::string &node_name, std::unordered_set<std::string> &processed_nodes)
+    const std::string &node_name, std::unordered_set<std::string> &processed_nodes
+)
 {
+    if (IsNodeExist(node_name) == false)
+    {
+        return;
+    }
+
     if (processed_nodes.count(node_name))
     {
         return;
     }
+
     processed_nodes.insert(node_name);
 
-    Node &node = node_map_[node_name];
-    node.is_dirty = true;
+    Node &n = node_map_.at(node_name);
+    n.is_dirty_ = true;
 
-    for (const auto &dependent : node.active_dependents)
+    for (const auto &dependent : n.dependents_)
     {
         MakeNodeDependentsDirty(dependent, processed_nodes);
+    }
+}
+
+void VariableDependencyGraph::Reset()
+{
+    node_map_.clear();
+    edges_.clear();
+}
+
+void VariableDependencyGraph::ActiveEdgeToNodes(const VariableDependencyGraph::Edge &edge)
+{
+    if (node_map_.count(edge.from_) && node_map_.count(edge.to_))
+    {
+        node_map_[edge.from_].dependencies_.insert(edge.to_);
+        node_map_[edge.to_].dependents_.insert(edge.from_);
+    }
+}
+
+void VariableDependencyGraph::DeactiveEdgeToNodes(const VariableDependencyGraph::Edge &edge)
+{
+    if (node_map_.count(edge.from_))
+    {
+        node_map_[edge.from_].dependencies_.erase(edge.to_);
+    }
+    if (node_map_.count(edge.to_))
+    {
+        node_map_[edge.to_].dependents_.erase(edge.from_);
     }
 }

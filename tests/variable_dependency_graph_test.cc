@@ -5,39 +5,37 @@
 
 using namespace xexprengine;
 
-class VariableDependencyGraphTest : public ::testing::Test {
+class VariableDependencyGraphTest : public ::testing::Test, public VariableDependencyGraph {
 protected:
     void SetUp() override {
-        graph = std::make_unique<VariableDependencyGraph>();
+        Reset();
     }
-
-    std::unique_ptr<VariableDependencyGraph> graph;
 };
 
 // Test add and remove node
 TEST_F(VariableDependencyGraphTest, AddRemoveNode)
 {
     // Test adding a node
-    graph->AddNode("A");
-    EXPECT_TRUE(graph->IsNodeExist("A"));
-    EXPECT_TRUE(graph->GetNodeActiveDependencies("A").empty());
-    EXPECT_TRUE(graph->GetNodeActiveDependents("A").empty());
+    AddNode("A");
+    EXPECT_TRUE(IsNodeExist("A"));
+    EXPECT_TRUE(GetNodeDependencies("A").empty());
+    EXPECT_TRUE(GetNodeDependents("A").empty());
 
     // Test removing a node
-    graph->RemoveNode("A");
-    EXPECT_FALSE(graph->IsNodeExist("A"));
+    RemoveNode("A");
+    EXPECT_FALSE(IsNodeExist("A"));
 
-    graph->AddEdge({"A", "B"});
-    graph->AddNode("B");
+    AddEdge({"A", "B"});
+    AddNode("B");
 
-    auto dependents = graph->GetNodeActiveDependents("B");
+    auto dependents = GetNodeDependents("B");
     EXPECT_EQ(dependents.size(), 0);
 
-    graph->AddNode("A");
-    dependents = graph->GetNodeActiveDependents("B");
+    AddNode("A");
+    dependents = GetNodeDependents("B");
     EXPECT_EQ(dependents.size(), 1);
     EXPECT_TRUE(dependents.count("A") > 0);
-    auto dependencies = graph->GetNodeActiveDependencies("A");
+    auto dependencies = GetNodeDependencies("A");
     EXPECT_EQ(dependencies.size(), 1);
     EXPECT_TRUE(dependencies.count("B") > 0);
 }
@@ -45,45 +43,45 @@ TEST_F(VariableDependencyGraphTest, AddRemoveNode)
 // Test add and remove edge
 TEST_F(VariableDependencyGraphTest, AddRemoveEdge)
 {
-    graph->AddNode("A");
-    graph->AddNode("B");
+    AddNode("A");
+    AddNode("B");
 
     // Test adding an edge
     VariableDependencyGraph::Edge edge{"A", "B"};
-    graph->AddEdge(edge);
-    auto dependents = graph->GetNodeActiveDependents("B");
+    AddEdge(edge);
+    auto dependents = GetNodeDependents("B");
     EXPECT_EQ(dependents.size(), 1);
     EXPECT_TRUE(dependents.count("A") > 0);
 
-    auto dependencies = graph->GetNodeActiveDependencies("A");
+    auto dependencies = GetNodeDependencies("A");
     EXPECT_EQ(dependencies.size(), 1);
     EXPECT_TRUE(dependencies.count("B") > 0);
 
     // Test removing an edge
-    graph->RemoveEdge(edge);
-    EXPECT_TRUE(graph->GetNodeActiveDependents("B").empty());
-    EXPECT_TRUE(graph->GetNodeActiveDependencies("A").empty());
+    RemoveEdge(edge);
+    EXPECT_TRUE(GetNodeDependents("B").empty());
+    EXPECT_TRUE(GetNodeDependencies("A").empty());
 }
 
 TEST_F(VariableDependencyGraphTest, RebuildConnectionAndClearNodeEdge)
 {
-    graph->AddEdge({"A", "B"});
-    graph->AddEdge({"A", "C"});
-    graph->AddEdge({"B", "C"});
-    graph->AddEdge({"D", "A"});
-    graph->AddEdge({"E", "A"});
-    graph->AddEdge({"D", "B"});
-    graph->AddEdge({"E", "C"});
-    graph->AddEdge({"D", "E"});
+    AddEdge({"A", "B"});
+    AddEdge({"A", "C"});
+    AddEdge({"B", "C"});
+    AddEdge({"D", "A"});
+    AddEdge({"E", "A"});
+    AddEdge({"D", "B"});
+    AddEdge({"E", "C"});
+    AddEdge({"D", "E"});
 
-    graph->AddNode("A");
-    graph->AddNode("B");
-    graph->AddNode("C");
-    graph->AddNode("D");
-    graph->AddNode("E");
+    AddNode("A");
+    AddNode("B");
+    AddNode("C");
+    AddNode("D");
+    AddNode("E");
     
-    auto a_dependencies = graph->GetNodeActiveDependencies("A");
-    auto a_dependents = graph->GetNodeActiveDependents("A");
+    auto a_dependencies = GetNodeDependencies("A");
+    auto a_dependents = GetNodeDependents("A");
     ASSERT_EQ(2, a_dependencies.size());
     EXPECT_THAT(a_dependencies, ::testing::AllOf(
         ::testing::Contains("B"),
@@ -96,8 +94,8 @@ TEST_F(VariableDependencyGraphTest, RebuildConnectionAndClearNodeEdge)
         ::testing::Contains("E")
     ));
 
-    auto b_dependencies = graph->GetNodeActiveDependencies("B");
-    auto b_dependents = graph->GetNodeActiveDependents("B");
+    auto b_dependencies = GetNodeDependencies("B");
+    auto b_dependents = GetNodeDependents("B");
     ASSERT_EQ(1, b_dependencies.size()); 
     EXPECT_THAT(b_dependencies, ::testing::AllOf(
         ::testing::Contains("C")
@@ -108,8 +106,8 @@ TEST_F(VariableDependencyGraphTest, RebuildConnectionAndClearNodeEdge)
         ::testing::Contains("A")
     ));
 
-    auto c_dependencies = graph->GetNodeActiveDependencies("C");
-    auto c_dependents = graph->GetNodeActiveDependents("C");
+    auto c_dependencies = GetNodeDependencies("C");
+    auto c_dependents = GetNodeDependents("C");
     ASSERT_EQ(0, c_dependencies.size()); 
     ASSERT_EQ(3, c_dependents.size()); 
     EXPECT_THAT(c_dependents, ::testing::AllOf(
@@ -118,8 +116,8 @@ TEST_F(VariableDependencyGraphTest, RebuildConnectionAndClearNodeEdge)
         ::testing::Contains("E")
     ));
 
-    auto d_dependencies = graph->GetNodeActiveDependencies("D");
-    auto d_dependents = graph->GetNodeActiveDependents("D");
+    auto d_dependencies = GetNodeDependencies("D");
+    auto d_dependents = GetNodeDependents("D");
     ASSERT_EQ(3, d_dependencies.size()); 
     EXPECT_THAT(d_dependencies, ::testing::AllOf(
         ::testing::Contains("A"),
@@ -128,8 +126,8 @@ TEST_F(VariableDependencyGraphTest, RebuildConnectionAndClearNodeEdge)
     ));
     ASSERT_EQ(0, d_dependents.size()); 
 
-    auto e_dependencies = graph->GetNodeActiveDependencies("E");
-    auto e_dependents = graph->GetNodeActiveDependents("E");
+    auto e_dependencies = GetNodeDependencies("E");
+    auto e_dependents = GetNodeDependents("E");
     ASSERT_EQ(2, e_dependencies.size()); 
     EXPECT_THAT(e_dependencies, ::testing::AllOf(
         ::testing::Contains("A"),
@@ -144,20 +142,20 @@ TEST_F(VariableDependencyGraphTest, RebuildConnectionAndClearNodeEdge)
 
 // Test cycle detection
 TEST_F(VariableDependencyGraphTest, CycleDetection) {
-    graph->AddNode("A");
-    graph->AddNode("B");
-    graph->AddNode("C");
+    AddNode("A");
+    AddNode("B");
+    AddNode("C");
 
     // Acyclic graph
-    graph->AddEdge({"A", "B"});
-    graph->AddEdge({"B", "C"});
+    AddEdge({"A", "B"});
+    AddEdge({"B", "C"});
 
     // Create cycle
     try {
-        graph->AddEdge({"C", "A"});
+        AddEdge({"C", "A"});
         FAIL() << "Expected DependencyCycleException";
     } catch (const DependencyCycleException& ex) {
-        auto cycle = ex.getCyclePath();
+        auto cycle = ex.GetCyclePath()[0];
         ASSERT_EQ(4, cycle.size());
         EXPECT_EQ("C", cycle[0]);
         EXPECT_EQ("A", cycle[1]);
@@ -167,7 +165,7 @@ TEST_F(VariableDependencyGraphTest, CycleDetection) {
 
     // Self-cycle
     try {
-        graph->AddEdge({"A", "A"});
+        AddEdge({"A", "A"});
         FAIL() << "Expected DependencyCycleException";
     } catch (const DependencyCycleException&) {
         SUCCEED();
@@ -176,15 +174,15 @@ TEST_F(VariableDependencyGraphTest, CycleDetection) {
 
 // Test topological sorting
 TEST_F(VariableDependencyGraphTest, TopologicalSort) {
-    graph->AddNode("A");
-    graph->AddNode("B");
-    graph->AddNode("C");
-    graph->AddNode("D");
+    AddNode("A");
+    AddNode("B");
+    AddNode("C");
+    AddNode("D");
 
     // Linear dependency
-    graph->AddEdge({"A", "B"});
-    graph->AddEdge({"B", "C"});
-    auto order = graph->TopologicalSort();
+    AddEdge({"A", "B"});
+    AddEdge({"B", "C"});
+    auto order = TopologicalSort();
     ASSERT_EQ(4, order.size());
     EXPECT_TRUE(std::find(order.begin(), order.end(), "A") > 
                 std::find(order.begin(), order.end(), "B"));
@@ -192,19 +190,19 @@ TEST_F(VariableDependencyGraphTest, TopologicalSort) {
                 std::find(order.begin(), order.end(), "C"));
 
     // Forked dependency
-    graph->AddEdge({"A", "D"});
-    order = graph->TopologicalSort();
+    AddEdge({"A", "D"});
+    order = TopologicalSort();
     EXPECT_TRUE(std::find(order.begin(), order.end(), "A") > 
                 std::find(order.begin(), order.end(), "D"));
 }
 
 // Test dirty marking and update mechanism
 TEST_F(VariableDependencyGraphTest, MakeDirtyAndUpdate) {
-    graph->AddNode("A");
-    graph->AddNode("B");
-    graph->AddNode("C");
-    graph->AddEdge({"A", "B"});
-    graph->AddEdge({"B", "C"});
+    AddNode("A");
+    AddNode("B");
+    AddNode("C");
+    AddEdge({"A", "B"});
+    AddEdge({"B", "C"});
 
     std::vector<std::string> updatedNodes;
     auto callback = [&updatedNodes](const std::string& node) {
@@ -212,16 +210,16 @@ TEST_F(VariableDependencyGraphTest, MakeDirtyAndUpdate) {
     };
 
     // Mark single node as dirty
-    graph->MakeNodeDirty("B");
-    graph->UpdateGraph(callback);
+    SetNodeDirty("B", true);
+    UpdateGraph(callback);
     ASSERT_EQ(2, updatedNodes.size()); // A and B should be updated
     EXPECT_EQ("B", updatedNodes[0]);
     EXPECT_EQ("A", updatedNodes[1]);
 
     // Clear and test root node
     updatedNodes.clear();
-    graph->MakeNodeDirty("C");
-    graph->UpdateGraph(callback);
+    SetNodeDirty("C", true);
+    UpdateGraph(callback);
     ASSERT_EQ(3, updatedNodes.size()); // A, B, C should all be updated
     EXPECT_EQ("C", updatedNodes[0]);
     EXPECT_EQ("B", updatedNodes[1]);
@@ -230,35 +228,31 @@ TEST_F(VariableDependencyGraphTest, MakeDirtyAndUpdate) {
 
 // Test edge cases
 TEST_F(VariableDependencyGraphTest, EdgeCases) {
-    // Empty name node
-    EXPECT_NO_THROW(graph->AddNode(""));
-    EXPECT_FALSE(graph->IsNodeExist(""));
-
     // Operations on non-existent edges
-    EXPECT_NO_THROW(graph->RemoveEdge({"X", "Y"}));
-    EXPECT_NO_THROW(graph->ClearNodeDependencyEdges("Nonexistent"));
+    EXPECT_NO_THROW(RemoveEdge({"X", "Y"}));
+    EXPECT_NO_THROW(ClearNodeDependencyEdges("Nonexistent"));
 
     // Operations on empty graph
-    EXPECT_TRUE(graph->TopologicalSort().empty());
+    EXPECT_TRUE(TopologicalSort().empty());
 }
 
 // Test complex dependency scenarios
 TEST_F(VariableDependencyGraphTest, ComplexDependencyScenario) {
     // Build complex dependency graph
-    graph->AddNode("A");
-    graph->AddNode("B");
-    graph->AddNode("C");
-    graph->AddNode("D");
-    graph->AddNode("E");
+    AddNode("A");
+    AddNode("B");
+    AddNode("C");
+    AddNode("D");
+    AddNode("E");
 
-    graph->AddEdge({"A", "B"});
-    graph->AddEdge({"A", "C"});
-    graph->AddEdge({"B", "D"});
-    graph->AddEdge({"C", "D"});
-    graph->AddEdge({"D", "E"});
+    AddEdge({"A", "B"});
+    AddEdge({"A", "C"});
+    AddEdge({"B", "D"});
+    AddEdge({"C", "D"});
+    AddEdge({"D", "E"});
 
     // Verify topological sort
-    auto order = graph->TopologicalSort();
+    auto order = TopologicalSort();
     ASSERT_EQ(5, order.size());
     // A should come after B and C
     EXPECT_TRUE(std::find(order.begin(), order.end(), "A") > 
@@ -276,8 +270,8 @@ TEST_F(VariableDependencyGraphTest, ComplexDependencyScenario) {
 
     // Verify dependency propagation
     std::vector<std::string> updatedNodes;
-    graph->MakeNodeDirty("E");
-    graph->UpdateGraph([&updatedNodes](const std::string& node) {
+    SetNodeDirty("E", true);
+    UpdateGraph([&updatedNodes](const std::string& node) {
         updatedNodes.push_back(node);
     });
     ASSERT_EQ(5, updatedNodes.size()); // All nodes should be updated
@@ -290,8 +284,8 @@ TEST_F(VariableDependencyGraphTest, ComplexDependencyScenario) {
     ));
 
     updatedNodes.clear();
-    graph->MakeNodeDirty("D");
-    graph->UpdateGraph([&updatedNodes](const std::string& node) {
+    SetNodeDirty("D", true);
+    UpdateGraph([&updatedNodes](const std::string& node) {
         updatedNodes.push_back(node);
     });
     ASSERT_EQ(4, updatedNodes.size()); 
