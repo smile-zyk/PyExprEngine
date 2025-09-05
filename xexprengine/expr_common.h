@@ -27,7 +27,7 @@ struct EvalResult
     std::string error_message;
 };
 
-struct AnalyzeResult
+struct ParseResult
 {
     std::unordered_set<std::string> variables;
     std::unordered_set<std::string> functions;

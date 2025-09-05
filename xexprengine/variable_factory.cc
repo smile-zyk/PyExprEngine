@@ -1,5 +1,4 @@
 #include "variable_factory.h"
-#include "variable.h"
 
 namespace xexprengine
 {

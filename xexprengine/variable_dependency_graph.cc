@@ -8,6 +8,23 @@
 
 using namespace xexprengine;
 
+std::string DependencyCycleException::BuildErrorMessage(const std::vector<std::vector<std::string>> &cycle_path_list)
+{
+    std::string msg = "Dependency cycle detected: ";
+    for (const std::vector<std::string> &cycle_path : cycle_path_list)
+    {
+        msg += "{";
+        for (size_t i = 0; i < cycle_path.size(); ++i)
+        {
+            if (i != 0)
+                msg += " -> ";
+            msg += cycle_path[i];
+        }
+        msg += "}";
+    }
+    return msg;
+}
+
 std::unordered_set<std::string> VariableDependencyGraph::GetNodeDependencies(const std::string &node_name) const
 {
     if (IsNodeExist(node_name) == true)
@@ -121,7 +138,7 @@ std::vector<VariableDependencyGraph::Edge> VariableDependencyGraph::GetAllEdges(
     return std::vector<Edge>(edges_.begin(), edges_.end());
 }
 
-Variable* VariableDependencyGraph::GetVariable(const std::string &node_name) const
+Variable *VariableDependencyGraph::GetVariable(const std::string &node_name) const
 {
     if (IsNodeExist(node_name) == true)
     {
@@ -132,7 +149,12 @@ Variable* VariableDependencyGraph::GetVariable(const std::string &node_name) con
 
 bool VariableDependencyGraph::AddNode(std::unique_ptr<Variable> var)
 {
-    const std::string& node_name = var->name();
+    if (var == nullptr)
+    {
+        return false;
+    }
+
+    const std::string &node_name = var->name();
     if (IsNodeExist(node_name) == true)
     {
         return false;
@@ -157,7 +179,7 @@ bool VariableDependencyGraph::AddNode(std::unique_ptr<Variable> var)
     {
         auto cycle_path = FindNodeCyclePath(node_name);
         RemoveNode(node_name);
-        throw DependencyCycleException({cycle_path});
+        throw DependencyCycleException({cycle_path}, DependencyCycleException::Operation::kAddNode);
     }
 
     return true;
@@ -166,11 +188,11 @@ bool VariableDependencyGraph::AddNode(std::unique_ptr<Variable> var)
 bool VariableDependencyGraph::AddNodes(const std::vector<std::unique_ptr<Variable>> &var_list)
 {
     std::vector<std::unique_ptr<Variable>> unique_vars = std::move(var_list);
-    // remove duplicate
+    // remove duplicate and nullptr
     std::unordered_set<std::string> seen_names;
-    auto new_end = std::remove_if(unique_vars.begin(), unique_vars.end(),
-        [&seen_names](const std::unique_ptr<Variable>& var) {
-            return !seen_names.insert(var->name()).second;
+    auto new_end =
+        std::remove_if(unique_vars.begin(), unique_vars.end(), [&seen_names](const std::unique_ptr<Variable> &var) {
+            return !var || !seen_names.insert(var->name()).second;
         });
     unique_vars.erase(new_end, var_list.end());
 
@@ -199,7 +221,8 @@ bool VariableDependencyGraph::AddNodes(const std::vector<std::unique_ptr<Variabl
     std::vector<std::string> var_name_list;
     var_name_list.reserve(var_list.size());
 
-    for (const auto& var : unique_vars) {
+    for (const auto &var : unique_vars)
+    {
         var_name_list.push_back(var->name());
     }
 
@@ -219,9 +242,25 @@ bool VariableDependencyGraph::AddNodes(const std::vector<std::unique_ptr<Variabl
     {
         auto cycle_path_list = FindCyclePath();
         RemoveNodes(var_name_list);
-        throw DependencyCycleException(cycle_path_list);
+        throw DependencyCycleException(cycle_path_list, DependencyCycleException::Operation::kAddNode);
     }
 
+    return true;
+}
+
+bool VariableDependencyGraph::SetNode(const std::string &node_name, std::unique_ptr<Variable> var)
+{
+    if (var == nullptr)
+    {
+        return false;
+    }
+
+    if (IsNodeExist(node_name) == false)
+    {
+        return false;
+    }
+
+    node_map_.at(node_name)->variable_ = std::move(var);
     return true;
 }
 
@@ -294,39 +333,53 @@ bool VariableDependencyGraph::RemoveNodes(const std::vector<std::string> &node_l
 
 bool VariableDependencyGraph::RenameNode(const std::string &old_name, const std::string &new_name)
 {
-    if(IsNodeExist(old_name) == false || IsNodeExist(new_name) == true)
+    if (IsNodeExist(old_name) == false || IsNodeExist(new_name) == true)
     {
         return false;
     }
 
-    auto node_it = node_map_.find(old_name);
-    if (node_it == node_map_.end())
-    {
-        return false;
-    }
-
-    auto node_ptr = std::move(node_it->second);
-    node_map_.erase(node_it);
-    node_ptr->variable_->name_ = new_name;
-    node_map_.insert({new_name, std::move(node_ptr)});
-
-    // Update edges
-    std::vector<Edge> edges_to_update;
+    std::vector<Edge> old_edges;
 
     auto from_edges = GetEdgesByFrom(old_name);
-    edges_to_update.insert(edges_to_update.end(), from_edges.begin(), from_edges.end());
+    old_edges.insert(old_edges.end(), from_edges.begin(), from_edges.end());
 
     auto to_edges = GetEdgesByTo(old_name);
-    edges_to_update.insert(edges_to_update.end(), to_edges.begin(), to_edges.end());
+    old_edges.insert(old_edges.end(), to_edges.begin(), to_edges.end());
 
-    for (const auto &edge : edges_to_update)
+    RemoveEdges(old_edges);
+
+    auto node_it = node_map_.find(old_name);
+    if (node_it != node_map_.end())
     {
-        RemoveEdge(edge);
-        Edge new_edge = (edge.from_ == old_name) ? Edge(new_name, edge.to_) : Edge(edge.from_, new_name);
-        AddEdge(new_edge);
+        auto value = std::move(node_it->second);
+        node_map_.erase(node_it);
+        node_map_.insert({new_name, std::move(value)});
     }
 
-    return true;
+    std::vector<Edge> new_edges;
+    for (const auto &edge : old_edges)
+    {
+        Edge new_edge = (edge.from_ == old_name) ? Edge(new_name, edge.to_) : Edge(edge.from_, new_name);
+        new_edges.push_back(new_edge);
+    }
+
+    try
+    {
+        AddEdges(new_edges);
+        return true;
+    }
+    catch (const DependencyCycleException &e)
+    {
+        auto node_it = node_map_.find(new_name);
+        if (node_it != node_map_.end())
+        {
+            auto value = std::move(node_it->second);
+            node_map_.erase(node_it);
+            node_map_.insert({old_name, std::move(value)});
+        }
+        AddEdges(old_edges);
+        throw e;
+    }
 }
 
 bool VariableDependencyGraph::AddEdge(const std::string &from, const std::string &to)
@@ -466,7 +519,7 @@ bool VariableDependencyGraph::AddEdge(const Edge &edge)
     {
         auto cycle_path = FindNodeCyclePath(edge.from_);
         RemoveEdge(edge);
-        throw DependencyCycleException({cycle_path});
+        throw DependencyCycleException({cycle_path}, DependencyCycleException::Operation::kAddEdge);
     }
     return true;
 }
@@ -503,7 +556,7 @@ bool VariableDependencyGraph::AddEdges(const std::vector<Edge> &edge_list)
     {
         auto cycle_path_list = FindCyclePath();
         RemoveEdges(unique_edges);
-        throw DependencyCycleException(cycle_path_list);
+        throw DependencyCycleException(cycle_path_list, DependencyCycleException::Operation::kAddEdge);
     }
 
     return true;

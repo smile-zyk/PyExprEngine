@@ -14,8 +14,8 @@ class ExprEngine
     ExprEngine() = default;
     ~ExprEngine() = default;
 
-    virtual EvalResult Evaluate(const std::string &expr, ExprContext *context = nullptr) = 0;
-    virtual AnalyzeResult Analyze(const std::string &expr) = 0;
+    virtual EvalResult Evaluate(const std::string &expr, const ExprContext *context = nullptr) = 0;
+    virtual ParseResult Parse(const std::string &expr) = 0;
 
     void RegisterContext(const std::string &name, std::unique_ptr<ExprContext> context);
     void SetCurrentContext(ExprContext *context);
@@ -29,8 +29,9 @@ class ExprEngine
   protected:
     virtual void SetVariable(const std::string &var_name, const Value &value, const ExprContext *context) = 0;
     virtual Value GetVariable(const std::string &var_name, const ExprContext *context) = 0;
-    virtual void RemoveVariable(const std::string &var_name, const ExprContext *context) = 0;
-    virtual void RenameVariable(const std::string &old_name, const std::string &new_name, const ExprContext *context) = 0;
+    virtual bool RemoveVariable(const std::string &var_name, const ExprContext *context) = 0;
+    virtual bool RenameVariable(const std::string &old_name, const std::string &new_name, const ExprContext *context) = 0;
+    virtual void Reset() = 0;
     friend class ExprContext;
 
   private:

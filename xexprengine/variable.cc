@@ -5,16 +5,11 @@
 
 using namespace xexprengine;
 
-Value Variable::GetValue()
+Value Variable::GetValue() const
 {
     if (context_ != nullptr)
         return context_->GetValue(this);
     return Value::Null();
-}
-
-Value RawVariable::Evaluate()
-{
-    return value_;
 }
 
 Value ExprVariable::Evaluate()
@@ -28,4 +23,14 @@ Value ExprVariable::Evaluate()
         return result.value;
     }
     return Value::Null();
+}
+
+void ExprVariable::Parse()
+{
+    const ExprContext *ctx = context();
+    if (ctx != nullptr)
+    {
+        ParseResult parse_result = ctx->Parse(expression_);
+        parse_result_ = parse_result;
+    }
 }

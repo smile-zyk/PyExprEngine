@@ -5,57 +5,83 @@
 namespace xexprengine
 {
 class ExprContext;
+
 class Variable
 {
   public:
-    Variable(const std::string& name, const ExprContext *context = nullptr) : name_(name), context_(context){}
+    enum class Type
+    {
+        Raw,
+        Expr,
+        Func,
+    };
+
+    Variable(const std::string &name, const ExprContext *context = nullptr) : name_(name), context_(context) {}
     virtual ~Variable() = default;
     const std::string &name() const
     {
         return name_;
     }
+
     const ExprContext *context() const
     {
         return context_;
     }
 
-    Value GetValue();
-    virtual Value Evaluate() = 0;
-    virtual std::string Type() const = 0;
+    template <typename T>
+    auto As() const -> typename std::enable_if<std::is_base_of<Variable, T>::value, const T *>::type
+    {
+        return static_cast<const T *>(this);
+    }
+
+    Value GetValue() const;
+    virtual ParseResult GetParseResult() const = 0;
+    virtual Value Evaluate()  = 0;
+    virtual Type GetType() const = 0;
 
   protected:
-    // for force set context when add to ExprContext 
-    void set_context(const ExprContext *context)
-    {
-        context_ = context;
-    }
-    friend class ExprContext;
-
-    // for access name_ when rename node
     void set_name(const std::string &name)
     {
         name_ = name;
     }
-    friend class VariableDependencyGraph;
+
+    void set_context(const ExprContext *context)
+    {
+        context_ = context;
+    }
+    
+    friend class ExprContext;
 
   private:
     std::string name_;
     const ExprContext *context_;
-
 };
 
 class RawVariable : public Variable
 {
   public:
+    Value Evaluate() override
+    {
+        return value_;
+    }
+
+    ParseResult GetParseResult() const override
+    {
+        return {};
+    }
+
+    Variable::Type GetType() const override
+    {
+        return Variable::Type::Raw;
+    }
+
+  protected:
     RawVariable(const std::string &name, const Value &value, const ExprContext *context = nullptr)
         : Variable(name, context), value_(value)
     {
     }
-    Value Evaluate() override;
-    std::string Type() const override
-    {
-        return value_.Type().name();
-    }
+    friend class VariableFactory;
+
   private:
     Value value_;
 };
@@ -63,19 +89,9 @@ class RawVariable : public Variable
 class ExprVariable : public Variable
 {
   public:
-    ExprVariable(const std::string &name, const std::string &expression, const ExprContext *context = nullptr)
-        : Variable(name, context), expression_(expression)
-    {
-    }
-
     const std::string &expression() const
     {
         return expression_;
-    }
-
-    void set_expression(const std::string &expression)
-    {
-        expression_ = expression;
     }
 
     std::string error_message() const
@@ -88,15 +104,32 @@ class ExprVariable : public Variable
         return error_code_;
     }
 
-    std::string Type() const override
+    Variable::Type GetType() const override
     {
-        return "expression";
+        return Variable::Type::Expr;
     }
 
-    virtual Value Evaluate() override;
+    Value Evaluate() override;
+
+    ParseResult GetParseResult() const override
+    {
+        return parse_result_;
+    }
+
+  protected:
+    ExprVariable(const std::string &name, const std::string &expression, const ExprContext *context = nullptr)
+        : Variable(name, context), expression_(expression)
+    {
+        Parse();
+    }
+
+    friend class VariableFactory;
+
   private:
+    void Parse();
     std::string expression_;
     std::string error_message_;
     ErrorCode error_code_ = ErrorCode::Success;
+    ParseResult parse_result_;
 };
 } // namespace xexprengine

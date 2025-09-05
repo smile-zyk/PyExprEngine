@@ -18,35 +18,28 @@ namespace xexprengine
 class DependencyCycleException : public std::runtime_error
 {
   public:
-    explicit DependencyCycleException(const std::vector<std::vector<std::string>> &cycle_path_list)
-        : std::runtime_error(BuildErrorMessage(cycle_path_list)), cycle_path_list_(cycle_path_list)
+    enum class Operation
+    {
+        kAddNode,
+        kAddEdge
+    };
+    
+    explicit DependencyCycleException(const std::vector<std::vector<std::string>> &cycle_path_list, Operation operation)
+        : std::runtime_error(BuildErrorMessage(cycle_path_list)), cycle_path_list_(cycle_path_list), operation_(operation)
     {
     }
 
-    const std::vector<std::vector<std::string>> &GetCyclePath() const noexcept
+    const std::vector<std::vector<std::string>> &cycle_path_list() const noexcept
     {
         return cycle_path_list_;
     }
 
-  private:
-    static std::string BuildErrorMessage(const std::vector<std::vector<std::string>> &cycle_path_list)
-    {
-        std::string msg = "Dependency cycle detected: ";
-        for (const std::vector<std::string> &cycle_path : cycle_path_list)
-        {
-            msg += "{";
-            for (size_t i = 0; i < cycle_path.size(); ++i)
-            {
-                if (i != 0)
-                    msg += " -> ";
-                msg += cycle_path[i];
-            }
-            msg += "}";
-        }
-        return msg;
-    }
+    Operation operation() const noexcept { return operation_; }
 
+  private:
+    static std::string BuildErrorMessage(const std::vector<std::vector<std::string>> &cycle_path_list);
     std::vector<std::vector<std::string>> cycle_path_list_;
+    Operation operation_;
 };
 
 class VariableDependencyGraph
@@ -103,6 +96,7 @@ class VariableDependencyGraph
 
     bool IsNodeDirty(const std::string &node_name) const;
     bool IsNodeExist(const std::string &node_name) const;
+    bool IsNodeAllDependencyExist() const;
 
     std::vector<Edge> GetEdgesByFrom(const std::string &from) const;
     std::vector<Edge> GetEdgesByFrom(const std::vector<std::string> &from_list) const;
@@ -110,11 +104,12 @@ class VariableDependencyGraph
     std::vector<Edge> GetEdgesByTo(const std::vector<std::string> &to_list) const;
     std::vector<Edge> GetAllEdges() const;
 
-    Variable* GetVariable(const std::string &node_name) const;
+    Variable *GetVariable(const std::string &node_name) const;
 
   protected:
     bool AddNode(std::unique_ptr<Variable> var);
     bool AddNodes(const std::vector<std::unique_ptr<Variable>> &var_list);
+    bool SetNode(const std::string &node_name, std::unique_ptr<Variable> var);
     bool RemoveNode(const std::string &node_name);
     bool RemoveNodes(const std::vector<std::string> &node_list);
     bool RenameNode(const std::string &old_name, const std::string &new_name);
