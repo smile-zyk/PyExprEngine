@@ -1,0 +1,148 @@
+@startuml xexprengine_class_diagram_corrected
+
+title xexprengine Expression Engine Class Diagram (Corrected)
+
+' 核心值类型
+class Value {
+  +Type(): type_info
+  +ToString(): string
+  +Cast<T>(): T
+  +IsNull(): bool
+}
+
+class Optional<T> {
+  +has_value(): bool
+  +value(): T
+  +value_or(default): T
+}
+
+' 表达式结果
+enum ErrorCode {
+  Success
+  ParseError
+  EvaluationError
+  TypeMismatch
+  UnknownVariable
+  DivisionByZero
+  InvalidOperation
+  Overflow
+  Underflow
+  OutOfMemory
+  InternalError
+}
+
+class EvalResult {
+  -Value value
+  -ErrorCode error_code
+  -string error_message
+  +IsOk(): bool
+}
+
+class ParseResult {
+  -unordered_set<string> variables
+  -unordered_set<string> functions
+  -unordered_set<string> modules
+}
+
+' 变量系统
+abstract class Variable {
+  {abstract} +GetValue(): Value
+  {abstract} +Evaluate(): Value
+  {abstract} +GetType(): Variable::Type
+  +As<T>(): T*
+}
+
+class RawVariable {
+  -Value value_
+  +Evaluate(): Value override
+}
+
+class ExprVariable {
+  -string expression_
+  -ErrorCode error_code_
+  -string error_message_
+  -ParseResult parse_result_
+  +Evaluate(): Value override
+}
+
+class VariableFactory {
+  +CreateRawVariable()
+  +CreateExprVariable()
+}
+
+' 依赖图系统
+class VariableDependencyGraph {
+  +TopologicalSort(): vector<string>
+  +GetNodeDependencies(): unordered_set<string>
+  +GetNodeDependents(): unordered_set<string>
+  +IsNodeDirty(): bool
+  +GetVariable(): Variable*
+}
+
+class Node {
+  -unordered_set<string> dependencies_
+  -unordered_set<string> dependents_
+  -unique_ptr<Variable> variable_
+  -bool is_dirty_
+}
+
+class Edge {
+  -string from_
+  -string to_
+}
+
+class DependencyCycleException {
+  -vector<vector<string>> cycle_path_list_
+  -Operation operation_
+}
+
+' 上下文系统
+class ExprContext {
+  -unique_ptr<VariableDependencyGraph> graph_
+  -string name_
+  -ExprEngine* engine_
+  +GetVariable()
+  +AddVariable()
+  +RemoveVariable()
+  +Evaluate()
+  +Parse()
+}
+
+class ExprEngine {
+  -unordered_map<string, unique_ptr<ExprContext>> context_map_
+  -ExprContext* current_context_
+  +RegisterContext()
+  +SetCurrentContext()
+  +RemoveContext()
+  +GetCurrentContext()
+}
+
+' 类型转换
+namespace value_convert {
+  class StringConverter {
+    +ToString<T>(): string
+  }
+}
+
+' 关系定义
+Value <|-- Optional
+ErrorCode <-- EvalResult
+ParseResult <-- ExprVariable
+
+Variable <|-- RawVariable
+Variable <|-- ExprVariable
+VariableFactory --> Variable
+
+ExprContext "1" *-- "1" VariableDependencyGraph
+VariableDependencyGraph "1" *-- "*" Node
+Node "1" *-- "1" Variable
+VariableDependencyGraph "1" *-- "*" Edge
+
+ExprEngine "1" *-- "*" ExprContext
+Variable o-- "1" ExprContext : context_
+
+DependencyCycleException -[dashed]|> std::runtime_error
+
+StringConverter ..> Value : converts
+
+@enduml
