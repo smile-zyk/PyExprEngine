@@ -16,7 +16,7 @@ class Variable
         Func,
     };
 
-    Variable(const std::string &name, const ExprContext *context = nullptr) : name_(name), context_(context) {}
+    Variable(const std::string &name, ExprContext *context = nullptr) : name_(name), context_(context) {}
     virtual ~Variable() = default;
     const std::string &name() const
     {
@@ -28,10 +28,10 @@ class Variable
         return context_;
     }
 
-    template <typename T>
-    auto As() const -> typename std::enable_if<std::is_base_of<Variable, T>::value, const T *>::type
+    template <typename T, typename std::enable_if<std::is_base_of<Variable, T>::value, int>::type = 0>
+    T* As() noexcept
     {
-        return static_cast<const T *>(this);
+        return dynamic_cast<T *>(this);
     }
 
     Value GetValue() const;
@@ -45,7 +45,7 @@ class Variable
         name_ = name;
     }
 
-    void set_context(const ExprContext *context)
+    void set_context(ExprContext *context)
     {
         context_ = context;
     }
@@ -54,7 +54,8 @@ class Variable
 
   private:
     std::string name_;
-    const ExprContext *context_;
+    bool dirty_flag_;
+    ExprContext *context_;
 };
 
 class RawVariable : public Variable
@@ -76,7 +77,7 @@ class RawVariable : public Variable
     }
 
   protected:
-    RawVariable(const std::string &name, const Value &value, const ExprContext *context = nullptr)
+    RawVariable(const std::string &name, const Value &value, ExprContext *context = nullptr)
         : Variable(name, context), value_(value)
     {
     }
@@ -117,7 +118,7 @@ class ExprVariable : public Variable
     }
 
   protected:
-    ExprVariable(const std::string &name, const std::string &expression, const ExprContext *context = nullptr)
+    ExprVariable(const std::string &name, const std::string &expression, ExprContext *context = nullptr)
         : Variable(name, context), expression_(expression)
     {
         Parse();

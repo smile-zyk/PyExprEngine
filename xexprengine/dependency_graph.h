@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <stack>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -11,33 +12,32 @@
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index_container.hpp>
 
+#include "optional.h"
+
 namespace xexprengine
 {
 class DependencyCycleException : public std::runtime_error
 {
   public:
-    enum class Operation
-    {
-        kAddNode,
-        kAddEdge
-    };
-    
-    explicit DependencyCycleException(const std::vector<std::vector<std::string>> &cycle_path_list, Operation operation)
-        : std::runtime_error(BuildErrorMessage(cycle_path_list)), cycle_path_list_(cycle_path_list), operation_(operation)
+    explicit DependencyCycleException(const std::vector<std::string> &cycle_path)
+        : std::runtime_error(BuildErrorMessage(cycle_path)), cycle_path_(cycle_path)
     {
     }
 
-    const std::vector<std::vector<std::string>> &cycle_path_list() const noexcept
-    {
-        return cycle_path_list_;
-    }
+    DependencyCycleException(const DependencyCycleException &) = default;
+    DependencyCycleException &operator=(const DependencyCycleException &) = default;
 
-    Operation operation() const noexcept { return operation_; }
+    DependencyCycleException(DependencyCycleException &&) = default;
+    DependencyCycleException &operator=(DependencyCycleException &&) = default;
+
+    const std::vector<std::string> &cycle_path() const noexcept
+    {
+        return cycle_path_;
+    }
 
   private:
-    static std::string BuildErrorMessage(const std::vector<std::vector<std::string>> &cycle_path_list);
-    std::vector<std::vector<std::string>> cycle_path_list_;
-    Operation operation_;
+    static std::string BuildErrorMessage(const std::vector<std::string> &cycle_path);
+    std::vector<std::string> cycle_path_;
 };
 
 class DependencyGraph
@@ -47,6 +47,13 @@ class DependencyGraph
     {
       public:
         Edge(const std::string &from, const std::string &to) : from_(from), to_(to) {}
+        ~Edge() = default;
+
+        Edge(const Edge &) = default;
+        Edge &operator=(const Edge &) = default;
+        Edge(Edge &&) = default;
+        Edge &operator=(Edge &&) = default;
+
         const std::string &from() const
         {
             return from_;
@@ -65,7 +72,14 @@ class DependencyGraph
     class Node
     {
       public:
-        Node() : is_dirty_(true) {}
+        Node() {}
+
+        ~Node() = default;
+        Node(const Node &) = default;
+        Node &operator=(const Node &) = default;
+        Node(Node &&) = default;
+        Node &operator=(Node &&) = default;
+
         const std::unordered_set<std::string> &dependencies() const
         {
             return dependencies_;
@@ -74,94 +88,36 @@ class DependencyGraph
         {
             return dependents_;
         }
-        bool is_dirty() const
-        {
-            return is_dirty_;
-        }
 
       private:
         std::unordered_set<std::string> dependencies_;
         std::unordered_set<std::string> dependents_;
-        bool is_dirty_;
         friend class DependencyGraph;
-    };
-
-    DependencyGraph() = default;
-    ~DependencyGraph() = default;
-
-    DependencyGraph(const DependencyGraph&) = delete;
-    DependencyGraph& operator=(const DependencyGraph&) = delete;
-    
-    DependencyGraph(DependencyGraph&&) = default;
-    DependencyGraph& operator=(DependencyGraph&&) = default;
-
-    std::vector<std::string> TopologicalSort() const;
-
-    std::unordered_set<std::string> GetNodeDependencies(const std::string &node_name) const;
-    std::unordered_set<std::string> GetNodeDependents(const std::string &node_name) const;
-
-    bool IsNodeDirty(const std::string &node_name) const;
-    bool IsNodeExist(const std::string &node_name) const;
-    bool IsNodeAllDependencyExist() const;
-
-    std::vector<Edge> GetEdgesByFrom(const std::string &from) const;
-    std::vector<Edge> GetEdgesByFrom(const std::vector<std::string> &from_list) const;
-    std::vector<Edge> GetEdgesByTo(const std::string &to) const;
-    std::vector<Edge> GetEdgesByTo(const std::vector<std::string> &to_list) const;
-    std::vector<Edge> GetAllEdges() const;
-
-  protected:
-    bool AddNode(const std::string& node_name);
-    bool AddNodes(const std::vector<std::string>& node_list);
-    bool RemoveNode(const std::string &node_name);
-    bool RemoveNodes(const std::vector<std::string> &node_list);
-    bool RenameNode(const std::string &old_name, const std::string &new_name);
-    bool SetNodeDirty(const std::string &node_name, bool dirty);
-    bool ClearNodeDependencyEdges(const std::string &node_name);
-    bool AddEdge(const std::string &from, const std::string &to);
-    bool AddEdge(const Edge &edge);
-    bool AddEdges(const std::vector<Edge> &edge_list);
-    bool RemoveEdge(const Edge &edge);
-    bool RemoveEdges(const std::vector<Edge> &edge_list);
-    void UpdateGraph(std::function<void(const std::string &)> update_callback);
-    void Reset();
-
-    friend class ExprContext;
-
-  private:
-    void ActiveEdgeToNodes(const Edge &edge);
-    void DeactiveEdgeToNodes(const Edge &edge);
-    bool HasCycle() const;
-    std::vector<std::string> FindNodeCyclePath(const std::string &node_name) const;
-    std::vector<std::vector<std::string>> FindCyclePath() const;
-    bool FindCycleDFS(
-        const std::string &node_name, std::unordered_set<std::string> &visited,
-        std::unordered_set<std::string> &recursionStack, std::vector<std::string> &cycle_path
-    ) const;
-    void MakeNodeDependentsDirty(const std::string &node_name, std::unordered_set<std::string> &processed_nodes);
-
-    struct EdgeHash
-    {
-        size_t operator()(const Edge &edge) const
-        {
-            return std::hash<std::string>()(edge.from()) ^ (std::hash<std::string>()(edge.to()) << 1);
-        }
-    };
-
-    struct EdgeEqual
-    {
-        bool operator()(const Edge &lhs, const Edge &rhs) const
-        {
-            return lhs.from() == rhs.from() && lhs.to() == rhs.to();
-        }
     };
 
     struct EdgeContainer
     {
         struct ByFrom
         {};
+
         struct ByTo
         {};
+
+        struct EdgeHash
+        {
+            size_t operator()(const Edge &edge) const
+            {
+                return std::hash<std::string>()(edge.from()) ^ (std::hash<std::string>()(edge.to()) << 1);
+            }
+        };
+
+        struct EdgeEqual
+        {
+            bool operator()(const Edge &lhs, const Edge &rhs) const
+            {
+                return lhs.from() == rhs.from() && lhs.to() == rhs.to();
+            }
+        };
 
         typedef boost::multi_index::multi_index_container<
             Edge, boost::multi_index::indexed_by<
@@ -171,9 +127,183 @@ class DependencyGraph
                       boost::multi_index::hashed_non_unique<
                           boost::multi_index::tag<ByTo>, boost::multi_index::member<Edge, std::string, &Edge::to_>>>>
             Type;
+
+        typedef std::pair<
+            Type::index<ByFrom>::type::const_iterator, EdgeContainer::Type::index<ByFrom>::type::const_iterator>
+            RangeByFrom;
+        typedef std::pair<
+            Type::index<ByTo>::type::const_iterator, EdgeContainer::Type::index<ByTo>::type::const_iterator>
+            RangeByTo;
+        typedef std::pair<Type::const_iterator, Type::const_iterator> Range;
     };
 
+    class BatchUpdateGuard
+    {
+      public:
+        explicit BatchUpdateGuard(DependencyGraph *graph) : graph_(graph), committed_(false)
+        {
+            can_update_ = graph_->BeginBatchUpdate();
+        }
+        ~BatchUpdateGuard()
+        {
+            if (can_update_ && !committed_)
+            {
+                graph_->EndBatchUpdate();
+            }
+        }
+        void commit() noexcept
+        {
+            committed_ = true;
+        }
+
+      private:
+        DependencyGraph *graph_;
+        bool committed_;
+        bool can_update_;
+    };
+
+    DependencyGraph() = default;
+    ~DependencyGraph() = default;
+
+    DependencyGraph(const DependencyGraph &) = delete;
+    DependencyGraph &operator=(const DependencyGraph &) = delete;
+
+    DependencyGraph(DependencyGraph &&) = default;
+    DependencyGraph &operator=(DependencyGraph &&) = default;
+
+    // get node and edge
+    const Node *GetNode(const std::string &node_name) const;
+    EdgeContainer::RangeByFrom GetEdgesByFrom(const std::string &from) const;
+    EdgeContainer::RangeByTo GetEdgesByTo(const std::string &to) const;
+    EdgeContainer::Range GetAllEdges() const;
+    bool IsNodeExist(const std::string &node_name) const;
+    bool IsEdgeExist(const Edge &edge) const;
+
+    bool BeginBatchUpdate();
+    bool EndBatchUpdate();
+
+    // single operation
+    bool AddNode(const std::string &node_name);
+    bool RemoveNode(const std::string &node_name);
+    bool AddEdge(const Edge &edge);
+    bool RemoveEdge(const Edge &edge);
+    bool SetNodeDirty(const std::string &node_name, bool dirty);
+
+    // batch operation
+    bool AddNodes(const std::vector<std::string> &node_list);
+    bool RemoveNodes(const std::vector<std::string> &node_list);
+    bool AddEdges(const std::vector<Edge> &edge_list);
+    bool RemoveEdges(const std::vector<Edge> &edge_list);
+
+    void Traversal(std::function<void(const std::string &)> callback);
+    void Reset();
+
+    // topological sort
+    std::vector<std::string> TopologicalSort() const;
+
+  private:
+    // for rollback
+    struct Operation
+    {
+        enum class Type
+        {
+            kAddNode,
+            kRemoveNode,
+            kAddEdge,
+            kRemoveEdge,
+        };
+
+        Operation(Type type_, const std::string &node_) : type(type_)
+        {
+            new (&node) std::string(node_);
+        }
+        Operation(Type type_, const Edge &edge_) : type(type_)
+        {
+            new (&edge) Edge(edge_);
+        }
+
+        ~Operation()
+        {
+            switch (type)
+            {
+            case Type::kAddNode:
+            case Type::kRemoveNode:
+                node.~basic_string();
+                break;
+            case Type::kAddEdge:
+            case Type::kRemoveEdge:
+                edge.~Edge();
+                break;
+            }
+        }
+
+        Operation(const Operation &other) : type(other.type)
+        {
+            switch (type)
+            {
+            case Type::kAddNode:
+            case Type::kRemoveNode:
+                new (&node) std::string(other.node);
+                break;
+            case Type::kAddEdge:
+            case Type::kRemoveEdge:
+                new (&edge) Edge(other.edge);
+                break;
+            }
+        }
+
+        Operation(Operation &&other) noexcept : type(other.type)
+        {
+            switch (type)
+            {
+            case Type::kAddNode:
+            case Type::kRemoveNode:
+                new (&node) std::string(std::move(other.node));
+                break;
+            case Type::kAddEdge:
+            case Type::kRemoveEdge:
+                new (&edge) Edge(std::move(other.edge));
+                break;
+            }
+        }
+
+        Operation &operator=(const Operation &other)
+        {
+            if (this != &other)
+            {
+                this->~Operation();
+                new (this) Operation(other);
+            }
+            return *this;
+        }
+
+        Operation &operator=(Operation &&other) noexcept
+        {
+            if (this != &other)
+            {
+                this->~Operation();
+                new (this) Operation(std::move(other));
+            }
+            return *this;
+        }
+
+        Type type;
+        union
+        {
+            std::string node;
+            Edge edge;
+        };
+    };
+
+    void RollBack() noexcept;
+    void ActiveEdge(const Edge &edge);
+    void DeactiveEdge(const Edge &edge);
+    // use kahn's algorithm
+    Optional<std::vector<std::string>> CheckCycle();
+
     std::unordered_map<std::string, std::unique_ptr<Node>> node_map_;
-    EdgeContainer::Type edges_;
+    EdgeContainer::Type edge_container_;
+    bool batch_update_in_progress_{false};
+    std::stack<Operation> operation_stack_;
 };
 } // namespace xexprengine

@@ -7,10 +7,6 @@
 #include <string>
 #include <unordered_map>
 
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-
 namespace xexprengine
 {
 class ExprEngine;
@@ -60,27 +56,8 @@ class ExprContext
     }
 
   private:
-    struct VariableContainer
-    {
-      struct ByName {};
-
-      typedef boost::multi_index::multi_index_container<
-        std::unique_ptr<Variable>,
-        boost::multi_index::indexed_by<
-          boost::multi_index::ordered_unique<
-            boost::multi_index::tag<ByName>,
-            boost::multi_index::const_mem_fun<
-              Variable,
-              const std::string&,
-              &Variable::name
-            >
-          >
-        >
-      > Type;
-    };
-
     std::unique_ptr<DependencyGraph> graph_;
-    VariableContainer::Type variables_;
+    std::unordered_map<std::string, std::unique_ptr<Variable>> variable_map_;
     std::string name_;
     ExprEngine *engine_ = nullptr;
 };
