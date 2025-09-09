@@ -1,6 +1,6 @@
 #include "dependency_graph.h"
 #include "optional.h"
-#include <algorithm>
+#include "queue"
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -288,13 +288,6 @@ bool DependencyGraph::RemoveEdges(const std::vector<Edge> &edge_list)
     return res;
 }
 
-bool DependencyGraph::HasCycle() const
-{
-    std::vector<std::string> top_order = TopologicalSort();
-
-    return top_order.size() != node_map_.size();
-}
-
 std::vector<std::string> DependencyGraph::TopologicalSort() const
 {
     // Kahn's Algorithm
@@ -329,20 +322,25 @@ std::vector<std::string> DependencyGraph::TopologicalSort() const
     return topo_order;
 }
 
-void DependencyGraph::UpdateGraph(std::function<void(const std::string &)> update_callback)
+void DependencyGraph::Traversal(std::function<void(const std::string &)> callback)
 {
     auto topo_order = TopologicalSort();
 
     for (const auto &node_name : topo_order)
     {
-        update_callback(node_name);
+        callback(node_name);
     }
 }
 
 void DependencyGraph::Reset()
 {
     node_map_.clear();
-    edges_.clear();
+    edge_container_.clear();
+    while (!operation_stack_.empty())
+    {
+        operation_stack_.pop();
+    }
+    batch_update_in_progress_ = false;
 }
 
 void DependencyGraph::ActiveEdge(const DependencyGraph::Edge &edge)
@@ -364,4 +362,75 @@ void DependencyGraph::DeactiveEdge(const DependencyGraph::Edge &edge)
     {
         node_map_[edge.to_]->dependents_.erase(edge.from_);
     }
+}
+
+// kahn's algorithm
+Optional<std::vector<std::string>> DependencyGraph::CheckCycle()
+{
+    std::unordered_map<std::string, int> in_degree;
+    std::queue<std::string> zero_in_degree_queue;
+    std::vector<std::string> topo_order;
+
+    for (const auto &entry : node_map_)
+    {
+        in_degree[entry.first] = entry.second->dependencies_.size();
+        if (in_degree[entry.first] == 0)
+        {
+            zero_in_degree_queue.push(entry.first);
+        }
+    }
+
+
+    while (!zero_in_degree_queue.empty())
+    {
+        auto node_name = zero_in_degree_queue.front();
+        zero_in_degree_queue.pop();
+        topo_order.push_back(node_name);
+
+        for (const auto &dependent : node_map_.at(node_name)->dependents_)
+        {
+            if (--in_degree[dependent] == 0)
+            {
+                zero_in_degree_queue.push(dependent);
+            }
+        }
+    }
+
+    if (topo_order.size() != node_map_.size())
+    {
+        // cycle detected
+        std::unordered_map<std::string, std::string> cycle_predecessor; 
+
+        std::unordered_set<std::string> cycle_nodes;
+        for (const auto &entry : in_degree) {
+            if (entry.second > 0) {
+                cycle_nodes.insert(entry.first);
+            }
+        }
+
+        for (const auto &node : cycle_nodes) {
+            for (const auto &dep : node_map_.at(node)->dependents_) {
+                if (cycle_nodes.find(dep) != cycle_nodes.end()) {
+                    cycle_predecessor[node] = dep;
+                    break;
+                }
+            }
+        }
+
+        std::string start = *cycle_nodes.begin();
+        std::vector<std::string> cycle_path;
+        std::unordered_set<std::string> visited;
+
+        std::string current = start;
+        while (visited.find(current) == visited.end()) {
+            visited.insert(current);
+            cycle_path.push_back(current);
+            current = cycle_predecessor[current];
+        }
+
+        auto it = std::find(cycle_path.begin(), cycle_path.end(), current);
+        std::vector<std::string> final_cycle(it, cycle_path.end());
+        return Optional<std::vector<std::string>>(std::move(final_cycle));
+    }
+    return NullOpt;
 }
