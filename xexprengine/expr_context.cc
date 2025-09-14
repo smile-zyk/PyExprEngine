@@ -89,6 +89,7 @@ bool ExprContext::RemoveVariable(const std::string &var_name)
         graph_->InvalidateNode(var_name);
         graph_->RemoveNode(var_name);
         variable_map_.erase(var_name);
+        RemoveContextValue(var_name);
         return true;
     }
     return false;

@@ -261,6 +261,14 @@ TEST_F(ExprContextTest, BasicVariableOperations)
     EXPECT_EQ(context_.GetVariable("C")->As<ExprVariable>()->cached_value().Cast<int>(), 20);
     EXPECT_EQ(context_.GetVariable("C")->As<ExprVariable>()->error_code(), ErrorCode::Success);
     EXPECT_EQ(context_.GetVariable("C")->As<ExprVariable>()->error_message(), "");
+
+    // remove variable A
+    EXPECT_TRUE(context_.RemoveVariable("A"));
+    EXPECT_FALSE(context_.IsVariableExist("A"));
+    EXPECT_FALSE(context_.IsContextValueExist("A"));
+    EXPECT_TRUE(context_.IsVariableExist("B"));
+    EXPECT_TRUE(context_.IsVariableExist("C"));
+    context_.Update();
 }
 
 int main(int argc, char **argv) {
