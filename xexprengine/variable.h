@@ -104,10 +104,14 @@ class ExprVariable : public Variable
         return expression_;
     }
 
-    void SetEvalResult(const EvalResult &result)
+    void set_error_message(const std::string &message)
     {
-        error_code_ = result.error_code;
-        error_message_ = result.error_message;
+        error_message_ = message;
+    }
+
+    void set_error_code(ErrorCode code)
+    {
+        error_code_ = code;
     }
 
     std::string error_message() const

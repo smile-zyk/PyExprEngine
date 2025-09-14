@@ -29,6 +29,9 @@ struct EvalResult
 
 struct ParseResult
 {
+    bool success = true;
+    ErrorCode error_code = ErrorCode::Success;
+    std::string error_message;
     std::unordered_set<std::string> variables;
     std::unordered_set<std::string> functions;
     std::unordered_set<std::string> modules;

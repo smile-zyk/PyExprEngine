@@ -32,8 +32,8 @@ class ExprContext
     bool AddVariables(std::vector<std::unique_ptr<Variable>> var_list);
 
     // set variable : if variable not exist , add variable, otherwise overwrite variable
-    void SetVariable(const std::string& var_name, const Value& value);
-    void SetVariable(const std::string& var_name, const std::string& expression);
+    void SetValue(const std::string& var_name, const Value& value);
+    void SetExpression(const std::string& var_name, const std::string& expression);
     void SetVariable(const std::string& var_name, std::unique_ptr<Variable> variable);
 
     // remove variable
@@ -45,6 +45,8 @@ class ExprContext
 
     // call when exprvariable update expression
     bool UpdateVariableDependencies(const std::string &var_name);
+
+    bool IsVariableDependencyEntire(const std::string &var_name) const;
 
     // check both graph node and variable exist
     bool IsVariableExist(const std::string &var_name) const;
@@ -62,10 +64,23 @@ class ExprContext
     virtual Value GetContextValue(const std::string &var_name) const = 0;
     virtual void SetContextValue(const std::string &var_name, const Value &value) = 0;
     virtual bool RemoveContextValue(const std::string& var_name) = 0;
+    virtual void ClearContextValue() = 0;
+    virtual bool IsContextValueExist(const std::string &var_name) const = 0;
 
     const DependencyGraph* graph()
     {
         return graph_.get();
+    }
+
+  protected:
+    void set_evaluate_callback(std::function<EvalResult(const std::string&,const ExprContext*)> callback)
+    {
+        evaluate_callback_ = callback;
+    }
+
+    void set_parse_callback(std::function<ParseResult(const std::string&)> callback)
+    {
+        parse_callback_ = callback;
     }
 
   private:

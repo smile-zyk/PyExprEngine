@@ -314,6 +314,28 @@ std::vector<std::string> DependencyGraph::TopologicalSort() const
     return topo_order;
 }
 
+bool DependencyGraph::InvalidateNode(const std::string &node_name)
+{
+    auto node = GetNode(node_name);
+    if (node == nullptr)
+    {
+        return false;
+    }
+    node->set_dirty_flag(true);
+    return true;
+}
+
+bool DependencyGraph::UpdateNodeEventStamp(const std::string &node_name)
+{
+    auto node = GetNode(node_name);
+    if (node == nullptr)
+    {
+        return false;
+    }
+    node->set_event_stamp(EventStampGenerator::GetInstance().GetNextStamp());
+    return true;
+}
+
 void DependencyGraph::Traversal(std::function<void(const std::string &)> callback) const
 {
     auto topo_order = TopologicalSort();

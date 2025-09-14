@@ -227,6 +227,8 @@ class DependencyGraph
     bool AddEdges(const std::vector<Edge> &edge_list);
     bool RemoveEdges(const std::vector<Edge> &edge_list);
 
+    bool InvalidateNode(const std::string &node_name);
+    bool UpdateNodeEventStamp(const std::string &node_name);
     void Traversal(std::function<void(const std::string &)> callback) const;
     void Reset();
 

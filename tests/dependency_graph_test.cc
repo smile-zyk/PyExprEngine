@@ -5,92 +5,92 @@
 
 using namespace xexprengine;
 
-// 测试基础节点操作
+// Test basic node operations
 TEST(DependencyGraphTest, NodeOperations) {
   DependencyGraph graph;
   
-  // 添加节点
+  // Add node
   EXPECT_TRUE(graph.AddNode("A"));
   EXPECT_TRUE(graph.IsNodeExist("A"));
   
-  // 重复添加应失败
+  // Adding duplicate should fail
   EXPECT_FALSE(graph.AddNode("A"));
   
-  // 移除节点
+  // Remove node
   EXPECT_TRUE(graph.RemoveNode("A"));
   EXPECT_FALSE(graph.IsNodeExist("A"));
   
-  // 移除不存在的节点应失败
+  // Removing non-existent node should fail
   EXPECT_FALSE(graph.RemoveNode("B"));
 }
 
-// 测试悬空边处理
+// Test dangling edge handling
 TEST(DependencyGraphTest, DanglingEdges) {
   DependencyGraph graph;
   
-  // 添加悬空边（节点都不存在）
+  // Add dangling edge (both nodes don't exist)
   DependencyGraph::Edge edgeAB("A", "B");
   EXPECT_TRUE(graph.AddEdge(edgeAB));
   
-  // 验证边存在但无连接关系
+  // Verify edge exists but no connection relationship
   EXPECT_TRUE(graph.IsEdgeExist(edgeAB));
   EXPECT_EQ(graph.GetNode("A"), nullptr);
   EXPECT_EQ(graph.GetNode("B"), nullptr);
   
-  // 只添加目标节点B
+  // Only add target node B
   EXPECT_TRUE(graph.AddNode("B"));
   auto nodeB = graph.GetNode("B");
   ASSERT_NE(nodeB, nullptr);
   
-  // 验证连接关系未建立（因为A不存在）
-  EXPECT_TRUE(nodeB->dependents().empty());   // B没有被任何节点依赖
-  EXPECT_TRUE(nodeB->dependencies().empty());  // B不依赖任何节点
+  // Verify connection not established (because A doesn't exist)
+  EXPECT_TRUE(nodeB->dependents().empty());   // B has no dependents
+  EXPECT_TRUE(nodeB->dependencies().empty());  // B has no dependencies
   
-  // 添加源节点A - 此时连接关系应自动建立
+  // Add source node A - connection should now be automatically established
   EXPECT_TRUE(graph.AddNode("A"));
   auto nodeA = graph.GetNode("A");
   ASSERT_NE(nodeA, nullptr);
   
-  // 验证连接关系已建立
-  EXPECT_EQ(nodeA->dependencies().size(), 1);  // A依赖B
+  // Verify connection is established
+  EXPECT_EQ(nodeA->dependencies().size(), 1);  // A depends on B
   EXPECT_EQ(*nodeA->dependencies().begin(), "B");
-  EXPECT_EQ(nodeB->dependents().size(), 1);     // B被A依赖
+  EXPECT_EQ(nodeB->dependents().size(), 1);     // B has A as dependent
   EXPECT_EQ(*nodeB->dependents().begin(), "A");
 }
 
-// 测试部分悬空边的激活
+// Test partial dangling edge activation
 TEST(DependencyGraphTest, PartialDanglingEdgeActivation) {
   DependencyGraph graph;
   
-  // 先添加节点A
+  // First add node A
   EXPECT_TRUE(graph.AddNode("A"));
   auto nodeA = graph.GetNode("A");
   ASSERT_NE(nodeA, nullptr);
   
-  // 添加边AB（B不存在）
+  // Add edge AB (B doesn't exist)
   DependencyGraph::Edge edgeAB("A", "B");
   EXPECT_TRUE(graph.AddEdge(edgeAB));
   
-  // 验证连接关系未建立
+  // Verify connection not established
   EXPECT_TRUE(nodeA->dependencies().empty());
   
-  // 添加节点B
+  // Add node B
   EXPECT_TRUE(graph.AddNode("B"));
   auto nodeB = graph.GetNode("B");
   ASSERT_NE(nodeB, nullptr);
   
-  // 验证连接关系已建立
+  // Verify connection is established
   EXPECT_EQ(nodeA->dependencies().size(), 1);
   EXPECT_EQ(*nodeA->dependencies().begin(), "B");
   EXPECT_EQ(nodeB->dependents().size(), 1);
   EXPECT_EQ(*nodeB->dependents().begin(), "A");
 }
 
-// 测试节点移除时的连接断开
+// Test connection deactivation when node is removed
 TEST(DependencyGraphTest, EdgeDeactivationOnNodeRemoval) {
   DependencyGraph graph;
   
-  // 添加完整连接
+  // Add complete connection
   graph.AddNode("A");
   graph.AddNode("B");
   graph.AddEdge({"A", "B"});
@@ -100,50 +100,50 @@ TEST(DependencyGraphTest, EdgeDeactivationOnNodeRemoval) {
   ASSERT_NE(nodeA, nullptr);
   ASSERT_NE(nodeB, nullptr);
   
-  // 验证连接存在
+  // Verify connection exists
   EXPECT_EQ(nodeA->dependencies().size(), 1);
   EXPECT_EQ(nodeB->dependents().size(), 1);
   
-  // 移除节点B
+  // Remove node B
   EXPECT_TRUE(graph.RemoveNode("B"));
   
-  // 验证连接断开（但边仍存在为悬空状态）
+  // Verify connection broken (but edge remains as dangling)
   nodeA = graph.GetNode("A");
   ASSERT_NE(nodeA, nullptr);
   EXPECT_TRUE(nodeA->dependencies().empty());
   EXPECT_TRUE(graph.IsEdgeExist({"A", "B"}));
   
-  // 重新添加节点B
+  // Re-add node B
   EXPECT_TRUE(graph.AddNode("B"));
   nodeB = graph.GetNode("B");
   ASSERT_NE(nodeB, nullptr);
   
-  // 验证连接自动恢复
+  // Verify connection automatically restored
   EXPECT_EQ(nodeA->dependencies().size(), 1);
   EXPECT_EQ(*nodeA->dependencies().begin(), "B");
   EXPECT_EQ(nodeB->dependents().size(), 1);
   EXPECT_EQ(*nodeB->dependents().begin(), "A");
 }
 
-// 测试拓扑排序
+// Test topological sorting
 TEST(DependencyGraphTest, TopologicalSort) {
   DependencyGraph graph;
   
-  // 添加节点
+  // Add nodes
   graph.AddNode("A");
   graph.AddNode("B");
   graph.AddNode("C");
   graph.AddNode("D");
   
-  // 构建依赖: A -> B -> C, D独立
+  // Build dependencies: A -> B -> C, D is independent
   graph.AddEdge({"A", "B"});
   graph.AddEdge({"B", "C"});
   
   auto sorted = graph.TopologicalSort();
   ASSERT_EQ(sorted.size(), 4);
   
-  // 验证顺序: C和D在最前（无依赖）
-  // 拓扑排序中无依赖节点可任意顺序，但依赖顺序必须保持
+  // Verify order: C and D first (no dependencies)
+  // In topological sort, nodes without dependencies can be in any order
   bool c_found = false, d_found = false;
   for (size_t i = 0; i < 2; i++) {
     if (sorted[i] == "C") c_found = true;
@@ -152,7 +152,7 @@ TEST(DependencyGraphTest, TopologicalSort) {
   EXPECT_TRUE(c_found);
   EXPECT_TRUE(d_found);
   
-  // 验证依赖顺序: B在C后，A在B后
+  // Verify dependency order: B after C, A after B
   size_t a_pos = -1, b_pos = -1, c_pos = -1;
   for (size_t i = 0; i < sorted.size(); i++) {
     if (sorted[i] == "A") a_pos = i;
@@ -167,29 +167,29 @@ TEST(DependencyGraphTest, TopologicalSort) {
 TEST(DependencyGraphTest, CycleDetection) {
   DependencyGraph graph;
   
-  // 准备有效依赖
+  // Prepare valid dependency
   graph.AddNode("A");
   graph.AddNode("B");
   graph.AddEdge({"A", "B"});
   
-  // 尝试创建环
+  // Try to create a cycle
   try {
     DependencyGraph::BatchUpdateGuard guard(&graph);
-    graph.AddEdge({"B", "A"});  // 形成环
+    graph.AddEdge({"B", "A"});  // Forms a cycle
     
-    // 提交时应抛出异常
+    // Should throw exception when committing
     guard.commit();
     FAIL() << "Expected DependencyCycleException";
   } catch (const DependencyCycleException& e) {
-    // 验证环路径信息
+    // Verify cycle path information
     const auto& cycle = e.cycle_path();
     
-    // 验证环的基本属性
-    ASSERT_GE(cycle.size(), 2);  // 至少包含起点和终点
-    EXPECT_EQ(cycle.front(), cycle.back());  // 起点和终点相同
-    EXPECT_NE(cycle[0], cycle[1]);  // 中间节点不同
+    // Verify basic cycle properties
+    ASSERT_GE(cycle.size(), 2);  // At least contains start and end
+    EXPECT_EQ(cycle.front(), cycle.back());  // Start and end are the same
+    EXPECT_NE(cycle[0], cycle[1]);  // Intermediate nodes are different
     
-    // 验证环中包含A和B
+    // Verify cycle contains A and B
     bool hasA = false, hasB = false;
     for (const auto& node : cycle) {
       if (node == "A") hasA = true;
@@ -198,10 +198,10 @@ TEST(DependencyGraphTest, CycleDetection) {
     EXPECT_TRUE(hasA);
     EXPECT_TRUE(hasB);
     
-    // 验证环长度正确（A→B→A 或 B→A→B）
+    // Verify correct cycle length (A→B→A or B→A→B)
     EXPECT_TRUE(cycle.size() == 2 || cycle.size() == 3);
     
-    // 如果是3节点环，验证中间节点不同
+    // If it's a 3-node cycle, verify intermediate nodes are different
     if (cycle.size() == 3) {
       EXPECT_NE(cycle[0], cycle[1]);
       EXPECT_NE(cycle[1], cycle[2]);
@@ -210,55 +210,55 @@ TEST(DependencyGraphTest, CycleDetection) {
     FAIL() << "Expected DependencyCycleException";
   }
   
-  // 验证状态回滚
+  // Verify state rollback
   auto nodeA = graph.GetNode("A");
   auto nodeB = graph.GetNode("B");
   ASSERT_NE(nodeA, nullptr);
   ASSERT_NE(nodeB, nullptr);
   
-  // 原始依赖关系保持不变
+  // Original dependency relationship remains unchanged
   EXPECT_EQ(nodeA->dependencies().size(), 1);
   EXPECT_EQ(*nodeA->dependencies().begin(), "B");
   EXPECT_EQ(nodeB->dependents().size(), 1);
   EXPECT_EQ(*nodeB->dependents().begin(), "A");
   
-  // 验证非法边未添加
+  // Verify illegal edge was not added
   EXPECT_FALSE(graph.IsEdgeExist({"B", "A"}));
 }
 
 TEST(DependencyGraphTest, MultipleCyclesDetection) {
   DependencyGraph graph;
   
-  // 添加节点
+  // Add nodes
   graph.AddNodes({"A", "B", "C", "D", "E"});
   
-  // 尝试添加复杂的边结构（包含两个环）
+  // Try to add complex edge structure (containing two cycles)
   try {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 添加边
+    // Add edges
     graph.AddEdges({
-      {"A", "B"},  // A依赖B
-      {"A", "C"},  // A依赖C
-      {"B", "C"},  // B依赖C
-      {"C", "D"},  // C依赖D
-      {"D", "B"},  // D依赖B → 形成环：B→C→D→B
-      {"E", "D"},  // E依赖D
-      {"B", "E"},  // B依赖E → 形成环：B→E→D→B
+      {"A", "B"},  // A depends on B
+      {"A", "C"},  // A depends on C
+      {"B", "C"},  // B depends on C
+      {"C", "D"},  // C depends on D
+      {"D", "B"},  // D depends on B -> Forms cycle: B→C→D→B
+      {"E", "D"},  // E depends on D
+      {"B", "E"},  // B depends on E -> Forms cycle: B→E→D→B
     });
     
-    // 提交操作，应检测到环
+    // Commit operation, should detect cycle
     guard.commit();
     FAIL() << "Expected DependencyCycleException";
   } catch (const DependencyCycleException& e) {
-    // 验证环路径信息
+    // Verify cycle path information
     const auto& cycle = e.cycle_path();
     
-    // 验证环的基本属性
+    // Verify basic cycle properties
     ASSERT_GE(cycle.size(), 3);
     EXPECT_EQ(cycle.front(), cycle.back());
     
-    // 验证环中包含关键节点（B和D）
+    // Verify cycle contains key nodes (B and D)
     bool hasB = false, hasD = false;
     for (const auto& node : cycle) {
       if (node == "B") hasB = true;
@@ -267,34 +267,34 @@ TEST(DependencyGraphTest, MultipleCyclesDetection) {
     EXPECT_TRUE(hasB);
     EXPECT_TRUE(hasD);
     
-    // 可能的环路径：
-    // 环1: [B, C, D, B]
-    // 环2: [B, E, D, B]
+    // Possible cycle paths:
+    // Cycle 1: [B, C, D, B]
+    // Cycle 2: [B, E, D, B]
     
-    // 验证环长度（应为3个不同节点+起点重复）
-    EXPECT_EQ(cycle.size(), 4);  // 3个不同节点 + 起点重复
+    // Verify cycle length (should be 3 different nodes + start repetition)
+    EXPECT_EQ(cycle.size(), 4);  // 3 different nodes + start repetition
     
-    // 验证中间节点
+    // Verify intermediate nodes
     bool hasC = std::find(cycle.begin(), cycle.end(), "C") != cycle.end();
     bool hasE = std::find(cycle.begin(), cycle.end(), "E") != cycle.end();
     
-    // 只能包含C或E中的一个
-    EXPECT_TRUE(hasC ^ hasE);  // XOR操作：要么有C，要么有E，但不能同时有
+    // Can only contain one of C or E
+    EXPECT_TRUE(hasC ^ hasE);  // XOR operation: either has C or has E, but not both
   } catch (...) {
     FAIL() << "Expected DependencyCycleException";
   }
   
-  // 验证所有边都被回滚（没有添加任何边）
+  // Verify all edges were rolled back (no edges added)
   EXPECT_TRUE(graph.GetAllEdges().first == graph.GetAllEdges().second);
   
-  // 验证节点仍然存在
+  // Verify nodes still exist
   EXPECT_TRUE(graph.IsNodeExist("A"));
   EXPECT_TRUE(graph.IsNodeExist("B"));
   EXPECT_TRUE(graph.IsNodeExist("C"));
   EXPECT_TRUE(graph.IsNodeExist("D"));
   EXPECT_TRUE(graph.IsNodeExist("E"));
   
-  // 验证节点没有依赖关系
+  // Verify nodes have no dependencies
   auto nodeA = graph.GetNode("A");
   auto nodeB = graph.GetNode("B");
   auto nodeC = graph.GetNode("C");
@@ -314,7 +314,7 @@ TEST(DependencyGraphTest, MultipleCyclesDetection) {
   EXPECT_TRUE(nodeE->dependencies().empty());
 }
 
-// 测试节点移除时的级联清理
+// Test cascading cleanup when node is removed
 TEST(DependencyGraphTest, NodeRemovalCleanup) {
   DependencyGraph graph;
   
@@ -324,29 +324,29 @@ TEST(DependencyGraphTest, NodeRemovalCleanup) {
   graph.AddEdge({"Parent", "Child1"});
   graph.AddEdge({"Parent", "Child2"});
   
-  // 验证初始连接
+  // Verify initial connection
   auto parent = graph.GetNode("Parent");
   ASSERT_NE(parent, nullptr);
   EXPECT_EQ(parent->dependencies().size(), 2);
   
-  // 移除子节点
+  // Remove child node
   EXPECT_TRUE(graph.RemoveNode("Child1"));
   
-  // 验证连接更新
+  // Verify connection updated
   parent = graph.GetNode("Parent");
   ASSERT_NE(parent, nullptr);
   EXPECT_EQ(parent->dependencies().size(), 1);
   EXPECT_EQ(*parent->dependencies().begin(), "Child2");
   
-  // 验证悬空边仍然存在
+  // Verify dangling edge still exists
   EXPECT_TRUE(graph.IsEdgeExist({"Parent", "Child1"}));
 }
 
-// 测试批量操作提交与回滚
+// Test batch operation commit and rollback
 TEST(DependencyGraphTest, BatchOperations) {
   DependencyGraph graph;
   
-  // 成功提交批量操作
+  // Successful batch operation commit
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
@@ -357,52 +357,52 @@ TEST(DependencyGraphTest, BatchOperations) {
     guard.commit();
   }
   
-  // 验证提交结果
+  // Verify commit results
   EXPECT_TRUE(graph.IsNodeExist("X"));
   EXPECT_TRUE(graph.IsNodeExist("Y"));
   EXPECT_TRUE(graph.IsEdgeExist({"X", "Y"}));
   
-  // 创建环导致回滚
+  // Create cycle causing rollback
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
     graph.AddNode("Z");
     graph.AddEdge({"Y", "Z"});
-    graph.AddEdge({"Z", "X"});  // 形成环 X->Y->Z->X
+    graph.AddEdge({"Z", "X"});  // Forms cycle X->Y->Z->X
     
     try {
       guard.commit();
       FAIL() << "Expected DependencyCycleException";
     } catch (const DependencyCycleException&) {
-      // 预期异常
+      // Expected exception
     }
   }
   
-  // 验证整个批量操作回滚
+  // Verify entire batch operation rolled back
   EXPECT_FALSE(graph.IsNodeExist("Z"));
   EXPECT_FALSE(graph.IsEdgeExist({"Y", "Z"}));
   EXPECT_FALSE(graph.IsEdgeExist({"Z", "X"}));
   
-  // 原始数据应保留
+  // Original data should be preserved
   EXPECT_TRUE(graph.IsNodeExist("X"));
   EXPECT_TRUE(graph.IsNodeExist("Y"));
   EXPECT_TRUE(graph.IsEdgeExist({"X", "Y"}));
 }
 
-// 测试批量添加节点和边（无环）
+// Test batch addition of nodes and edges (no cycle)
 TEST(DependencyGraphTest, BatchAddNodesEdgesSuccess) {
   DependencyGraph graph;
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 批量添加节点
+    // Batch add nodes
     EXPECT_TRUE(graph.AddNodes({"A", "B", "C", "D"}));
     
-    // 混合单个添加节点
+    // Mixed single node addition
     EXPECT_TRUE(graph.AddNode("E"));
     
-    // 批量添加边
+    // Batch add edges
     std::vector<DependencyGraph::Edge> edges = {
       {"A", "B"},
       {"B", "C"},
@@ -411,53 +411,53 @@ TEST(DependencyGraphTest, BatchAddNodesEdgesSuccess) {
     };
     EXPECT_TRUE(graph.AddEdges(edges));
     
-    // 混合单个添加边
+    // Mixed single edge addition
     EXPECT_TRUE(graph.AddEdge({"A", "D"}));
     
     guard.commit();
   }
   
-  // 验证所有节点存在
+  // Verify all nodes exist
   EXPECT_TRUE(graph.IsNodeExist("A"));
   EXPECT_TRUE(graph.IsNodeExist("B"));
   EXPECT_TRUE(graph.IsNodeExist("C"));
   EXPECT_TRUE(graph.IsNodeExist("D"));
   EXPECT_TRUE(graph.IsNodeExist("E"));
   
-  // 验证边存在
+  // Verify edges exist
   EXPECT_TRUE(graph.IsEdgeExist({"A", "B"}));
   EXPECT_TRUE(graph.IsEdgeExist({"B", "C"}));
   EXPECT_TRUE(graph.IsEdgeExist({"C", "D"}));
   EXPECT_TRUE(graph.IsEdgeExist({"D", "E"}));
   EXPECT_TRUE(graph.IsEdgeExist({"A", "D"}));
   
-  // 验证拓扑排序（无环）
+  // Verify topological sort (no cycle)
   EXPECT_NO_THROW(graph.TopologicalSort());
 }
 
-// 测试批量添加节点和边（形成环）
+// Test batch addition of nodes and edges (forming cycle)
 TEST(DependencyGraphTest, BatchAddNodesEdgesCycle) {
   DependencyGraph graph;
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 批量添加节点
+    // Batch add nodes
     EXPECT_TRUE(graph.AddNodes({"A", "B", "C"}));
     
-    // 批量添加边（包括形成环的边）
+    // Batch add edges (including edge that forms cycle)
     std::vector<DependencyGraph::Edge> edges = {
       {"A", "B"},
       {"B", "C"},
-      {"C", "A"}  // 这将形成环
+      {"C", "A"}  // This will form a cycle
     };
     EXPECT_TRUE(graph.AddEdges(edges));
     
-    // 尝试提交，应检测到环
+    // Try to commit, should detect cycle
     EXPECT_THROW(guard.commit(), DependencyCycleException);
   }
   
-  // 验证所有操作已回滚
+  // Verify all operations rolled back
   EXPECT_FALSE(graph.IsNodeExist("A"));
   EXPECT_FALSE(graph.IsNodeExist("B"));
   EXPECT_FALSE(graph.IsNodeExist("C"));
@@ -466,47 +466,47 @@ TEST(DependencyGraphTest, BatchAddNodesEdgesCycle) {
   EXPECT_FALSE(graph.IsEdgeExist({"C", "A"}));
 }
 
-// 测试混合单个和批量操作（无环）
+// Test mixed single and batch operations (no cycle)
 TEST(DependencyGraphTest, MixedOperationsSuccess) {
   DependencyGraph graph;
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 单个添加节点
+    // Single add node
     EXPECT_TRUE(graph.AddNode("A"));
     
-    // 批量添加节点
+    // Batch add nodes
     EXPECT_TRUE(graph.AddNodes({"B", "C"}));
     
-    // 单个添加边
+    // Single add edge
     EXPECT_TRUE(graph.AddEdge({"A", "B"}));
     
-    // 批量添加边
+    // Batch add edges
     EXPECT_TRUE(graph.AddEdges({{"B", "C"}, {"A", "C"}}));
     
-    // 添加独立节点
+    // Add independent node
     EXPECT_TRUE(graph.AddNode("D"));
     
     guard.commit();
   }
   
-  // 验证所有节点存在
+  // Verify all nodes exist
   EXPECT_TRUE(graph.IsNodeExist("A"));
   EXPECT_TRUE(graph.IsNodeExist("B"));
   EXPECT_TRUE(graph.IsNodeExist("C"));
   EXPECT_TRUE(graph.IsNodeExist("D"));
   
-  // 验证边存在
+  // Verify edges exist
   EXPECT_TRUE(graph.IsEdgeExist({"A", "B"}));
   EXPECT_TRUE(graph.IsEdgeExist({"B", "C"}));
   EXPECT_TRUE(graph.IsEdgeExist({"A", "C"}));
   
-  // 验证拓扑排序
+  // Verify topological sort
   auto sorted = graph.TopologicalSort();
   EXPECT_EQ(sorted.size(), 4);
   
-  // 验证依赖关系
+  // Verify dependency relationships
   auto nodeA = graph.GetNode("A");
   auto nodeB = graph.GetNode("B");
   auto nodeC = graph.GetNode("C");
@@ -515,94 +515,94 @@ TEST(DependencyGraphTest, MixedOperationsSuccess) {
   ASSERT_NE(nodeB, nullptr);
   ASSERT_NE(nodeC, nullptr);
   
-  EXPECT_EQ(nodeA->dependencies().size(), 2);  // A依赖B和C
-  EXPECT_EQ(nodeB->dependencies().size(), 1);  // B依赖C
-  EXPECT_TRUE(nodeC->dependencies().empty());  // C无依赖
+  EXPECT_EQ(nodeA->dependencies().size(), 2);  // A depends on B and C
+  EXPECT_EQ(nodeB->dependencies().size(), 1);  // B depends on C
+  EXPECT_TRUE(nodeC->dependencies().empty());  // C has no dependencies
 }
 
-// 测试混合单个和批量操作（形成环）
+// Test mixed single and batch operations (forming cycle)
 TEST(DependencyGraphTest, MixedOperationsCycle) {
   DependencyGraph graph;
   
-  // 预添加一个节点
+  // Pre-add a node
   graph.AddNode("X");
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 批量添加节点
+    // Batch add nodes
     EXPECT_TRUE(graph.AddNodes({"A", "B", "C"}));
     
-    // 单个添加边
+    // Single add edge
     EXPECT_TRUE(graph.AddEdge({"A", "B"}));
     
-    // 批量添加边
-    EXPECT_TRUE(graph.AddEdges({{"B", "C"}, {"C", "A"}}));  // 形成环A→B→C→A
+    // Batch add edges
+    EXPECT_TRUE(graph.AddEdges({{"B", "C"}, {"C", "A"}}));  // Forms cycle A→B→C→A
     
-    // 添加另一个有效边
+    // Add another valid edge
     EXPECT_TRUE(graph.AddEdge({"X", "A"}));
     
-    // 尝试提交，应检测到环
+    // Try to commit, should detect cycle
     EXPECT_THROW(guard.commit(), DependencyCycleException);
   }
   
-  // 验证所有批量操作已回滚
+  // Verify all batch operations rolled back
   EXPECT_FALSE(graph.IsNodeExist("A"));
   EXPECT_FALSE(graph.IsNodeExist("B"));
   EXPECT_FALSE(graph.IsNodeExist("C"));
   
-  // 验证环边不存在
+  // Verify cycle edges don't exist
   EXPECT_FALSE(graph.IsEdgeExist({"A", "B"}));
   EXPECT_FALSE(graph.IsEdgeExist({"B", "C"}));
   EXPECT_FALSE(graph.IsEdgeExist({"C", "A"}));
   
-  // 验证有效边也被回滚
+  // Verify valid edge also rolled back
   EXPECT_FALSE(graph.IsEdgeExist({"X", "A"}));
   
-  // 验证预添加节点保持不变
+  // Verify pre-added node remains unchanged
   EXPECT_TRUE(graph.IsNodeExist("X"));
   EXPECT_TRUE(graph.GetNode("X")->dependencies().empty());
   EXPECT_TRUE(graph.GetNode("X")->dependents().empty());
 }
 
-// 测试批量操作中的重复添加
+// Test duplicate additions in batch operations
 TEST(DependencyGraphTest, BatchDuplicateOperations) {
   DependencyGraph graph;
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 添加节点（包含重复）
-    EXPECT_FALSE(graph.AddNodes({"A", "A", "B"}));  // 重复添加A
-    EXPECT_FALSE(graph.AddNode("A"));                // 单个重复添加
-    EXPECT_TRUE(graph.AddNode("C"));                 // 有效添加
-    EXPECT_TRUE(graph.AddNode("D"));                 // 添加新节点避免环
+    // Add nodes (including duplicates)
+    EXPECT_FALSE(graph.AddNodes({"A", "A", "B"}));  // Duplicate add A
+    EXPECT_FALSE(graph.AddNode("A"));                // Single duplicate add
+    EXPECT_TRUE(graph.AddNode("C"));                 // Valid add
+    EXPECT_TRUE(graph.AddNode("D"));                 // Add new node to avoid cycle
     
-    // 添加边（包含重复）
+    // Add edges (including duplicates)
     std::vector<DependencyGraph::Edge> edges = {
       {"A", "B"},
-      {"A", "B"},  // 重复边
+      {"A", "B"},  // Duplicate edge
       {"B", "C"}
     };
-    EXPECT_FALSE(graph.AddEdges(edges));  // 返回false因为有重复
+    EXPECT_FALSE(graph.AddEdges(edges));  // Returns false because of duplicates
     
-    // 添加单个边（重复）
+    // Add single edge (duplicate)
     EXPECT_FALSE(graph.AddEdge({"A", "B"}));
     
-    // 添加不会形成环的有效边
-    EXPECT_TRUE(graph.AddEdge({"C", "D"}));  // 不会形成环
+    // Add valid edge that won't form cycle
+    EXPECT_TRUE(graph.AddEdge({"C", "D"}));  // Won't form cycle
     
-    // 提交所有操作
+    // Commit all operations
     guard.commit();
   }
   
-  // 验证最终状态
+  // Verify final state
   EXPECT_TRUE(graph.IsNodeExist("A"));
   EXPECT_TRUE(graph.IsNodeExist("B"));
   EXPECT_TRUE(graph.IsNodeExist("C"));
   EXPECT_TRUE(graph.IsNodeExist("D"));
   
-  // 验证边（重复添加只应存在一次）
+  // Verify edges (duplicate addition should only exist once)
   EXPECT_TRUE(graph.IsEdgeExist({"A", "B"}));
   EXPECT_TRUE(graph.IsEdgeExist({"B", "C"}));
   EXPECT_TRUE(graph.IsEdgeExist({"C", "D"}));
@@ -610,10 +610,10 @@ TEST(DependencyGraphTest, BatchDuplicateOperations) {
   std::vector<std::string> sorted;
   sorted = graph.TopologicalSort();
   
-  // 验证排序结果
+  // Verify sort results
   ASSERT_EQ(sorted.size(), 4);
   
-  // 依赖顺序应该是 D -> C -> B -> A
+  // Dependency order should be D -> C -> B -> A
   size_t posD = -1, posC = -1, posB = -1, posA = -1;
   for (size_t i = 0; i < sorted.size(); i++) {
     if (sorted[i] == "A") posA = i;
@@ -622,44 +622,44 @@ TEST(DependencyGraphTest, BatchDuplicateOperations) {
     if (sorted[i] == "D") posD = i;
   }
   
-  // 验证依赖顺序
+  // Verify dependency order
   EXPECT_LT(posD, posC);
   EXPECT_LT(posC, posB);
   EXPECT_LT(posB, posA);
 }
 
-// 测试批量操作中的部分无效操作
+// Test partially invalid operations in batch
 TEST(DependencyGraphTest, BatchPartialInvalidOperations) {
   DependencyGraph graph;
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 添加有效节点
+    // Add valid node
     EXPECT_TRUE(graph.AddNode("A"));
     
-    // 添加边到不存在的节点
-    EXPECT_TRUE(graph.AddEdge({"A", "B"}));  // B不存在，但边会被存储
+    // Add edge to non-existent node
+    EXPECT_TRUE(graph.AddEdge({"A", "B"}));  // B doesn't exist, but edge will be stored
     
-    // 批量添加节点（包含有效和无效）
-    EXPECT_FALSE(graph.AddNodes({"B", "C", "B"}));  // 重复添加B
+    // Batch add nodes (including valid and invalid)
+    EXPECT_FALSE(graph.AddNodes({"B", "C", "B"}));  // Duplicate add B
     
-    // 添加有效边
+    // Add valid edge
     EXPECT_TRUE(graph.AddEdge({"B", "C"}));
     
-    // 添加会形成环的边
-    EXPECT_TRUE(graph.AddEdge({"C", "A"}));  // 形成环A→B→C→A
+    // Add edge that will form cycle
+    EXPECT_TRUE(graph.AddEdge({"C", "A"}));  // Forms cycle A→B→C→A
     
-    // 尝试提交，应检测到环
+    // Try to commit, should detect cycle
     EXPECT_THROW(guard.commit(), DependencyCycleException);
   }
   
-  // 验证所有操作已回滚
+  // Verify all operations rolled back
   EXPECT_FALSE(graph.IsNodeExist("A"));
   EXPECT_FALSE(graph.IsNodeExist("B"));
   EXPECT_FALSE(graph.IsNodeExist("C"));
   
-  // 验证边不存在
+  // Verify edges don't exist
   EXPECT_FALSE(graph.IsEdgeExist({"A", "B"}));
   EXPECT_FALSE(graph.IsEdgeExist({"B", "C"}));
   EXPECT_FALSE(graph.IsEdgeExist({"C", "A"}));
@@ -668,62 +668,62 @@ TEST(DependencyGraphTest, BatchPartialInvalidOperations) {
 TEST(DependencyGraphTest, BatchRemoveOperations) {
   DependencyGraph graph;
   
-  // 预填充数据
+  // Pre-populate data
   graph.AddNodes({"A", "B", "C", "D"});
   graph.AddEdges({
-    {"A", "B"},  // A依赖B
-    {"B", "C"},  // B依赖C
-    {"C", "D"}   // C依赖D
+    {"A", "B"},  // A depends on B
+    {"B", "C"},  // B depends on C
+    {"C", "D"}   // C depends on D
   });
   
   {
     DependencyGraph::BatchUpdateGuard guard(&graph);
     
-    // 批量移除节点
+    // Batch remove nodes
     EXPECT_TRUE(graph.RemoveNodes({"B", "C"}));
     
-    // 移除悬空边（节点不存在但边仍然存在）
-    EXPECT_TRUE(graph.RemoveEdge({"C", "D"}));  // 移除悬空边
+    // Remove dangling edge (nodes don't exist but edge still exists)
+    EXPECT_TRUE(graph.RemoveEdge({"C", "D"}));  // Remove dangling edge
     
-    // 添加新节点和边
+    // Add new node and edges
     EXPECT_TRUE(graph.AddNode("E"));
-    EXPECT_TRUE(graph.AddEdge({"A", "E"}));  // A依赖E
-    EXPECT_TRUE(graph.AddEdge({"E", "D"}));   // E依赖D
+    EXPECT_TRUE(graph.AddEdge({"A", "E"}));  // A depends on E
+    EXPECT_TRUE(graph.AddEdge({"E", "D"}));   // E depends on D
     
     guard.commit();
   }
   
-  // 验证节点状态
+  // Verify node status
   EXPECT_TRUE(graph.IsNodeExist("A"));
   EXPECT_FALSE(graph.IsNodeExist("B"));
   EXPECT_FALSE(graph.IsNodeExist("C"));
   EXPECT_TRUE(graph.IsNodeExist("D"));
   EXPECT_TRUE(graph.IsNodeExist("E"));
   
-  // 验证边状态 - 悬空边仍然存在直到显式移除
-  EXPECT_TRUE(graph.IsEdgeExist({"A", "B"}));   // 悬空边（A存在，B不存在）
-  EXPECT_TRUE(graph.IsEdgeExist({"B", "C"}));   // 悬空边（B和C都不存在）
-  EXPECT_FALSE(graph.IsEdgeExist({"C", "D"}));  // 已被显式移除
+  // Verify edge status - dangling edges still exist until explicitly removed
+  EXPECT_TRUE(graph.IsEdgeExist({"A", "B"}));   // Dangling edge (A exists, B doesn't)
+  EXPECT_TRUE(graph.IsEdgeExist({"B", "C"}));   // Dangling edge (B and C don't exist)
+  EXPECT_FALSE(graph.IsEdgeExist({"C", "D"}));  // Explicitly removed
   EXPECT_TRUE(graph.IsEdgeExist({"A", "E"}));
   EXPECT_TRUE(graph.IsEdgeExist({"E", "D"}));
   
-  // 验证连接关系
+  // Verify connection relationships
   auto nodeA = graph.GetNode("A");
   ASSERT_NE(nodeA, nullptr);
-  EXPECT_EQ(nodeA->dependencies().size(), 1);  // 只有E，B是悬空边
+  EXPECT_EQ(nodeA->dependencies().size(), 1);  // Only E, B is dangling edge
   EXPECT_EQ(*nodeA->dependencies().begin(), "E");
   
-  // 验证拓扑排序
+  // Verify topological sort
   auto sorted = graph.TopologicalSort();
   ASSERT_EQ(sorted.size(), 3);
   
-  // 依赖顺序：D -> E -> A
+  // Dependency order: D -> E -> A
   EXPECT_EQ(sorted[0], "D");
   EXPECT_EQ(sorted[1], "E");
   EXPECT_EQ(sorted[2], "A");
 }
 
-// 测试重置图
+// Test graph reset
 TEST(DependencyGraphTest, Reset) {
   DependencyGraph graph;
   
@@ -735,9 +735,14 @@ TEST(DependencyGraphTest, Reset) {
   
   graph.Reset();
   
-  // 验证所有内容已清除
+  // Verify all content cleared
   EXPECT_FALSE(graph.IsNodeExist("X"));
   EXPECT_FALSE(graph.IsNodeExist("Y"));
   EXPECT_FALSE(graph.IsNodeExist("Z"));
   EXPECT_TRUE(graph.GetAllEdges().first == graph.GetAllEdges().second);
+}
+
+int main(int argc, char **argv) {
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

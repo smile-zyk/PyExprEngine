@@ -4,7 +4,6 @@
 #include <functional>
 #include <iostream>
 
-
 namespace xexprengine
 {
 class EventStamp
