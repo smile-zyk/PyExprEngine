@@ -11,13 +11,3 @@ std::unique_ptr<Variable> VariableFactory::CreateExprVariable(const std::string 
 {
     return std::unique_ptr<Variable>(new ExprVariable(name, expression));
 }
-
-std::unique_ptr<Variable> VariableFactory::CreateVariable(const std::string &name, const Value &value)
-{
-    return CreateRawVariable(name, value);
-}
-
-std::unique_ptr<Variable> VariableFactory::CreateVariable(const std::string &name, const std::string &expression)
-{
-    return CreateExprVariable(name, expression);
-}

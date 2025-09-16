@@ -48,7 +48,7 @@ class DependencyGraph
     class Node
     {
       public:
-        Node() : dirty_flag_(true) {}
+        Node() : dirty_flag_(false) {}
 
         ~Node() = default;
         Node(const Node &) = default;
@@ -202,7 +202,6 @@ class DependencyGraph
     DependencyGraph(DependencyGraph &&) = default;
     DependencyGraph &operator=(DependencyGraph &&) = default;
 
-    // get node and edge
     const Node* GetNode(const std::string& node_name) const;
     Node* GetNode(const std::string& node_name);
     EdgeContainer::RangeByFrom GetEdgesByFrom(const std::string &from) const;

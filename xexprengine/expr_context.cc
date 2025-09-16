@@ -12,7 +12,7 @@
 
 using namespace xexprengine;
 
-ExprContext::ExprContext()
+ExprContext::ExprContext() noexcept
     : graph_(std::unique_ptr<DependencyGraph>(new DependencyGraph())),
       evaluate_callback_(nullptr),
       parse_callback_(nullptr)
@@ -43,8 +43,7 @@ bool ExprContext::AddVariable(std::unique_ptr<Variable> var)
         }
         catch (xexprengine::DependencyCycleException e)
         {
-            // todo
-            return false;
+            throw;
         }
         return true;
     }
@@ -65,21 +64,20 @@ bool ExprContext::AddVariables(std::vector<std::unique_ptr<Variable>> var_list)
     }
     catch (xexprengine::DependencyCycleException e)
     {
-        // todo
-        return false;
+        throw;
     }
     return res;
 }
 
 void ExprContext::SetValue(const std::string &var_name, const Value &value)
 {
-    auto var = VariableFactory::CreateVariable(var_name, value);
+    auto var = VariableFactory::CreateRawVariable(var_name, value);
     SetVariable(var_name, std::move(var));
 }
 
 void ExprContext::SetExpression(const std::string &var_name, const std::string &expression)
 {
-    auto var = VariableFactory::CreateVariable(var_name, expression);
+    auto var = VariableFactory::CreateExprVariable(var_name, expression);
     SetVariable(var_name, std::move(var));
 }
 
@@ -102,19 +100,34 @@ void ExprContext::SetVariable(const std::string &var_name, std::unique_ptr<Varia
     }
     catch (xexprengine::DependencyCycleException e)
     {
-        // todo
-        return;
+        throw;
     }
 }
 
 bool ExprContext::RemoveVariable(const std::string &var_name)
 {
+    DependencyGraph::BatchUpdateGuard guard(graph_.get());
     if (IsVariableExist(var_name) == true)
     {
         graph_->RemoveNode(var_name);
+        auto edges = graph_->GetEdgesByFrom(var_name);
+        std::vector<DependencyGraph::Edge> edges_to_remove;
+        for(auto it = edges.first; it != edges.second; it++)
+        {
+            edges_to_remove.push_back(*it);
+        }
+        graph_->RemoveEdges(edges_to_remove);
         variable_map_.erase(var_name);
         RemoveContextValue(var_name);
         return true;
+    }
+    try
+    {
+        guard.commit();
+    }
+    catch (xexprengine::DependencyCycleException e)
+    {
+        throw;
     }
     return false;
 }
@@ -133,8 +146,7 @@ bool ExprContext::RemoveVariables(const std::vector<std::string> &var_name_list)
     }
     catch (xexprengine::DependencyCycleException e)
     {
-        // todo
-        return false;
+        throw;
     }
     return res;
 }
@@ -163,8 +175,7 @@ bool ExprContext::RenameVariable(const std::string &old_name, const std::string 
         }
         catch (xexprengine::DependencyCycleException e)
         {
-            // todo
-            return false;
+            throw;
         }
         // process variable map
         std::unique_ptr<Variable> origin_var = std::move(variable_map_[old_name]);
@@ -227,8 +238,7 @@ bool ExprContext::UpdateVariableDependencies(const std::string &var_name)
     }
     catch (xexprengine::DependencyCycleException e)
     {
-        // todo
-        return false;
+        throw;
     }
     return true;
 }
@@ -244,7 +254,7 @@ bool ExprContext::IsVariableDependencyEntire(
     const DependencyGraph::Node *node = graph_->GetNode(var_name);
     DependencyGraph::EdgeContainer::RangeByFrom edges = graph_->GetEdgesByFrom(var_name);
     const auto &dependencies = node->dependencies();
-    if(dependencies.size() == std::distance(edges.first, edges.second))
+    if (dependencies.size() == std::distance(edges.first, edges.second))
     {
         return true;
     }
@@ -307,7 +317,7 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
         return false;
     }
 
-    bool is_should_update = node->dirty_flag();
+    bool is_should_update = var->status() == VariableStatus::kInit || var->status() == VariableStatus::kExprParseSuccess || node->dirty_flag();
 
     if (is_should_update == false)
     {
@@ -333,7 +343,7 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
     }
 
     // check parse error
-    if(var->status() == VariableStatus::kExprParseSyntaxError)
+    if (var->status() == VariableStatus::kExprParseSyntaxError)
     {
         if (IsContextValueExist(var_name) == true)
         {

@@ -67,10 +67,6 @@ class VariableFactory
     static std::unique_ptr<Variable> CreateRawVariable(const std::string &name, const Value &value);
 
     static std::unique_ptr<Variable> CreateExprVariable(const std::string &name, const std::string &expression);
-
-    static std::unique_ptr<Variable> CreateVariable(const std::string &name, const Value &value);
-
-    static std::unique_ptr<Variable> CreateVariable(const std::string &name, const std::string &expression);
 };
 
 class RawVariable : public Variable

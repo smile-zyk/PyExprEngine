@@ -20,6 +20,7 @@ class EventStamp
     {
         return value_;
     }
+
     explicit operator uint64_t() const
     {
         return value_;
@@ -29,22 +30,27 @@ class EventStamp
     {
         return value_ == other.value_;
     }
+
     constexpr bool operator!=(const EventStamp &other) const noexcept
     {
         return value_ != other.value_;
     }
+
     constexpr bool operator<(const EventStamp &other) const noexcept
     {
         return value_ < other.value_;
     }
+
     constexpr bool operator<=(const EventStamp &other) const noexcept
     {
         return value_ <= other.value_;
     }
+
     constexpr bool operator>(const EventStamp &other) const noexcept
     {
         return value_ > other.value_;
     }
+
     constexpr bool operator>=(const EventStamp &other) const noexcept
     {
         return value_ >= other.value_;
