@@ -8,6 +8,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 using namespace xexprengine;
@@ -33,18 +34,18 @@ bool ExprContext::AddVariable(std::unique_ptr<Variable> var)
     std::string var_name = var->name();
     if (IsVariableExist(var_name) == false)
     {
-        DependencyGraph::BatchUpdateGuard guard(graph_.get());
-        graph_->AddNode(var_name);
-        variable_map_.insert({var_name, std::move(var)});
-        UpdateVariableDependencies(var_name);
+        // update graph
         try
         {
-            guard.commit();
+            AddVariableToGraph(var.get());
         }
         catch (xexprengine::DependencyCycleException e)
         {
             throw;
         }
+
+        // update variable_map
+        AddVariableToMap(std::move(var));
         return true;
     }
     return false;
@@ -56,7 +57,7 @@ bool ExprContext::AddVariables(std::vector<std::unique_ptr<Variable>> var_list)
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
     for (std::unique_ptr<Variable> &var : var_list)
     {
-        res &= AddVariable(std::move(var));
+        res &= AddVariableToGraph(var.get());
     }
     try
     {
@@ -65,6 +66,11 @@ bool ExprContext::AddVariables(std::vector<std::unique_ptr<Variable>> var_list)
     catch (xexprengine::DependencyCycleException e)
     {
         throw;
+    }
+
+    for (std::unique_ptr<Variable> &var : var_list)
+    {
+        res &= AddVariableToMap(std::move(var));
     }
     return res;
 }
@@ -81,19 +87,21 @@ void ExprContext::SetExpression(const std::string &var_name, const std::string &
     SetVariable(var_name, std::move(var));
 }
 
-void ExprContext::SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable)
+bool ExprContext::SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable)
 {
+    if (variable->name() != var_name)
+    {
+        return false;
+    }
+
+    // update graph
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
-    if (IsVariableExist(var_name) == false)
+    bool is_variable_exist = IsVariableExist(var_name);
+    if (is_variable_exist == true)
     {
-        AddVariable(std::move(variable));
+        RemoveVariableToGraph(var_name);
     }
-    else
-    {
-        variable_map_[var_name] = std::move(variable);
-        UpdateVariableDependencies(var_name);
-        graph_->InvalidateNode(var_name);
-    }
+    AddVariableToGraph(variable.get());
     try
     {
         guard.commit();
@@ -102,51 +110,44 @@ void ExprContext::SetVariable(const std::string &var_name, std::unique_ptr<Varia
     {
         throw;
     }
+
+    if (is_variable_exist)
+    {
+        // remove variable to map
+        variable_map_.erase(var_name);
+        // remvoe variable to context
+        RemoveContextValue(var_name);
+    }
+
+    // add variable to map
+    AddVariableToMap(std::move(variable));
+
+    return true;
 }
 
-bool ExprContext::RemoveVariable(const std::string &var_name)
+bool ExprContext::RemoveVariable(const std::string &var_name) noexcept
 {
-    DependencyGraph::BatchUpdateGuard guard(graph_.get());
     if (IsVariableExist(var_name) == true)
     {
-        graph_->RemoveNode(var_name);
-        auto edges = graph_->GetEdgesByFrom(var_name);
-        std::vector<DependencyGraph::Edge> edges_to_remove;
-        for(auto it = edges.first; it != edges.second; it++)
-        {
-            edges_to_remove.push_back(*it);
-        }
-        graph_->RemoveEdges(edges_to_remove);
+        // update graph
+        RemoveVariableToGraph(var_name);
+
+        // update variable map
         variable_map_.erase(var_name);
+
+        // update context value
         RemoveContextValue(var_name);
         return true;
-    }
-    try
-    {
-        guard.commit();
-    }
-    catch (xexprengine::DependencyCycleException e)
-    {
-        throw;
     }
     return false;
 }
 
-bool ExprContext::RemoveVariables(const std::vector<std::string> &var_name_list)
+bool ExprContext::RemoveVariables(const std::vector<std::string> &var_name_list) noexcept
 {
-    DependencyGraph::BatchUpdateGuard guard(graph_.get());
     bool res = true;
     for (const std::string &var_name : var_name_list)
     {
         res &= RemoveVariable(var_name);
-    }
-    try
-    {
-        guard.commit();
-    }
-    catch (xexprengine::DependencyCycleException e)
-    {
-        throw;
     }
     return res;
 }
@@ -177,6 +178,7 @@ bool ExprContext::RenameVariable(const std::string &old_name, const std::string 
         {
             throw;
         }
+
         // process variable map
         std::unique_ptr<Variable> origin_var = std::move(variable_map_[old_name]);
         variable_map_.erase(old_name);
@@ -192,67 +194,16 @@ bool ExprContext::RenameVariable(const std::string &old_name, const std::string 
     return false;
 }
 
-bool ExprContext::UpdateVariableDependencies(const std::string &var_name)
-{
-    if (parse_callback_ == nullptr)
-    {
-        return false;
-    }
-
-    DependencyGraph::BatchUpdateGuard guard(graph_.get());
-    if (IsVariableExist(var_name) == false)
-    {
-        return false;
-    }
-
-    // remove origin dependencies
-    const DependencyGraph::Node *node = graph_->GetNode(var_name);
-    const DependencyGraph::EdgeContainer::RangeByFrom edges = graph_->GetEdgesByFrom(var_name);
-    std::vector<DependencyGraph::Edge> edges_to_remove;
-    for (auto it = edges.first; it != edges.second; it++)
-    {
-        edges_to_remove.push_back(*it);
-    }
-    graph_->RemoveEdges(edges_to_remove);
-
-    // add new dependencies
-    Variable *var = GetVariable(var_name);
-    if (var->GetType() == Variable::Type::Expr)
-    {
-        ExprVariable *expr_var = var->As<ExprVariable>();
-
-        ParseResult result = parse_callback_(expr_var->expression());
-        if (result.status == VariableStatus::kExprParseSuccess)
-        {
-            for (const std::string &dep_var : result.variables)
-            {
-                graph_->AddEdge({var_name, dep_var});
-            }
-        }
-        var->set_status(result.status);
-        var->set_error_message(result.parse_error_message);
-    }
-    try
-    {
-        guard.commit();
-    }
-    catch (xexprengine::DependencyCycleException e)
-    {
-        throw;
-    }
-    return true;
-}
-
-bool ExprContext::IsVariableDependencyEntire(
-    const std::string &var_name, std::vector<std::string> &missing_dependencies
+bool ExprContext::CheckNodeDependenciesComplete(
+    const std::string &node_name, std::vector<std::string> &missing_dependencies
 ) const
 {
-    if (IsVariableExist(var_name) == false)
+    if (graph_->IsNodeExist(node_name) == false)
     {
         return false;
     }
-    const DependencyGraph::Node *node = graph_->GetNode(var_name);
-    DependencyGraph::EdgeContainer::RangeByFrom edges = graph_->GetEdgesByFrom(var_name);
+    const DependencyGraph::Node *node = graph_->GetNode(node_name);
+    DependencyGraph::EdgeContainer::RangeByFrom edges = graph_->GetEdgesByFrom(node_name);
     const auto &dependencies = node->dependencies();
     if (dependencies.size() == std::distance(edges.first, edges.second))
     {
@@ -268,6 +219,41 @@ bool ExprContext::IsVariableDependencyEntire(
     return false;
 }
 
+bool ExprContext::UpdateNodeDependencies(
+    const std::string &node_name, const std::unordered_set<std::string> &node_dependencies
+)
+{
+    if (graph_->IsNodeExist(node_name) == false)
+    {
+        return false;
+    }
+    DependencyGraph::BatchUpdateGuard guard(graph_.get());
+    const DependencyGraph::Node *node = graph_->GetNode(node_name);
+    const DependencyGraph::EdgeContainer::RangeByFrom edges = graph_->GetEdgesByFrom(node_name);
+    std::vector<DependencyGraph::Edge> edges_to_remove;
+    for (auto it = edges.first; it != edges.second; it++)
+    {
+        edges_to_remove.push_back(*it);
+    }
+    graph_->RemoveEdges(edges_to_remove);
+
+    for (const std::string &dep : node_dependencies)
+    {
+        graph_->AddEdge({node_name, dep});
+    }
+
+    try
+    {
+        guard.commit();
+    }
+    catch (xexprengine::DependencyCycleException e)
+    {
+        throw;
+    }
+
+    return true;
+}
+
 bool ExprContext::IsVariableExist(const std::string &var_name) const
 {
     return graph_->IsNodeExist(var_name) && variable_map_.count(var_name);
@@ -277,6 +263,7 @@ void ExprContext::Reset()
 {
     graph_->Reset();
     variable_map_.clear();
+    parse_cached_map_.clear();
     ClearContextValue();
 }
 
@@ -297,7 +284,7 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
 
     // check missing dependencies;
     std::vector<std::string> missing_dependencies;
-    if (IsVariableDependencyEntire(var_name, missing_dependencies) == false)
+    if (CheckNodeDependenciesComplete(var_name, missing_dependencies) == false)
     {
         if (IsContextValueExist(var_name) == true)
         {
@@ -317,7 +304,7 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
         return false;
     }
 
-    bool is_should_update = var->status() == VariableStatus::kInit || var->status() == VariableStatus::kExprParseSuccess || node->dirty_flag();
+    bool is_should_update = var->status() == VariableStatus::kParseSuccess || node->dirty_flag();
 
     if (is_should_update == false)
     {
@@ -343,7 +330,7 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
     }
 
     // check parse error
-    if (var->status() == VariableStatus::kExprParseSyntaxError)
+    if (var->status() == VariableStatus::kParseSyntaxError)
     {
         if (IsContextValueExist(var_name) == true)
         {
@@ -385,6 +372,108 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
         var->set_error_message("");
     }
     node->set_dirty_flag(false);
+    return true;
+}
+
+void ExprContext::UpdateVariableParseStatus(Variable *var)
+{
+    if (var->GetType() == Variable::Type::Raw)
+    {
+        var->set_status(VariableStatus::kParseSuccess);
+        var->set_error_message("");
+    }
+    else if (var->GetType() == Variable::Type::Expr)
+    {
+        const ExprVariable *expr_var = var->As<ExprVariable>();
+        const std::string &expression = expr_var->expression();
+        auto it = parse_cached_map_.find(expression);
+        ParseResult parse_result;
+        if (it == parse_cached_map_.end())
+        {
+            if (parse_callback_ != nullptr)
+            {
+                parse_result = parse_callback_(expression);
+                parse_cached_map_.insert({expression, parse_result});
+            }
+        }
+        else
+        {
+            parse_result = it->second;
+        }
+        var->set_status(parse_result.status);
+        var->set_error_message(parse_result.parse_error_message);
+    }
+}
+
+bool ExprContext::AddVariableToGraph(const Variable *var)
+{
+    const std::string &var_name = var->name();
+    if (graph_->IsNodeExist(var_name))
+    {
+        return false;
+    }
+
+    DependencyGraph::BatchUpdateGuard guard(graph_.get());
+    graph_->AddNode(var_name);
+    if (var->GetType() == Variable::Type::Expr)
+    {
+        const ExprVariable *expr_var = var->As<ExprVariable>();
+        const std::string &expression = expr_var->expression();
+        auto it = parse_cached_map_.find(expression);
+        ParseResult parse_result;
+        if (it == parse_cached_map_.end())
+        {
+            if (parse_callback_ != nullptr)
+            {
+                parse_result = parse_callback_(expression);
+                parse_cached_map_.insert({expression, parse_result});
+            }
+        }
+        else
+        {
+            parse_result = it->second;
+        }
+        UpdateNodeDependencies(var_name, parse_result.variables);
+    }
+
+    try
+    {
+        guard.commit();
+    }
+    catch (xexprengine::DependencyCycleException e)
+    {
+        throw;
+    }
+    return true;
+}
+
+bool ExprContext::RemoveVariableToGraph(const std::string &var_name) noexcept
+{
+    if (graph_->IsNodeExist(var_name) == false)
+    {
+        return false;
+    }
+    graph_->RemoveNode(var_name);
+    auto edges = graph_->GetEdgesByFrom(var_name);
+    std::vector<DependencyGraph::Edge> edges_to_remove;
+    for (auto it = edges.first; it != edges.second; it++)
+    {
+        edges_to_remove.push_back(*it);
+    }
+    graph_->RemoveEdges(edges_to_remove);
+    return true;
+}
+
+bool ExprContext::AddVariableToMap(std::unique_ptr<Variable> var)
+{
+    const std::string &var_name = var->name();
+    if (variable_map_.count(var_name))
+    {
+        return false;
+    }
+    // set parse status when add
+    UpdateVariableParseStatus(var.get());
+    variable_map_.insert({var_name, std::move(var)});
     return true;
 }
 

@@ -72,7 +72,7 @@ class SymbolExtractor(ast.NodeVisitor):
 
 # 测试代码
 test_code = """
-a+b
+cos(a) + b
 """
 
 def extract_symbols_from_code(code_string):

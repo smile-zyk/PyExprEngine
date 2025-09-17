@@ -74,11 +74,11 @@ class MockExprContext : public ExprContext
             {
                 result.variables.insert(match[5]);
             }
-            result.status = xexprengine::VariableStatus::kExprParseSuccess;
+            result.status = xexprengine::VariableStatus::kParseSuccess;
         }
         else
         {
-            result.status = xexprengine::VariableStatus::kExprParseSyntaxError;
+            result.status = xexprengine::VariableStatus::kParseSyntaxError;
         }
         return result;
     }
@@ -263,12 +263,12 @@ class ExprContextTest : public testing::Test
     MockExprContext context_;
 };
 
-TEST_F(ExprContextTest, AddAndRemoveAndSetVariable)
+TEST_F(ExprContextTest, AddAndRemoveVariable)
 {
     // test AddVariable
     std::unique_ptr<Variable> raw_var = VariableFactory::CreateRawVariable("A", 1);
     EXPECT_TRUE(context_.AddVariable(std::move(raw_var)));
-    VerifyVar(context_.GetVariable("A"), Variable::Type::Raw, VariableStatus::kInit, 1);
+    VerifyVar(context_.GetVariable("A"), Variable::Type::Raw, VariableStatus::kParseSuccess, 1);
     VerifyNode(context_.graph()->GetNode("A"), {}, {});
     EXPECT_FALSE(context_.AddVariable(VariableFactory::CreateRawVariable("A", 2)));
 
@@ -277,14 +277,14 @@ TEST_F(ExprContextTest, AddAndRemoveAndSetVariable)
     var_vec.push_back(VariableFactory::CreateRawVariable("B", 2));
     var_vec.push_back(VariableFactory::CreateExprVariable("C", "A + B"));
     EXPECT_TRUE(context_.AddVariables(std::move(var_vec)));
-    VerifyVar(context_.GetVariable("C"), Variable::Type::Expr, VariableStatus::kExprParseSuccess, "A + B");
+    VerifyVar(context_.GetVariable("C"), Variable::Type::Expr, VariableStatus::kParseSuccess, "A + B");
     VerifyNode(context_.graph()->GetNode("C"), {"A", "B"}, {});
     VerifyEdges({{"C", "A"}, {"C", "B"}}, true);
     var_vec.clear();
     var_vec.push_back(VariableFactory::CreateRawVariable("C", 4));
     var_vec.push_back(VariableFactory::CreateExprVariable("D", "C"));
     EXPECT_FALSE(context_.AddVariables(std::move(var_vec)));
-    VerifyVar(context_.GetVariable("C"), Variable::Type::Expr, VariableStatus::kExprParseSuccess, "A + B");
+    VerifyVar(context_.GetVariable("C"), Variable::Type::Expr, VariableStatus::kParseSuccess, "A + B");
     VerifyNode(context_.graph()->GetNode("C"), {"A", "B"}, {"D"});
     VerifyNode(context_.graph()->GetNode("D"), {"C"}, {});
     VerifyEdges({{"D", "C"}});
@@ -305,6 +305,65 @@ TEST_F(ExprContextTest, AddAndRemoveAndSetVariable)
     EXPECT_FALSE(context_.RemoveVariables({"B", "D"}));
     EXPECT_FALSE(context_.IsVariableExist("D"));
     VerifyEdges({}, true);
+}
+
+TEST_F(ExprContextTest, SetVariable)
+{
+    // test SetVariable
+    EXPECT_FALSE(context_.SetVariable("B", VariableFactory::CreateRawVariable("A", 1)));
+    EXPECT_FALSE(context_.IsVariableExist("B"));
+    EXPECT_TRUE(context_.SetVariable("A", VariableFactory::CreateRawVariable("A", 1)));
+    VerifyVar(context_.GetVariable("A"), Variable::Type::Raw, VariableStatus::kParseSuccess, 1);
+    VerifyNode(context_.graph()->GetNode("A"), {}, {});
+
+    // test SetValue
+    context_.SetValue("A", 3);
+    VerifyVar(context_.GetVariable("A"), Variable::Type::Raw, VariableStatus::kParseSuccess, 3);
+    VerifyNode(context_.graph()->GetNode("A"), {}, {});
+    context_.SetValue("B", 5);
+    VerifyVar(context_.GetVariable("B"), Variable::Type::Raw, VariableStatus::kParseSuccess, 5);
+    VerifyNode(context_.graph()->GetNode("B"), {}, {});
+
+    // test SetExpression
+    context_.SetExpression("C", "A +");
+    VerifyVar(context_.GetVariable("C"), Variable::Type::Expr, VariableStatus::kParseSyntaxError, "A +");
+    VerifyNode(context_.graph()->GetNode("C"), {}, {});
+    VerifyEdges({}, true);
+    context_.SetExpression("C", "A + B");
+    VerifyVar(context_.GetVariable("C"), Variable::Type::Expr, VariableStatus::kParseSuccess, "A + B");
+    VerifyNode(context_.graph()->GetNode("C"), {"A", "B"}, {});
+    VerifyEdges({{"C", "A"}, {"C", "B"}}, true);
+    EXPECT_THROW(context_.SetExpression("B", "C"), DependencyCycleException);
+}
+
+TEST_F(ExprContextTest, CycleDetection)
+{
+    context_.SetExpression("A", "B*C");
+    context_.SetExpression("B", "D");
+    context_.SetValue("C", 2);
+    VerifyNode(context_.graph()->GetNode("A"), {"B", "C"}, {});
+    VerifyNode(context_.graph()->GetNode("B"), {}, {"A"});
+    VerifyNode(context_.graph()->GetNode("C"), {}, {"A"});
+    VerifyEdges({{"A", "B"}, {"A", "C"}, {"B", "D"}}, true);
+
+    std::vector<std::unique_ptr<Variable>> var_vec;
+    var_vec.push_back(VariableFactory::CreateRawVariable("E", 4));
+    var_vec.push_back(VariableFactory::CreateExprVariable("D", "A"));
+    EXPECT_THROW(context_.AddVariables(std::move(var_vec)), DependencyCycleException);
+    VerifyNode(context_.graph()->GetNode("A"), {"B", "C"}, {});
+    VerifyNode(context_.graph()->GetNode("B"), {}, {"A"});
+    VerifyNode(context_.graph()->GetNode("C"), {}, {"A"});
+    VerifyEdges({{"A", "B"}, {"A", "C"}, {"B", "D"}}, true);
+}
+
+TEST_F(ExprContextTest, RenameVariable)
+{
+    
+}
+
+TEST_F(ExprContextTest, UpdateContext)
+{
+
 }
 
 int main(int argc, char **argv)

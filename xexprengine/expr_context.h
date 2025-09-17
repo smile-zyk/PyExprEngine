@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "dependency_graph.h"
 #include "expr_common.h"
@@ -34,11 +35,11 @@ class ExprContext
     // set variable : if variable not exist , add variable, otherwise overwrite variable
     void SetValue(const std::string &var_name, const Value &value);
     void SetExpression(const std::string &var_name, const std::string &expression);
-    void SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable);
+    bool SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable);
 
     // remove variable
-    bool RemoveVariable(const std::string &var_name);
-    bool RemoveVariables(const std::vector<std::string> &var_name_list);
+    bool RemoveVariable(const std::string &var_name) noexcept;
+    bool RemoveVariables(const std::vector<std::string> &var_name_list) noexcept;
 
     // rename variable
     bool RenameVariable(const std::string &old_name, const std::string &new_name);
@@ -64,10 +65,17 @@ class ExprContext
     virtual void SetContextValue(const std::string &var_name, const Value &value) = 0;
     virtual bool RemoveContextValue(const std::string &var_name) = 0;
     virtual void ClearContextValue() = 0;
-    bool UpdateVariable(const std::string &var_name);
-    bool UpdateVariableDependencies(const std::string &var_name);
-    bool IsVariableDependencyEntire(const std::string &var_name, std::vector<std::string> &missing_dependencies) const;
     
+    bool UpdateVariable(const std::string &var_name);
+    void UpdateVariableParseStatus(Variable* var);
+    bool AddVariableToGraph(const Variable* var);
+    bool RemoveVariableToGraph(const std::string& var_name) noexcept;
+    bool AddVariableToMap(std::unique_ptr<Variable> var);
+
+    // graph helper functions
+    bool CheckNodeDependenciesComplete(const std::string& node_name, std::vector<std::string>& missing_dependencies) const;
+    bool UpdateNodeDependencies(const std::string& node_name, const std::unordered_set<std::string>& node_dependencies);
+
     void set_evaluate_callback(std::function<EvalResult(const std::string &, const ExprContext *)> callback)
     {
         evaluate_callback_ = callback;
@@ -80,6 +88,7 @@ class ExprContext
   private:
     std::unique_ptr<DependencyGraph> graph_;
     std::unordered_map<std::string, std::unique_ptr<Variable>> variable_map_;
+    std::unordered_map<std::string, ParseResult> parse_cached_map_;
     std::function<EvalResult(const std::string &, const ExprContext *)> evaluate_callback_;
     std::function<ParseResult(const std::string &)> parse_callback_;
 };

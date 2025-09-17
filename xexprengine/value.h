@@ -151,8 +151,6 @@ class Value
     bool operator<=(const Value &other) const;
     bool operator>=(const Value &other) const;
 
-
-
     bool IsNull() const;
 
     const std::type_info &Type() const;

@@ -33,6 +33,12 @@ class Variable
         return dynamic_cast<T *>(this);
     }
 
+    template <typename T, typename std::enable_if<std::is_base_of<Variable, T>::value, int>::type = 0> 
+    const T *As() const noexcept 
+    {
+        return dynamic_cast<const T *>(this);
+    }
+
     void set_error_message(const std::string &message)
     {
         error_message_ = message;

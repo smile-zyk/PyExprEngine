@@ -216,15 +216,15 @@ class DependencyGraph
 
     // single operation
     bool AddNode(const std::string &node_name);
-    bool RemoveNode(const std::string &node_name);
+    bool RemoveNode(const std::string &node_name) noexcept;
     bool AddEdge(const Edge &edge);
-    bool RemoveEdge(const Edge &edge);
+    bool RemoveEdge(const Edge &edge) noexcept;
 
     // batch operation
     bool AddNodes(const std::vector<std::string> &node_list);
-    bool RemoveNodes(const std::vector<std::string> &node_list);
+    bool RemoveNodes(const std::vector<std::string> &node_list) noexcept;
     bool AddEdges(const std::vector<Edge> &edge_list);
-    bool RemoveEdges(const std::vector<Edge> &edge_list);
+    bool RemoveEdges(const std::vector<Edge> &edge_list) noexcept;
 
     bool InvalidateNode(const std::string &node_name);
     bool UpdateNodeEventStamp(const std::string &node_name);

@@ -166,7 +166,7 @@ bool DependencyGraph::AddNode(const std::string &node_name)
     return true;
 }
 
-bool DependencyGraph::RemoveNode(const std::string &node_name)
+bool DependencyGraph::RemoveNode(const std::string &node_name) noexcept
 {
     if (IsNodeExist(node_name) == false)
     {
@@ -221,7 +221,7 @@ bool DependencyGraph::AddEdge(const Edge &edge)
     return true;
 }
 
-bool DependencyGraph::RemoveEdge(const Edge &edge)
+bool DependencyGraph::RemoveEdge(const Edge &edge) noexcept
 {
     if (edge_container_.contains(edge) == false)
     {
@@ -248,7 +248,7 @@ bool DependencyGraph::AddNodes(const std::vector<std::string> &node_list)
     return res;
 }
 
-bool DependencyGraph::RemoveNodes(const std::vector<std::string> &node_list)
+bool DependencyGraph::RemoveNodes(const std::vector<std::string> &node_list) noexcept
 {
     bool res = true;
     for (const std::string &node_name : node_list)
@@ -270,7 +270,7 @@ bool DependencyGraph::AddEdges(const std::vector<Edge> &edge_list)
     return res;
 }
 
-bool DependencyGraph::RemoveEdges(const std::vector<Edge> &edge_list)
+bool DependencyGraph::RemoveEdges(const std::vector<Edge> &edge_list) noexcept
 {
     bool res = true;
     for (const Edge &edge : edge_list)
