@@ -4,7 +4,6 @@
 #include "expr_common.h"
 #include "value.h"
 #include "variable.h"
-#include <algorithm>
 #include <cstdio>
 #include <iterator>
 #include <memory>

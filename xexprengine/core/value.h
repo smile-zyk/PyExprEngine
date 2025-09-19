@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <typeinfo>
 
-#include "value_convert.h"
+#include "value_string_converter.h"
 
 namespace xexprengine
 {
@@ -121,7 +121,9 @@ class Value
     ~Value() noexcept {}
 
     template <typename T>
-    Value(const T &val) noexcept : value_ptr_(new ValueHolder<T>(val)) {}
+    Value(const T &val) noexcept : value_ptr_(new ValueHolder<T>(val))
+    {
+    }
 
     Value(const char *val) noexcept : value_ptr_(new ValueHolder<std::string>(val)) {}
 
@@ -131,7 +133,7 @@ class Value
     Value(Value &&) noexcept;
     Value &operator=(Value &&) noexcept;
 
-    void swap(Value& other) noexcept;
+    void swap(Value &other) noexcept;
 
     static const Value &Null()
     {
@@ -177,7 +179,11 @@ class Value
 
     std::string ToString() const;
 
-    friend std::ostream &operator<<(std::ostream &os, const Value &value);
+    friend std::ostream &operator<<(std::ostream &os, const Value &value)
+    {
+        os << value.ToString();
+        return os;
+    }
 
   private:
     std::unique_ptr<ValueBase> value_ptr_;

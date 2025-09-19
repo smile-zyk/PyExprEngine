@@ -34,12 +34,12 @@ TEST(Value, MoveConstructorAndAssignment)
     Value v1 = "move_test";
     Value v2 = std::move(v1);
     EXPECT_TRUE(v1.IsNull());
-    EXPECT_EQ(v2.ToString(), "move_test");
+    EXPECT_EQ(v2.ToString(), "'move_test'");
 
     Value v3;
     v3 = std::move(v2);
     EXPECT_TRUE(v2.IsNull());
-    EXPECT_EQ(v3.ToString(), "move_test");
+    EXPECT_EQ(v3.ToString(), "'move_test'");
 }
 
 TEST(Value, TypeInfo)
@@ -64,7 +64,7 @@ TEST(Value, NestedContainers)
         {{"a", 1}, {"b", 2}},
         {{"c", 3}}
     };
-    EXPECT_EQ(v_nested.ToString(), "[{a: 1, b: 2}, {c: 3}]");
+    EXPECT_EQ(v_nested.ToString(), "[{'a': 1, 'b': 2}, {'c': 3}]");
 }
 
 TEST(Value, ToStringHelper)
@@ -75,7 +75,7 @@ TEST(Value, ToStringHelper)
 
     // Char value
     Value char_val = 'A';
-    EXPECT_EQ(char_val.ToString(), "A");
+    EXPECT_EQ(char_val.ToString(), "'A'");
 
     // Float value
     Value float_val = 2.5f;
@@ -91,7 +91,7 @@ TEST(Value, ToStringHelper)
 
     // Vector of strings
     Value vec_str_val = std::vector<std::string>{"a", "b", "c"};
-    EXPECT_EQ(vec_str_val.ToString(), "[a, b, c]");
+    EXPECT_EQ(vec_str_val.ToString(), "['a', 'b', 'c']");
 
     // List of bools
     Value list_bool_val = std::list<bool>{true, false, true};
@@ -99,7 +99,7 @@ TEST(Value, ToStringHelper)
 
     // Map with Value keys and values
     Value map_val2 = std::map<Value, Value>{{"x", 1}, {"y", 2}};
-    EXPECT_EQ(map_val2.ToString(), "{x: 1, y: 2}");
+    EXPECT_EQ(map_val2.ToString(), "{'x': 1, 'y': 2}");
 
     // Set of ints
     Value set_int_val = std::set<int>{10, 20, 30};
@@ -108,7 +108,7 @@ TEST(Value, ToStringHelper)
     // Unordered set of strings
     Value uset_str_val = std::unordered_set<std::string>{"foo", "bar"};
     auto uset_str = uset_str_val.ToString();
-    EXPECT_TRUE(uset_str == "{foo, bar}" || uset_str == "{bar, foo}");
+    EXPECT_TRUE(uset_str == "{'foo', 'bar'}" || uset_str == "{'bar', 'foo'}");
 
     // Nested vector
     Value nested_vec_val = std::vector<std::vector<int>>{{1,2},{3,4}};
@@ -118,7 +118,7 @@ TEST(Value, ToStringHelper)
     Value nested_map_val = std::map<std::string, std::map<std::string, int>>{
         {"outer", {{"inner", 99}}}
     };
-    EXPECT_EQ(nested_map_val.ToString(), "{outer: {inner: 99}}");
+    EXPECT_EQ(nested_map_val.ToString(), "{'outer': {'inner': 99}}");
 
     // Complex double
     Value complex_double_val = std::complex<double>(2.0, -3.5);
