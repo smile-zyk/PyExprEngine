@@ -1,4 +1,4 @@
-#include "dependency_graph.h"
+#include "core/dependency_graph.h"
 #include <gtest/gtest.h>
 #include <vector>
 #include <string>

@@ -51,8 +51,17 @@ struct is_set_type<std::unordered_set<Key, Hash, Pred, Alloc>> : std::true_type
 {};
 
 template <typename T>
+struct is_pair_type : std::false_type
+{};
+
+template <typename T1, typename T2>
+struct is_pair_type<std::pair<T1, T2>> : std::true_type
+{};
+
+template <typename T>
 struct is_complex_type : std::false_type
 {};
+
 template <typename T>
 struct is_complex_type<std::complex<T>> : std::true_type
 {};

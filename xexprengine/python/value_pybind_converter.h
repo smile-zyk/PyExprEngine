@@ -1,9 +1,10 @@
 #pragma once
-#include "value.h"
-#include <pybind11/cast.h>
-#include <pybind11/pybind11.h>
+#include "core/value.h"
+#include "py_common.h"
+#include <map>
+#include <memory>
 #include <pybind11/pytypes.h>
-#include <pybind11/stl.h>
+#include <string>
 #include <vector>
 
 namespace xexprengine
@@ -13,31 +14,80 @@ namespace value_convert
 class PyObjectConverter
 {
   public:
-    virtual ~PyObjectConverter();
-    virtual bool CanConvert(const Value &value) const = 0;
-    virtual pybind11::object Convert(const Value &value) const = 0;
-};
-
-template <typename T>
-class NativePyObjectConverter : public PyObjectConverter
-{
-  public:
-    ~NativePyObjectConverter();
-    bool CanConvert(const Value &value) const override
+    class TypeConverter
     {
-        return value.Type() == typeid(T);
+      public:
+        virtual ~TypeConverter() {}
+        virtual bool CanConvert(const Value &value) const = 0;
+        virtual py::object Convert(const Value &value) const = 0;
+    };
+
+    template <typename T>
+    class NativeTypeConverter : public TypeConverter
+    {
+      public:
+        ~NativeTypeConverter() {}
+        bool CanConvert(const Value &value) const override
+        {
+            return value.Type() == typeid(T);
+        }
+
+        py::object Convert(const Value &value) const override
+        {
+            return py::cast(value.Cast<T>());
+        }
+    };
+
+    static void RegisterConverter(std::unique_ptr<TypeConverter> converter)
+    {
+        GetConverters().push_back(std::move(converter));
     }
 
-    pybind11::object Convert(const Value &value) const override
+    template <typename T>
+    static void RegisterNativeConverter(std::vector<std::unique_ptr<TypeConverter>> &converters)
     {
-        return pybind11::cast(value.Cast<T>());
+        converters.push_back(std::unique_ptr<TypeConverter>(new NativeTypeConverter<T>()));
+    }
+
+    static std::vector<std::unique_ptr<TypeConverter>> &GetConverters()
+    {
+        static std::vector<std::unique_ptr<TypeConverter>> converters;
+        static bool initialized = false;
+
+        if (!initialized)
+        {
+            initialized = true;
+            InitNativeConverter(converters);
+        }
+        return converters;
+    }
+
+  private:
+    static void InitNativeConverter(std::vector<std::unique_ptr<TypeConverter>> &converters)
+    {
+        RegisterNativeConverter<int>(converters);
+        RegisterNativeConverter<double>(converters);
+        RegisterNativeConverter<float>(converters);
+        RegisterNativeConverter<std::string>(converters);
+        RegisterNativeConverter<bool>(converters);
+        RegisterNativeConverter<long>(converters);
+        RegisterNativeConverter<long long>(converters);
+        RegisterNativeConverter<unsigned int>(converters);
+        RegisterNativeConverter<unsigned long>(converters);
+        RegisterNativeConverter<unsigned long long>(converters);
+
+        RegisterNativeConverter<std::vector<int>>(converters);
+        RegisterNativeConverter<std::vector<float>>(converters);
+        RegisterNativeConverter<std::vector<double>>(converters);
+        RegisterNativeConverter<std::vector<std::string>>(converters);
+        RegisterNativeConverter<std::map<std::string, std::string>>(converters);
+        RegisterNativeConverter<std::unordered_map<std::string, std::string>>(converters);
     }
 };
-
 } // namespace value_convert
 } // namespace xexprengine
 
-std::ostream &operator<<(std::ostream &os, const pybind11::object &obj);
+std::ostream &operator<<(std::ostream &os, const py::object &obj);
 
 namespace PYBIND11_NAMESPACE
 {
@@ -52,13 +102,24 @@ struct type_caster<xexprengine::Value>
 
     bool load(handle src, bool convert)
     {
-        if (!src)
+        if (!src || src.is_none())
         {
             return false;
         }
         try
         {
-            value = src;
+            pybind11::object obj;
+
+            if (pybind11::isinstance<pybind11::object>(src))
+            {
+                obj = pybind11::cast<pybind11::object>(src);
+            }
+            else
+            {
+                obj = pybind11::reinterpret_borrow<pybind11::object>(src);
+            }
+
+            value = obj;
             return true;
         }
         catch (const std::exception &e)
@@ -67,77 +128,28 @@ struct type_caster<xexprengine::Value>
         }
     }
 
-    static handle cast(const xexprengine::Value &src, return_value_policy /* policy */, handle /* parent */) 
+    static handle cast(const xexprengine::Value &src, return_value_policy /* policy */, handle /* parent */)
     {
-        try 
+        try
         {
-            for (const auto& converter : GetConverters()) 
+            for (const auto &converter : xexprengine::value_convert::PyObjectConverter::GetConverters())
             {
-                if (converter.CanConvert(src)) 
+                if (converter->CanConvert(src))
                 {
-                    pybind11::object obj = converter.Convert(src);
+                    py::object obj = converter->Convert(src);
                     return obj.release();
                 }
             }
-            
-            return pybind11::none().release();
+
+            return py::none().release();
         }
-        catch (const std::exception& e)
+        catch (const std::exception &e)
         {
-            pybind11::pybind11_fail("Failed to convert Value to Python object: " + std::string(e.what()));
+            py::pybind11_fail("Failed to convert Value to Python object: " + std::string(e.what()));
             return nullptr;
         }
-    }
-
-  private:
-    static std::vector<xexprengine::value_convert::PyObjectConverter> &GetConverters()
-    {
-        static std::vector<xexprengine::value_convert::PyObjectConverter> converters;
-        static bool initialized = false;
-
-        if (!initialized)
-        {
-            initialized = true;
-            RegisterNativeConverters(converters);
-        }
-
-        return converters;
-    }
-
-    static void RegisterNativeConverters(std::vector<xexprengine::value_convert::PyObjectConverter> &converters)
-    {
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<int>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<double>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<float>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<std::string>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<bool>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<long>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<long long>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<unsigned int>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<unsigned long>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<unsigned long long>());
-
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<std::vector<int>>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<std::vector<double>>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<std::vector<std::string>>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<std::map<std::string, std::string>>());
-        converters.push_back(xexprengine::value_convert::NativePyObjectConverter<std::unordered_map<std::string, std::string>>());
-    }
-
-  public:
-    static void RegisterConverter(const xexprengine::value_convert::PyObjectConverter &converter)
-    {
-        GetConverters().push_back(converter);
     }
 };
 
 } // namespace detail
 } // namespace PYBIND11_NAMESPACE
-
-#define REGISTER_NATIVE_CONVERTER(Type)                                                                                \
-    PYBIND11_NAMESPACE::detail::type_caster<xexprengine::Value>::RegisterConverter(                                    \
-        std::make_unique<xexprengine::value_convert::NativeTypeConverter<Type>>()                                      \
-    )
-
-#define REGISTER_CUSTOM_CONVERTER(ConverterType)                                                                       \
-    PYBIND11_NAMESPACE::detail::type_caster<xexprengine::Value>::RegisterConverter(std::make_unique<ConverterType>())

@@ -85,6 +85,15 @@ class StringConverter
     };
 
     template <typename T>
+    struct ToStringImpl<T, typename std::enable_if<is_pair_type<T>::value>::type>
+    {
+        static std::string convert(const T &value)
+        {
+            return "(" + StringConverter::ToString(value.first) + ", " + StringConverter::ToString(value.second) + ")";
+        }
+    };
+
+    template <typename T>
     struct ToStringImpl<T, typename std::enable_if<is_list_type<T>::value>::type>
     {
         static std::string convert(const T &value)

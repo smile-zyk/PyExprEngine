@@ -1,7 +1,7 @@
-#include "dependency_graph.h"
-#include "expr_common.h"
-#include "expr_context.h"
-#include "variable.h"
+#include "core/dependency_graph.h"
+#include "core/expr_common.h"
+#include "core/expr_context.h"
+#include "core/variable.h"
 
 #include <iterator>
 #include <memory>

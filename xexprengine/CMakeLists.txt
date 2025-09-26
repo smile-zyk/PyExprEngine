@@ -13,6 +13,7 @@ set(XEXPRENGINE_SRC
     core/variable.cc
     core/event_stamp.cc
     core/expr_context.cc
+    python/value_pybind_converter.cc
 )
 
 add_library(xexprengine STATIC ${XEXPRENGINE_SRC})
@@ -22,4 +23,4 @@ target_link_libraries(xexprengine PRIVATE pybind11::embed ${Python_LIBRARIES})
 target_link_libraries(xexprengine PRIVATE Boost::serialization)
 
 target_include_directories(xexprengine PRIVATE ${Boost_INCLUDE_DIRS})
-target_include_directories(xexprengine PUBLIC ./core)
+target_include_directories(xexprengine PUBLIC ./)
