@@ -14,7 +14,7 @@ class ExprEngine
     ExprEngine& operator=(const ExprEngine&) = delete;
     ExprEngine& operator=(ExprEngine&&) = delete;
 
-    static T GetInstance()
+    static T& GetInstance()
     {
       static T instance;
       return instance;
@@ -24,6 +24,6 @@ class ExprEngine
     virtual ParseResult Parse(const std::string &expr) = 0;
   protected:
     ExprEngine() = default;
-    ~ExprEngine() = default;
+    virtual ~ExprEngine() = default;
   };
 } // namespace xexprengine

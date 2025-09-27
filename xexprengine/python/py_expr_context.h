@@ -1,5 +1,6 @@
 #pragma once
 #include "core/expr_context.h"
+#include "py_common.h"
 #include <pybind11/pybind11.h>
 
 namespace xexprengine
@@ -16,6 +17,6 @@ class PyExprContext : public ExprContext
     void SetContextValue(const std::string &var_name, const Value &value) override;
     bool RemoveContextValue(const std::string &var_name) override;
     void ClearContextValue() override;
-    pybind11::dict context_dict_;
+    py::dict context_dict_;
 };
 } // namespace xexprengine

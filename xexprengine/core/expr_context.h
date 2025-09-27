@@ -16,7 +16,7 @@ class ExprContext
 {
   public:
     ExprContext() noexcept;
-    ~ExprContext() noexcept = default;
+    virtual ~ExprContext() noexcept = default;
 
     ExprContext(const ExprContext &) = delete;
     ExprContext &operator=(const ExprContext &) = delete;
