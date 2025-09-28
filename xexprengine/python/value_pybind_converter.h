@@ -38,11 +38,10 @@ class PyObjectConverter
         }
     };
 
-    template <>
-    class NativeTypeConverter<void> : public TypeConverter
+    class NoneConverter : public TypeConverter
     {
       public:
-        ~NativeTypeConverter() {}
+        ~NoneConverter() {}
         bool CanConvert(const Value &value) const override
         {
             return value.Type() == typeid(void);
@@ -51,6 +50,21 @@ class PyObjectConverter
         py::object Convert(const Value &value) const override
         {
             return py::none();
+        }
+    };
+
+    class ObjectConverter : public TypeConverter
+    {
+      public:
+        ~ObjectConverter() {}
+        bool CanConvert(const Value &value) const override
+        {
+            return value.Type() == typeid(py::object);
+        }
+
+        py::object Convert(const Value &value) const override
+        {
+            return value.Cast<py::object>();
         }
     };
 
@@ -81,8 +95,9 @@ class PyObjectConverter
   private:
     static void InitNativeConverter(std::vector<std::unique_ptr<TypeConverter>> &converters)
     {
-        RegisterNativeConverter<void>(converters);
-
+        converters.push_back(std::unique_ptr<TypeConverter>(new NoneConverter()));
+        converters.push_back(std::unique_ptr<TypeConverter>(new ObjectConverter()));
+        
         RegisterNativeConverter<int>(converters);
         RegisterNativeConverter<double>(converters);
         RegisterNativeConverter<float>(converters);

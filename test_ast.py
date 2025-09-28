@@ -72,7 +72,8 @@ class SymbolExtractor(ast.NodeVisitor):
 
 # 测试代码
 test_code = """
-cos(a) + b
+import numpy
+numpy.cos(1) + test(b)
 """
 
 def extract_symbols_from_code(code_string):

@@ -6,8 +6,7 @@
 #include "python/value_pybind_converter.h"
 #include "core/value.h"
 
-
-namespace xexprengine::test {
+using namespace xexprengine;
 
 class ValuePybindConverterTest : public ::testing::Test {
 protected:
@@ -194,10 +193,8 @@ TEST_F(ValuePybindConverterTest, PyObjectValue)
     py::object obj = m_list;
     
     Value package_obj_value = py::cast<Value>(obj);
-    py::object unpackage_obj = package_obj_value.Cast<py::object>();
+    py::object unpackage_obj = py::cast(package_obj_value);
     EXPECT_EQ(obj.ptr(), unpackage_obj.ptr());
 
     EXPECT_EQ(package_obj_value.ToString(), "['1', 2]");
 }
-
-} // namespace xexprengine::test
