@@ -24,7 +24,7 @@ class PySymbolExtractor
 
     void ClearCache();
 
-    void SetMaxCacheSize();
+    void SetMaxCacheSize(size_t max_size);
 
     size_t GetCacheSize();
 
@@ -40,6 +40,6 @@ class PySymbolExtractor
 
   private:
     std::unordered_map<std::string, ParseResult> parse_result_cache_;
-    size_t max_cache_size = 1000;
+    size_t max_cache_size_ = 1000;
 };
 } // namespace xexprengine
