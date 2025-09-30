@@ -6,37 +6,40 @@ using namespace xexprengine;
 
 ParseResult PySymbolExtractor::Extract(const std::string &py_code)
 {
-    auto it = parse_result_cache_.find(py_code);
-    if (it != parse_result_cache_.end())
+    auto it = cache_map_.find(py_code);
+    if (it != cache_map_.end())
     {
-        return it->second;
+        return it->second->value;
     }
 
     ParseResult result = Parse(py_code);
 
-    parse_result_cache_[py_code] = result;
+    cache_list_.emplace_front(py_code, result);
+    cache_map_[py_code] = cache_list_.begin();
 
-    if (parse_result_cache_.size() > max_cache_size_)
-    {
-        CleanupCache();
-    }
+    EvictLRU();
 
     return result;
 }
 
 void PySymbolExtractor::ClearCache()
 {
-    parse_result_cache_.clear();
+    cache_list_.clear();
+    cache_map_.clear();
 }
 
 void PySymbolExtractor::SetMaxCacheSize(size_t max_size)
 {
     max_cache_size_ = max_size;
+    while (cache_list_.size() > max_cache_size_)
+    {
+        EvictLRU();
+    }
 }
 
 size_t PySymbolExtractor::GetCacheSize()
 {
-    return parse_result_cache_.size();
+    return cache_list_.size();
 }
 
 ParseResult PySymbolExtractor::Parse(const std::string &py_code)
@@ -48,10 +51,16 @@ ParseResult PySymbolExtractor::Parse(const std::string &py_code)
     {
         py::gil_scoped_acquire acquire;
         py::object ast_module = py::module::import("ast");
-        py::object parse_func = ast_module.attr("parse");
-        py::object tree = parse_func(py_code);
+        auto tree = ast_module.attr("parse")(py_code);
 
-        VisitNode(tree, result);
+        // 使用ast.walk遍历所有节点
+        auto walk_iter = ast_module.attr("walk")(tree);
+
+        // 遍历所有节点
+        for (auto node : walk_iter)
+        {
+            ProcessNode(node, result);
+        }
     }
     catch (const py::error_already_set &e)
     {
@@ -62,76 +71,62 @@ ParseResult PySymbolExtractor::Parse(const std::string &py_code)
     return result;
 }
 
-void PySymbolExtractor::VisitName(py::handle node, ParseResult &result)
+void PySymbolExtractor::ProcessNameNode(py::handle node, ParseResult &result)
 {
-    py::object ctx_attr = node.attr("ctx");
-    std::string ctx_type = py::cast<std::string>(ctx_attr.attr("__class__").attr("__name__"));
-    std::string id_name = py::cast<std::string>(node.attr("id"));
-
-    if (ctx_type == "Load" || ctx_type == "Store")
+    if (py::hasattr(node, "ctx"))
     {
-        result.variables.insert(id_name);
-    }
-    GenericVisit(node, result);
-}
+        auto ctx = node.attr("ctx");
 
-void PySymbolExtractor::VisitCall(py::handle node, ParseResult &result)
-{
-    py::object func_attr = node.attr("func");
-    std::string func_type = py::cast<std::string>(func_attr.attr("__class__").attr("__name__"));
-
-    if (func_type == "Name")
-    {
-        std::string func_name = py::cast<std::string>(func_attr.attr("id"));
-        result.functions.insert(func_name);
-    }
-
-    GenericVisit(node, result);
-}
-
-void PySymbolExtractor::GenericVisit(py::handle node, ParseResult &result)
-{
-    if (py::hasattr(node, "_fields"))
-    {
-        py::list fields = node.attr("_fields");
-        for (auto field : fields)
+        if (py::isinstance<py::object>(ctx))
         {
-            std::string field_name = py::cast<std::string>(field);
-            if (py::hasattr(node, field_name.c_str()))
+            if (py::hasattr(ctx, "__class__"))
             {
-                py::object child = node.attr(field_name.c_str());
-                VisitNode(child, result);
+                auto ctx_class = ctx.attr("__class__").attr("__name__").cast<std::string>();
+
+                if (ctx_class == "Load" || ctx_class == "Store")
+                {
+                    auto id = node.attr("id").cast<std::string>();
+                    result.variables.insert(id);
+                }
             }
         }
     }
 }
 
-void PySymbolExtractor::VisitNode(py::handle node, ParseResult &result)
+void PySymbolExtractor::ProcessCallNode(py::handle node, ParseResult &result)
 {
-    if (node.is_none())
-        return;
+    if (py::hasattr(node, "func"))
+    {
+        auto func = node.attr("func");
 
-    std::string node_type = py::cast<std::string>(node.attr("__class__").attr("__name__"));
-
-    if (node_type == "Name")
-    {
-        VisitName(node, result);
-    }
-    else if (node_type == "Call")
-    {
-        VisitCall(node, result);
-    }
-    else
-    {
-        GenericVisit(node, result);
+        if (py::hasattr(func, "id"))
+        {
+            auto func_id = func.attr("id").cast<std::string>();
+            result.functions.insert(func_id);
+        }
     }
 }
 
-void PySymbolExtractor::CleanupCache()
+void PySymbolExtractor::ProcessNode(py::handle node, ParseResult &result)
 {
-    size_t target_size = max_cache_size_ / 2;
-    while (parse_result_cache_.size() > target_size)
+    auto node_type = node.attr("__class__").attr("__name__").cast<std::string>();
+
+    if (node_type == "Name")
     {
-        parse_result_cache_.erase(parse_result_cache_.begin());
+        ProcessNameNode(node, result);
+    }
+    else if (node_type == "Call")
+    {
+        ProcessCallNode(node, result);
+    }
+}
+
+void PySymbolExtractor::EvictLRU()
+{
+    if (cache_list_.size() > max_cache_size_)
+    {
+        auto last = cache_list_.back();
+        cache_map_.erase(last.key);
+        cache_list_.pop_back();
     }
 }

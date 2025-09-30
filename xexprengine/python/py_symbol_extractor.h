@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <list>
 #include <pybind11/pytypes.h>
 #include <string>
 #include <unordered_map>
@@ -31,15 +32,23 @@ class PySymbolExtractor
   private:
     ParseResult Parse(const std::string& py_code);
 
-    void VisitName(py::handle node, ParseResult& result);
-    void VisitCall(py::handle node, ParseResult& result);
-    void GenericVisit(py::handle node, ParseResult& result);
-    void VisitNode(py::handle node, ParseResult& result);
+    void ProcessNameNode(py::handle node, ParseResult& result);
+    void ProcessCallNode(py::handle node, ParseResult& result);
+    void ProcessNode(py::handle node, ParseResult& result);
 
-    void CleanupCache();
+    void MoveToFront(const std::string& key);
+    void EvictLRU();
 
   private:
-    std::unordered_map<std::string, ParseResult> parse_result_cache_;
+    struct CacheEntry
+    {
+        std::string key;
+        ParseResult value;
+        CacheEntry(const std::string& k, const ParseResult& v) : key(k), value(v) {}
+    };
+
+    std::list<CacheEntry> cache_list_;
+    std::unordered_map<std::string, typename std::list<CacheEntry>::iterator> cache_map_;
     size_t max_cache_size_ = 1000;
 };
 } // namespace xexprengine

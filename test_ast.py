@@ -1,30 +1,29 @@
 import ast
 
-class SymbolExtractor(ast.NodeVisitor):
+class SymbolExtractor:
     def __init__(self):
         self.symbols = {
             'variables': set(),      # 普通变量符号
             'functions': set()        # 普通函数调用符号
         }
     
-    def visit_Name(self, node):
-        """处理变量名"""
-        if isinstance(node.ctx, ast.Load):
-            # 如果是读取变量（使用变量）
-            self.symbols['variables'].add(node.id)
-        elif isinstance(node.ctx, ast.Store):
-            # 如果是写入变量（赋值变量）
-            self.symbols['variables'].add(node.id)
-        self.generic_visit(node)
-    
-    def visit_Call(self, node):
-        """处理函数调用 - 只处理普通函数调用"""
-        if isinstance(node.func, ast.Name):
-            # 只处理普通函数调用（如 sin()）
-            self.symbols['functions'].add(node.func.id)
-        
-        # 继续遍历参数中的符号
-        self.generic_visit(node)
+    def extract_symbols(self, tree):
+        """使用 ast.walk() 遍历所有节点并提取符号"""
+        for node in ast.walk(tree):
+            # 处理变量名
+            if isinstance(node, ast.Name):
+                if isinstance(node.ctx, ast.Load):
+                    # 如果是读取变量（使用变量）
+                    self.symbols['variables'].add(node.id)
+                elif isinstance(node.ctx, ast.Store):
+                    # 如果是写入变量（赋值变量）
+                    self.symbols['variables'].add(node.id)
+            
+            # 处理函数调用
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    # 只处理普通函数调用（如 sin()）
+                    self.symbols['functions'].add(node.func.id)
     
     def get_symbols(self):
         """返回整理后的符号"""
@@ -35,9 +34,7 @@ class SymbolExtractor(ast.NodeVisitor):
 
 # 测试代码
 test_code = """
-import numpy
-result = numpy.cos(1) + test(b) + test.a + obj.method()
-x = obj.attribute
+calcuate_sum(a, b)
 """
 
 def extract_symbols_from_code(code_string):
@@ -45,7 +42,7 @@ def extract_symbols_from_code(code_string):
     try:
         tree = ast.parse(code_string)
         extractor = SymbolExtractor()
-        extractor.visit(tree)
+        extractor.extract_symbols(tree)
         return extractor.get_symbols()
     except SyntaxError as e:
         print(f"语法错误: {e}")
