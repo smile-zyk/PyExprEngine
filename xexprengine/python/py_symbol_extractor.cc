@@ -53,10 +53,8 @@ ParseResult PySymbolExtractor::Parse(const std::string &py_code)
         py::object ast_module = py::module::import("ast");
         auto tree = ast_module.attr("parse")(py_code);
 
-        // 使用ast.walk遍历所有节点
         auto walk_iter = ast_module.attr("walk")(tree);
 
-        // 遍历所有节点
         for (auto node : walk_iter)
         {
             ProcessNode(node, result);

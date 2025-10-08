@@ -1,7 +1,6 @@
 #pragma once
 #include "core/expr_context.h"
 #include "py_common.h"
-#include <pybind11/pybind11.h>
 
 namespace xexprengine
 {
@@ -13,6 +12,7 @@ class PyExprContext : public ExprContext
     Value GetContextValue(const std::string &var_name) const override;
     bool IsContextValueExist(const std::string &var_name) const override;
     std::unordered_set<std::string> GetContextExistVariables() const override;
+    const py::dict context_dict() const { return context_dict_; }
   private:
     void SetContextValue(const std::string &var_name, const Value &value) override;
     bool RemoveContextValue(const std::string &var_name) override;

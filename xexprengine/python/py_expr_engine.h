@@ -1,5 +1,6 @@
 #pragma once
 #include "core/expr_engine.h"
+#include "python/py_symbol_extractor.h"
 
 namespace xexprengine
 {
@@ -24,6 +25,7 @@ class PyExprEngine : public ExprEngine<PyExprEngine>
 
   private:
     static PyEnvConfig config_;
+    PySymbolExtractor symbol_extractor_;
     bool manage_python_context_ = false;
 };
 } // namespace xexprengine

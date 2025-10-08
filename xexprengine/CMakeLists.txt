@@ -15,6 +15,8 @@ set(XEXPRENGINE_SRC
     core/expr_context.cc
     python/value_pybind_converter.cc
     python/py_symbol_extractor.cc
+    python/py_expr_context.cc
+    python/py_expr_engine.cc
 )
 
 add_library(xexprengine STATIC ${XEXPRENGINE_SRC})

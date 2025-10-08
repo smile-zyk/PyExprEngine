@@ -27,3 +27,4 @@ add_gtest_executable(dependency_graph_test "DependencyGraph" dependency_graph_te
 add_gtest_executable(expr_context_test "ExprContext" expr_context_test.cc)
 add_gtest_executable(pybind_cast_test "PyObjectConverter" pybind_cast_test.cc)
 add_gtest_executable(py_symbol_extractor_test "PySymbolExtractor" py_symbol_extractor_test.cc)
+add_gtest_executable(py_expr_engine_test "PyExprEngineTest" py_expr_engine_test.cc)

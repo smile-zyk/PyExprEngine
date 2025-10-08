@@ -1,7 +1,6 @@
 #pragma once
 #include <cstddef>
 #include <list>
-#include <pybind11/pytypes.h>
 #include <string>
 #include <unordered_map>
 

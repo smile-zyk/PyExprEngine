@@ -8,6 +8,7 @@ namespace xexprengine
 enum class VariableStatus
 {
     kInit,
+    kInvalidContext,
     kRawVar,
     kMissingDependency,
     kParseSuccess,
