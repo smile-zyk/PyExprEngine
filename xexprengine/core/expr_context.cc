@@ -255,7 +255,6 @@ void ExprContext::Reset()
 {
     graph_->Reset();
     variable_map_.clear();
-    parse_cached_map_.clear();
     ClearContextValue();
 }
 
@@ -378,20 +377,7 @@ void ExprContext::UpdateVariableParseStatus(Variable *var)
     {
         const ExprVariable *expr_var = var->As<ExprVariable>();
         const std::string &expression = expr_var->expression();
-        auto it = parse_cached_map_.find(expression);
-        ParseResult parse_result;
-        if (it == parse_cached_map_.end())
-        {
-            if (parse_callback_ != nullptr)
-            {
-                parse_result = parse_callback_(expression);
-                parse_cached_map_.insert({expression, parse_result});
-            }
-        }
-        else
-        {
-            parse_result = it->second;
-        }
+        ParseResult parse_result = parse_callback_(expression);
         var->set_status(parse_result.status);
         var->set_error_message(parse_result.parse_error_message);
     }
@@ -411,20 +397,7 @@ bool ExprContext::AddVariableToGraph(const Variable *var)
     {
         const ExprVariable *expr_var = var->As<ExprVariable>();
         const std::string &expression = expr_var->expression();
-        auto it = parse_cached_map_.find(expression);
-        ParseResult parse_result;
-        if (it == parse_cached_map_.end())
-        {
-            if (parse_callback_ != nullptr)
-            {
-                parse_result = parse_callback_(expression);
-                parse_cached_map_.insert({expression, parse_result});
-            }
-        }
-        else
-        {
-            parse_result = it->second;
-        }
+        ParseResult parse_result = parse_callback_(expression);
         UpdateNodeDependencies(var_name, parse_result.variables);
     }
 

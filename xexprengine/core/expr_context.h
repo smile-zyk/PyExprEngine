@@ -87,7 +87,6 @@ class ExprContext
     private:
     std::unique_ptr<DependencyGraph> graph_;
     std::unordered_map<std::string, std::unique_ptr<Variable>> variable_map_;
-    std::unordered_map<std::string, ParseResult> parse_cached_map_;
     std::function<EvalResult(const std::string &)> evaluate_callback_;
     std::function<ParseResult(const std::string &)> parse_callback_;
 };
