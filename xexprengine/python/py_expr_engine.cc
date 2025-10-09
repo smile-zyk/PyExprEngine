@@ -42,7 +42,7 @@ EvalResult PyExprEngine::Evaluate(const std::string &expr, const ExprContext *co
     } 
     catch (const py::error_already_set &e) 
     {
-        return EvalResult{e.what(), VariableStatus::kInvalidContext};
+        return EvalResult{Value::Null(), VariableStatus::kExprEvalSyntaxError, e.what()};
     }
 }
 

@@ -55,6 +55,7 @@ bool VariableManager::AddVariable(std::unique_ptr<Variable> var)
             throw;
         }
 
+        // for invalidate graph node to trigger dependent node update
         graph_->InvalidateNode(var_name);
         // update variable_map
         UpdateVariableParseStatus(var.get());
@@ -183,6 +184,9 @@ bool VariableManager::RenameVariable(const std::string &old_name, const std::str
     {
         return false;
     }
+
+    // store old node dependents
+    auto old_dependents = graph_->GetNode(old_name)->dependents();
     // process graph
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
     graph_->RemoveNode(old_name);
@@ -206,6 +210,11 @@ bool VariableManager::RenameVariable(const std::string &old_name, const std::str
         throw;
     }
 
+    // for invalidate graph node to trigger dependent node update
+    for (const std::string &old_dependent : old_dependents)
+    {
+        graph_->InvalidateNode(old_dependent);
+    }
     graph_->InvalidateNode(new_name);
     // process variable map
     std::unique_ptr<Variable> origin_var = std::move(variable_map_[old_name]);
@@ -303,14 +312,28 @@ void VariableManager::Reset()
     context_->Clear();
 }
 
-bool VariableManager::UpdateVariableInternal(const std::string &var_name)
+std::string BuildMissingDepsMessage(const std::vector<std::string> &missing_deps)
 {
-    if (!IsVariableExist(var_name))
+    if (missing_deps.empty())
     {
-        return false;
+        return "Missing dependencies: unknown";
     }
 
-    if (evaluate_callback_ == nullptr)
+    std::string message = "Missing dependencies: ";
+    for (size_t i = 0; i < missing_deps.size(); ++i)
+    {
+        if (i > 0)
+        {
+            message += ", ";
+        }
+        message += missing_deps[i];
+    }
+    return message;
+}
+
+bool VariableManager::UpdateVariableInternal(const std::string &var_name)
+{
+    if (!IsVariableExist(var_name) || evaluate_callback_ == nullptr)
     {
         return false;
     }
@@ -318,80 +341,79 @@ bool VariableManager::UpdateVariableInternal(const std::string &var_name)
     DependencyGraph::Node *node = graph_->GetNode(var_name);
     Variable *var = GetVariable(var_name);
 
-    // check parse error
+    if (!node->dirty_flag())
+    {
+        node->set_dirty_flag(false);
+        return false;
+    }
+
+    auto RemoveVariableInContext = [this](const std::string &var_name) {
+        if (context_->Remove(var_name))
+        {
+            graph_->UpdateNodeEventStamp(var_name);
+        }
+    };
+
+    auto UpdateValueToContext = [this](const std::string &var_name, const Value &value) {
+        if (value != context_->Get(var_name))
+        {
+            context_->Set(var_name, value);
+            graph_->UpdateNodeEventStamp(var_name);
+        }
+    };
+
+    bool needs_evaluation = true;
+
     if (var->status() == VariableStatus::kParseSyntaxError)
     {
-        if (context_->Contains(var_name) == true)
-        {
-            context_->Remove(var_name);
-            graph_->UpdateNodeEventStamp(var_name);
-        }
-        node->set_dirty_flag(false);
-        return false;
+        needs_evaluation = false;
+        RemoveVariableInContext(var_name);
     }
-
-    // check missing dependencies;
-    std::vector<std::string> missing_dependencies;
-    if (CheckNodeDependenciesComplete(var_name, missing_dependencies) == false)
+    else
     {
-        if (context_->Contains(var_name) == true)
+        std::vector<std::string> missing_deps;
+        if (!CheckNodeDependenciesComplete(var_name, missing_deps))
         {
-            context_->Remove(var_name);
-            graph_->UpdateNodeEventStamp(var_name);
+            needs_evaluation = false;
+            var->set_status(VariableStatus::kMissingDependency);
+            var->set_error_message(BuildMissingDepsMessage(missing_deps));
+            RemoveVariableInContext(var_name);
         }
-        var->set_status(VariableStatus::kMissingDependency);
-        std::string error_message = "missing dependencies is: ";
-        for (int i = 0; i < missing_dependencies.size(); i++)
+        else
         {
-            if (i != 0)
-                error_message += ", ";
-            error_message += missing_dependencies[i];
-        }
-        var->set_error_message(error_message);
-        node->set_dirty_flag(false);
-        return false;
-    }
-
-    bool is_should_update = node->dirty_flag();
-
-    if (is_should_update == true)
-    {
-        EventStamp max_event_stamp;
-        for (const std::string &dependency : node->dependencies())
-        {
-            const DependencyGraph::Node *dep_node = graph_->GetNode(dependency);
-            if (dep_node && dep_node->event_stamp() > max_event_stamp)
+            // Check if dependencies have newer event stamps
+            EventStamp max_dep_stamp;
+            for (const std::string &dep : node->dependencies())
             {
-                max_event_stamp = dep_node->event_stamp();
+                if (const DependencyGraph::Node *dep_node = graph_->GetNode(dep))
+                {
+                    max_dep_stamp = std::max(max_dep_stamp, dep_node->event_stamp());
+                }
             }
-        }
-        if (node->event_stamp() > max_event_stamp)
-        {
-            is_should_update = false;
+            needs_evaluation = (node->event_stamp() <= max_dep_stamp);
         }
     }
 
-    if (is_should_update == false)
+    if (!needs_evaluation)
     {
         node->set_dirty_flag(false);
         return false;
     }
+
+    bool eval_success = true;
 
     if (var->GetType() == Variable::Type::Expr)
     {
         const std::string &expression = var->As<ExprVariable>()->expression();
         EvalResult result = evaluate_callback_(expression, context_.get());
-        if (result.status != VariableStatus::kExprEvalSuccess)
+        eval_success = (result.status == VariableStatus::kExprEvalSuccess);
+        if (eval_success)
         {
-            if (context_->Remove(var_name) == true)
-            {
-                graph_->UpdateNodeEventStamp(var_name);
-            }
+            UpdateValueToContext(var_name, result.value);
         }
-        else if (result.value != context_->Get(var_name))
+        else
         {
-            context_->Set(var_name, result.value);
-            graph_->UpdateNodeEventStamp(var_name);
+            RemoveVariableInContext(var_name);
         }
         var->set_status(result.status);
         var->set_error_message(result.eval_error_message);
@@ -399,16 +421,12 @@ bool VariableManager::UpdateVariableInternal(const std::string &var_name)
     else if (var->GetType() == Variable::Type::Raw)
     {
         const Value &value = var->As<RawVariable>()->value();
-        if (value != context_->Get(var_name))
-        {
-            context_->Set(var_name, value);
-            graph_->UpdateNodeEventStamp(var_name);
-        }
+        UpdateValueToContext(var_name, value);
         var->set_status(VariableStatus::kRawVar);
         var->set_error_message("");
     }
     node->set_dirty_flag(false);
-    return true;
+    return eval_success;
 }
 
 void VariableManager::UpdateVariableParseStatus(Variable *var)
@@ -463,6 +481,7 @@ bool VariableManager::RemoveVariableToGraph(const std::string &var_name) noexcep
     {
         return false;
     }
+    // for invalidate graph node to trigger dependent node update
     graph_->InvalidateNode(var_name);
     graph_->RemoveNode(var_name);
     auto edges = graph_->GetEdgesByFrom(var_name);
@@ -477,30 +496,26 @@ bool VariableManager::RemoveVariableToGraph(const std::string &var_name) noexcep
 
 void VariableManager::Update()
 {
-    graph_->Traversal([&](const std::string &var_name) {
-        UpdateVariableInternal(var_name);
-    });
+    graph_->Traversal([&](const std::string &var_name) { UpdateVariableInternal(var_name); });
 
     RemoveObsoleteVariablesInContext();
 }
 
-bool VariableManager::UpdateVariable(const std::string& var_name, bool is_recursive)
+bool VariableManager::UpdateVariable(const std::string &var_name)
 {
-    if(IsVariableExist(var_name) == false)
+    if (IsVariableExist(var_name) == false)
     {
         return false;
     }
-    
-    UpdateVariableInternal(var_name);
-    DependencyGraph::Node *node = graph_->GetNode(var_name);
-    for(const auto& dependent : node->dependents())
+
+    auto topo_order = graph_->TopologicalSort(var_name);
+
+    for (const auto &node_name : topo_order)
     {
-        UpdateVariable(var_name, true);
+        UpdateVariableInternal(node_name);
     }
 
-    if(!is_recursive)
-    {
-        RemoveObsoleteVariablesInContext();
-    }
+    RemoveObsoleteVariablesInContext();
+    
     return true;
 }

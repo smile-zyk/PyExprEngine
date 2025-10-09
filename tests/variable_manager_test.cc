@@ -464,7 +464,7 @@ TEST_F(VariableManagerTest, UpdateContext)
     EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
 
     manager_.SetValue("E", 6);
-    manager_.Update();
+    manager_.UpdateVariable("E");
     EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 28);
     EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 12);
     EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 16);

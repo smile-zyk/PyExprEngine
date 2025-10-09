@@ -44,7 +44,7 @@ class VariableManager
     void Update();
 
     // use graph update single varible and its dependents to context
-    bool UpdateVariable(const std::string& var_name, bool is_recursive = false);
+    bool UpdateVariable(const std::string& var_name);
 
     const DependencyGraph *graph()
     {

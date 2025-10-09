@@ -280,6 +280,70 @@ bool DependencyGraph::RemoveEdges(const std::vector<Edge> &edge_list) noexcept
     return res;
 }
 
+std::vector<std::string> DependencyGraph::TopologicalSort(const std::string& node) const
+{
+    if (node_map_.find(node) == node_map_.end()) {
+        return {};
+    }
+
+    // Kahn's Algorithm for specific node and its dependencies
+    std::unordered_map<std::string, int> in_degree;
+    std::queue<std::string> zero_in_degree_queue;
+    std::vector<std::string> topo_order;
+    
+    std::unordered_set<std::string> relevant_nodes;
+    std::queue<std::string> node_queue;
+    node_queue.push(node);
+    relevant_nodes.insert(node);
+    
+    while (!node_queue.empty()) {
+        auto current_node = node_queue.front();
+        node_queue.pop();
+        
+        for (const auto& dep : node_map_.at(current_node)->dependents_) {
+            if (relevant_nodes.find(dep) == relevant_nodes.end()) {
+                relevant_nodes.insert(dep);
+                node_queue.push(dep);
+            }
+        }
+    }
+    
+    for (const auto& node_name : relevant_nodes) {
+        int count = 0;
+        for (const auto& dep : node_map_.at(node_name)->dependencies_) {
+            if (relevant_nodes.find(dep) != relevant_nodes.end()) {
+                count++;
+            }
+        }
+        in_degree[node_name] = count;
+        
+        if (in_degree[node_name] == 0) {
+            zero_in_degree_queue.push(node_name);
+        }
+    }
+    
+    while (!zero_in_degree_queue.empty()) {
+        auto node_name = zero_in_degree_queue.front();
+        zero_in_degree_queue.pop();
+        topo_order.push_back(node_name);
+        
+        for (const auto& dependent : node_map_.at(node_name)->dependents_) {
+            if (relevant_nodes.find(dependent) != relevant_nodes.end()) {
+                if (--in_degree[dependent] == 0) {
+                    zero_in_degree_queue.push(dependent);
+                }
+            }
+        }
+    }
+    
+    if (topo_order.size() != relevant_nodes.size()) {
+        return {};
+    }
+    
+    return topo_order;
+}
+
+
 std::vector<std::string> DependencyGraph::TopologicalSort() const
 {
     // Kahn's Algorithm
