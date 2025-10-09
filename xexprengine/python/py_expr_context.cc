@@ -2,47 +2,34 @@
 #include "py_expr_engine.h"
 #include "value_pybind_converter.h"
 #include "core/value.h"
+#include <cstddef>
 #include <pybind11/cast.h>
 #include <pybind11/gil.h>
 #include <pybind11/pytypes.h>
 
 using namespace xexprengine;
 
-PyExprContext::PyExprContext()
-{
-    auto evaluate_callback = [this](const std::string &expression) -> EvalResult {
-        return PyExprEngine::GetInstance().Evaluate(expression, this);
-    };
-
-    auto parse_callback = [this](const std::string &expression) -> ParseResult {
-        return PyExprEngine::GetInstance().Parse(expression);
-    };
-
-    set_evaluate_callback(evaluate_callback);
-    set_parse_callback(parse_callback);
-}
-
-Value PyExprContext::GetContextValue(const std::string &var_name) const
+Value PyExprContext::Get(const std::string &var_name) const
 {
     py::gil_scoped_acquire acquire;
-    if (context_dict_.contains(var_name))
+    if (dict_.contains(var_name))
     {
-        return py::cast<Value>(context_dict_[var_name.c_str()]);
+        return py::cast<Value>(dict_[var_name.c_str()]);
     }
     return Value::Null();
 }
 
-bool PyExprContext::IsContextValueExist(const std::string &var_name) const
+bool PyExprContext::Contains(const std::string &var_name) const
 {
     py::gil_scoped_acquire acquire;
-    return context_dict_.contains(var_name);
+    return dict_.contains(var_name);
 }
 
-std::unordered_set<std::string> PyExprContext::GetContextExistVariables() const
+std::unordered_set<std::string> PyExprContext::keys() const
 {
     py::gil_scoped_acquire acquire;
 
-    py::object keys_obj = context_dict_.attr("keys")();
+    py::object keys_obj = dict_.attr("keys")();
     std::unordered_set<std::string> keys;
 
     for (auto key : keys_obj)
@@ -52,28 +39,42 @@ std::unordered_set<std::string> PyExprContext::GetContextExistVariables() const
     return keys;
 }
 
-void PyExprContext::SetContextValue(const std::string &var_name, const Value &value)
+void PyExprContext::Set(const std::string &var_name, const Value &value)
 {
     py::gil_scoped_acquire acquire;
 
-    context_dict_[var_name.c_str()] = value;
+    dict_[var_name.c_str()] = value;
 }
 
-bool PyExprContext::RemoveContextValue(const std::string &var_name)
+bool PyExprContext::Remove(const std::string &var_name)
 {
     py::gil_scoped_acquire acquire;
 
-    if (context_dict_.contains(var_name))
+    if (dict_.contains(var_name))
     {
-        context_dict_.attr("__delitem__")(var_name);
+        dict_.attr("__delitem__")(var_name);
         return true;
     }
     return false;
 }
 
-void PyExprContext::ClearContextValue() 
+void PyExprContext::Clear() 
 {
     py::gil_scoped_acquire acquire;
     
-    context_dict_.clear();
+    dict_.clear();
+}
+
+size_t PyExprContext::size() const
+{
+    py::gil_scoped_acquire acquire;
+    
+    return dict_.size();
+}
+
+bool PyExprContext::empty() const
+{
+    py::gil_scoped_acquire acquire;
+
+    return dict_.empty();
 }

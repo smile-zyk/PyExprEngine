@@ -1,6 +1,7 @@
 #pragma once
 #include "value.h"
 #include <string>
+#include <functional>
 #include <unordered_set>
 
 namespace xexprengine
@@ -41,4 +42,9 @@ struct ParseResult
     std::unordered_set<std::string> variables;
     std::unordered_set<std::string> functions;
 };
+
+class ExprContext;
+
+typedef std::function<EvalResult(const std::string &, ExprContext*)> EvalCallback;
+typedef std::function<ParseResult(const std::string &)> ParseCallback;
 } // namespace xexprengine

@@ -322,6 +322,10 @@ bool DependencyGraph::InvalidateNode(const std::string &node_name)
         return false;
     }
     node->set_dirty_flag(true);
+    for(const auto& dependent : node->dependents_)
+    {
+        InvalidateNode(dependent);
+    }
     return true;
 }
 

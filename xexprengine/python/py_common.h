@@ -6,5 +6,7 @@
 #include <pybind11/functional.h> 
 #include <pybind11/numpy.h> 
 #include <pybind11/pytypes.h>
+#include <pybind11/eval.h>
+#include <pybind11/gil.h>
 
 namespace py = pybind11;

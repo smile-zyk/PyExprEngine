@@ -7,16 +7,42 @@ namespace xexprengine
 class PyExprContext : public ExprContext
 {
   public:
-    PyExprContext();
-    ~PyExprContext() = default;
-    Value GetContextValue(const std::string &var_name) const override;
-    bool IsContextValueExist(const std::string &var_name) const override;
-    std::unordered_set<std::string> GetContextExistVariables() const override;
-    const py::dict context_dict() const { return context_dict_; }
+    // Checks if key exists.
+     bool Contains(const std::string &key) const override;
+
+    // Gets value for the given key.
+     Value Get(const std::string &key) const override;
+
+    // Sets value for the given key.
+     void Set(const std::string &key, const Value &value) override;
+
+    // Removes the given key.
+     bool Remove(const std::string &key) override;
+
+    // Clears all entries.
+     void Clear() override;
+
+    // Returns all keys in the context.
+     std::unordered_set<std::string> keys() const override;
+
+    // Returns the number of entries.
+     size_t size() const override;
+
+    // Checks if the dictionary is empty.
+     bool empty() const override;
+
+    py::dict& dict() { return dict_; }
+    const py::dict& dict() const { return dict_; }
+
   private:
-    void SetContextValue(const std::string &var_name, const Value &value) override;
-    bool RemoveContextValue(const std::string &var_name) override;
-    void ClearContextValue() override;
-    py::dict context_dict_;
+    friend class PyExprEngine;
+    PyExprContext() noexcept = default;
+    ~PyExprContext() noexcept = default;
+    PyExprContext(const PyExprContext &) = delete;
+    PyExprContext &operator=(const PyExprContext &) = delete;
+
+    PyExprContext(PyExprContext &&) noexcept = delete;
+    PyExprContext &operator=(PyExprContext &&) noexcept = delete;
+    py::dict dict_;
 };
 } // namespace xexprengine

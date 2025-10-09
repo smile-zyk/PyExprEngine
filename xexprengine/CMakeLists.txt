@@ -12,14 +12,16 @@ set(XEXPRENGINE_SRC
     core/dependency_graph.cc
     core/variable.cc
     core/event_stamp.cc
-    core/expr_context.cc
+    core/variable_manager.cc
     python/value_pybind_converter.cc
     python/py_symbol_extractor.cc
     python/py_expr_context.cc
     python/py_expr_engine.cc
 )
 
-add_library(xexprengine STATIC ${XEXPRENGINE_SRC})
+add_library(xexprengine STATIC ${XEXPRENGINE_SRC} )
+
+set_target_properties(xexprengine PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 target_include_directories(xexprengine PUBLIC . ${Python_INCLUDE_DIRS})
 target_link_libraries(xexprengine PRIVATE pybind11::embed ${Python_LIBRARIES})

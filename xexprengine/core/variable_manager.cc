@@ -1,11 +1,10 @@
-#include "expr_context.h"
+#include "variable_manager.h"
 #include "dependency_graph.h"
 #include "event_stamp.h"
 #include "expr_common.h"
 #include "value.h"
 #include "variable.h"
 #include <cstdio>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -13,14 +12,17 @@
 
 using namespace xexprengine;
 
-ExprContext::ExprContext() noexcept
+VariableManager::VariableManager(
+    EvalCallback eval_callback, ParseCallback parse_callback, std::unique_ptr<ExprContext> context
+) noexcept
     : graph_(std::unique_ptr<DependencyGraph>(new DependencyGraph())),
-      evaluate_callback_(nullptr),
-      parse_callback_(nullptr)
+      context_(std::move(context)),
+      evaluate_callback_(eval_callback),
+      parse_callback_(parse_callback)
 {
 }
 
-Variable *ExprContext::GetVariable(const std::string &var_name) const
+const Variable *VariableManager::GetVariable(const std::string &var_name) const
 {
     if (IsVariableExist(var_name) == true)
     {
@@ -29,7 +31,16 @@ Variable *ExprContext::GetVariable(const std::string &var_name) const
     return nullptr;
 }
 
-bool ExprContext::AddVariable(std::unique_ptr<Variable> var)
+Variable *VariableManager::GetVariable(const std::string &var_name)
+{
+    if (IsVariableExist(var_name) == true)
+    {
+        return variable_map_.at(var_name).get();
+    }
+    return nullptr;
+}
+
+bool VariableManager::AddVariable(std::unique_ptr<Variable> var)
 {
     std::string var_name = var->name();
     if (IsVariableExist(var_name) == false)
@@ -44,20 +55,28 @@ bool ExprContext::AddVariable(std::unique_ptr<Variable> var)
             throw;
         }
 
+        graph_->InvalidateNode(var_name);
         // update variable_map
-        AddVariableToMap(std::move(var));
+        UpdateVariableParseStatus(var.get());
+        variable_map_.insert({var_name, std::move(var)});
         return true;
     }
     return false;
 }
 
-bool ExprContext::AddVariables(std::vector<std::unique_ptr<Variable>> var_list)
+bool VariableManager::AddVariables(std::vector<std::unique_ptr<Variable>> var_list)
 {
     bool res = true;
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
+    std::unordered_set<std::string> should_insert_variables;
     for (std::unique_ptr<Variable> &var : var_list)
     {
-        res &= AddVariableToGraph(var.get());
+        bool add_res = AddVariableToGraph(var.get());
+        res &= add_res;
+        if (add_res)
+        {
+            should_insert_variables.insert(var->name());
+        }
     }
     try
     {
@@ -70,24 +89,30 @@ bool ExprContext::AddVariables(std::vector<std::unique_ptr<Variable>> var_list)
 
     for (std::unique_ptr<Variable> &var : var_list)
     {
-        res &= AddVariableToMap(std::move(var));
+        std::string var_name = var->name();
+        if (should_insert_variables.count(var->name()))
+        {
+            graph_->InvalidateNode(var_name);
+            UpdateVariableParseStatus(var.get());
+            variable_map_.insert({var_name, std::move(var)});
+        }
     }
     return res;
 }
 
-void ExprContext::SetValue(const std::string &var_name, const Value &value)
+void VariableManager::SetValue(const std::string &var_name, const Value &value)
 {
     auto var = VariableFactory::CreateRawVariable(var_name, value);
     SetVariable(var_name, std::move(var));
 }
 
-void ExprContext::SetExpression(const std::string &var_name, const std::string &expression)
+void VariableManager::SetExpression(const std::string &var_name, const std::string &expression)
 {
     auto var = VariableFactory::CreateExprVariable(var_name, expression);
     SetVariable(var_name, std::move(var));
 }
 
-bool ExprContext::SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable)
+bool VariableManager::SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable)
 {
     if (variable->name() != var_name)
     {
@@ -117,16 +142,20 @@ bool ExprContext::SetVariable(const std::string &var_name, std::unique_ptr<Varia
         variable_map_.erase(var_name);
     }
 
+    graph_->InvalidateNode(var_name);
     // add variable to map
-    AddVariableToMap(std::move(variable));
+    UpdateVariableParseStatus(variable.get());
+    variable_map_.insert({var_name, std::move(variable)});
 
     return true;
 }
 
-bool ExprContext::RemoveVariable(const std::string &var_name) noexcept
+bool VariableManager::RemoveVariable(const std::string &var_name) noexcept
 {
     if (IsVariableExist(var_name) == true)
     {
+        graph_->InvalidateNode(var_name);
+
         // update graph
         RemoveVariableToGraph(var_name);
 
@@ -138,7 +167,7 @@ bool ExprContext::RemoveVariable(const std::string &var_name) noexcept
     return false;
 }
 
-bool ExprContext::RemoveVariables(const std::vector<std::string> &var_name_list) noexcept
+bool VariableManager::RemoveVariables(const std::vector<std::string> &var_name_list) noexcept
 {
     bool res = true;
     for (const std::string &var_name : var_name_list)
@@ -148,45 +177,46 @@ bool ExprContext::RemoveVariables(const std::vector<std::string> &var_name_list)
     return res;
 }
 
-bool ExprContext::RenameVariable(const std::string &old_name, const std::string &new_name)
+bool VariableManager::RenameVariable(const std::string &old_name, const std::string &new_name)
 {
-    if (IsVariableExist(old_name) == true && IsVariableExist(new_name) == false)
+    if (IsVariableExist(old_name) != true || IsVariableExist(new_name) != false)
     {
-        // process graph
-        DependencyGraph::BatchUpdateGuard guard(graph_.get());
-        graph_->RemoveNode(old_name);
-        graph_->AddNode(new_name);
-        auto old_edge_iterator = graph_->GetEdgesByFrom(old_name);
-        std::vector<DependencyGraph::Edge> old_edges;
-        std::vector<DependencyGraph::Edge> new_edges;
-        for (auto it = old_edge_iterator.first; it != old_edge_iterator.second; it++)
-        {
-            old_edges.push_back(*it);
-            new_edges.push_back({new_name, it->to()});
-        }
-        graph_->RemoveEdges(old_edges);
-        graph_->AddEdges(new_edges);
-        try
-        {
-            guard.commit();
-        }
-        catch (xexprengine::DependencyCycleException e)
-        {
-            throw;
-        }
-
-        // process variable map
-        std::unique_ptr<Variable> origin_var = std::move(variable_map_[old_name]);
-        variable_map_.erase(old_name);
-        origin_var->set_name(new_name);
-        variable_map_.insert({new_name, std::move(origin_var)});
-
-        return true;
+        return false;
     }
-    return false;
+    // process graph
+    DependencyGraph::BatchUpdateGuard guard(graph_.get());
+    graph_->RemoveNode(old_name);
+    graph_->AddNode(new_name);
+    auto old_edge_iterator = graph_->GetEdgesByFrom(old_name);
+    std::vector<DependencyGraph::Edge> old_edges;
+    std::vector<DependencyGraph::Edge> new_edges;
+    for (auto it = old_edge_iterator.first; it != old_edge_iterator.second; it++)
+    {
+        old_edges.push_back(*it);
+        new_edges.push_back({new_name, it->to()});
+    }
+    graph_->RemoveEdges(old_edges);
+    graph_->AddEdges(new_edges);
+    try
+    {
+        guard.commit();
+    }
+    catch (xexprengine::DependencyCycleException e)
+    {
+        throw;
+    }
+
+    graph_->InvalidateNode(new_name);
+    // process variable map
+    std::unique_ptr<Variable> origin_var = std::move(variable_map_[old_name]);
+    variable_map_.erase(old_name);
+    origin_var->set_name(new_name);
+    variable_map_.insert({new_name, std::move(origin_var)});
+
+    return true;
 }
 
-bool ExprContext::CheckNodeDependenciesComplete(
+bool VariableManager::CheckNodeDependenciesComplete(
     const std::string &node_name, std::vector<std::string> &missing_dependencies
 ) const
 {
@@ -211,7 +241,7 @@ bool ExprContext::CheckNodeDependenciesComplete(
     return false;
 }
 
-bool ExprContext::UpdateNodeDependencies(
+bool VariableManager::UpdateNodeDependencies(
     const std::string &node_name, const std::unordered_set<std::string> &node_dependencies
 )
 {
@@ -246,19 +276,34 @@ bool ExprContext::UpdateNodeDependencies(
     return true;
 }
 
-bool ExprContext::IsVariableExist(const std::string &var_name) const
+void VariableManager::RemoveObsoleteVariablesInContext()
+{
+    std::unordered_set<std::string> context_value_to_remove = context_->keys();
+
+    for (const auto &entry : variable_map_)
+    {
+        context_value_to_remove.erase(entry.first);
+    }
+
+    for (const auto &entry : context_value_to_remove)
+    {
+        context_->Remove(entry);
+    }
+}
+
+bool VariableManager::IsVariableExist(const std::string &var_name) const
 {
     return graph_->IsNodeExist(var_name) && variable_map_.count(var_name);
 }
 
-void ExprContext::Reset()
+void VariableManager::Reset()
 {
     graph_->Reset();
     variable_map_.clear();
-    ClearContextValue();
+    context_->Clear();
 }
 
-bool ExprContext::UpdateVariable(const std::string &var_name)
+bool VariableManager::UpdateVariableInternal(const std::string &var_name)
 {
     if (!IsVariableExist(var_name))
     {
@@ -273,13 +318,25 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
     DependencyGraph::Node *node = graph_->GetNode(var_name);
     Variable *var = GetVariable(var_name);
 
+    // check parse error
+    if (var->status() == VariableStatus::kParseSyntaxError)
+    {
+        if (context_->Contains(var_name) == true)
+        {
+            context_->Remove(var_name);
+            graph_->UpdateNodeEventStamp(var_name);
+        }
+        node->set_dirty_flag(false);
+        return false;
+    }
+
     // check missing dependencies;
     std::vector<std::string> missing_dependencies;
     if (CheckNodeDependenciesComplete(var_name, missing_dependencies) == false)
     {
-        if (IsContextValueExist(var_name) == true)
+        if (context_->Contains(var_name) == true)
         {
-            RemoveContextValue(var_name);
+            context_->Remove(var_name);
             graph_->UpdateNodeEventStamp(var_name);
         }
         var->set_status(VariableStatus::kMissingDependency);
@@ -295,9 +352,9 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
         return false;
     }
 
-    bool is_should_update = var->status() == VariableStatus::kParseSuccess || node->dirty_flag();
+    bool is_should_update = node->dirty_flag();
 
-    if (is_should_update == false)
+    if (is_should_update == true)
     {
         EventStamp max_event_stamp;
         for (const std::string &dependency : node->dependencies())
@@ -308,9 +365,9 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
                 max_event_stamp = dep_node->event_stamp();
             }
         }
-        if (node->event_stamp() <= max_event_stamp)
+        if (node->event_stamp() > max_event_stamp)
         {
-            is_should_update = true;
+            is_should_update = false;
         }
     }
 
@@ -320,32 +377,20 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
         return false;
     }
 
-    // check parse error
-    if (var->status() == VariableStatus::kParseSyntaxError)
-    {
-        if (IsContextValueExist(var_name) == true)
-        {
-            RemoveContextValue(var_name);
-            graph_->UpdateNodeEventStamp(var_name);
-        }
-        node->set_dirty_flag(false);
-        return false;
-    }
-
     if (var->GetType() == Variable::Type::Expr)
     {
         const std::string &expression = var->As<ExprVariable>()->expression();
-        EvalResult result = evaluate_callback_(expression);
+        EvalResult result = evaluate_callback_(expression, context_.get());
         if (result.status != VariableStatus::kExprEvalSuccess)
         {
-            if (RemoveContextValue(var_name) == true)
+            if (context_->Remove(var_name) == true)
             {
                 graph_->UpdateNodeEventStamp(var_name);
             }
         }
-        else if (result.value != GetContextValue(var_name))
+        else if (result.value != context_->Get(var_name))
         {
-            SetContextValue(var_name, result.value);
+            context_->Set(var_name, result.value);
             graph_->UpdateNodeEventStamp(var_name);
         }
         var->set_status(result.status);
@@ -354,9 +399,9 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
     else if (var->GetType() == Variable::Type::Raw)
     {
         const Value &value = var->As<RawVariable>()->value();
-        if (value != GetContextValue(var_name))
+        if (value != context_->Get(var_name))
         {
-            SetContextValue(var_name, value);
+            context_->Set(var_name, value);
             graph_->UpdateNodeEventStamp(var_name);
         }
         var->set_status(VariableStatus::kRawVar);
@@ -366,7 +411,7 @@ bool ExprContext::UpdateVariable(const std::string &var_name)
     return true;
 }
 
-void ExprContext::UpdateVariableParseStatus(Variable *var)
+void VariableManager::UpdateVariableParseStatus(Variable *var)
 {
     if (var->GetType() == Variable::Type::Raw)
     {
@@ -383,7 +428,7 @@ void ExprContext::UpdateVariableParseStatus(Variable *var)
     }
 }
 
-bool ExprContext::AddVariableToGraph(const Variable *var)
+bool VariableManager::AddVariableToGraph(const Variable *var)
 {
     const std::string &var_name = var->name();
     if (graph_->IsNodeExist(var_name))
@@ -409,16 +454,16 @@ bool ExprContext::AddVariableToGraph(const Variable *var)
     {
         throw;
     }
-    graph_->InvalidateNode(var_name);
     return true;
 }
 
-bool ExprContext::RemoveVariableToGraph(const std::string &var_name) noexcept
+bool VariableManager::RemoveVariableToGraph(const std::string &var_name) noexcept
 {
     if (graph_->IsNodeExist(var_name) == false)
     {
         return false;
     }
+    graph_->InvalidateNode(var_name);
     graph_->RemoveNode(var_name);
     auto edges = graph_->GetEdgesByFrom(var_name);
     std::vector<DependencyGraph::Edge> edges_to_remove;
@@ -430,36 +475,32 @@ bool ExprContext::RemoveVariableToGraph(const std::string &var_name) noexcept
     return true;
 }
 
-bool ExprContext::AddVariableToMap(std::unique_ptr<Variable> var)
+void VariableManager::Update()
 {
-    const std::string &var_name = var->name();
-    if (variable_map_.count(var_name))
+    graph_->Traversal([&](const std::string &var_name) {
+        UpdateVariableInternal(var_name);
+    });
+
+    RemoveObsoleteVariablesInContext();
+}
+
+bool VariableManager::UpdateVariable(const std::string& var_name, bool is_recursive)
+{
+    if(IsVariableExist(var_name) == false)
     {
         return false;
     }
-    // set parse status when add
-    UpdateVariableParseStatus(var.get());
-    variable_map_.insert({var_name, std::move(var)});
+    
+    UpdateVariableInternal(var_name);
+    DependencyGraph::Node *node = graph_->GetNode(var_name);
+    for(const auto& dependent : node->dependents())
+    {
+        UpdateVariable(var_name, true);
+    }
+
+    if(!is_recursive)
+    {
+        RemoveObsoleteVariablesInContext();
+    }
     return true;
-}
-
-void ExprContext::Update()
-{
-    std::unordered_set<std::string> current_exist_var_set;
-    graph_->Traversal([&](const std::string &var_name) {
-        UpdateVariable(var_name);
-        current_exist_var_set.insert(var_name);
-    });
-
-    std::unordered_set<std::string> context_value_to_remove = GetContextExistVariables();
-
-    for(const auto& entry : current_exist_var_set)
-    {
-        context_value_to_remove.erase(entry);
-    }
-
-    for(const auto& entry : context_value_to_remove)
-    {
-        RemoveContextValue(entry);
-    }
 }

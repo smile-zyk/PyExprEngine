@@ -2,9 +2,7 @@
 #include "core/expr_common.h"
 #include "py_common.h"
 #include "python/py_expr_context.h"
-#include <pybind11/eval.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/pytypes.h>
+#include <memory>
 
 using namespace xexprengine;
 
@@ -36,7 +34,7 @@ EvalResult PyExprEngine::Evaluate(const std::string &expr, const ExprContext *co
     }
     py::gil_scoped_acquire acquire;
     try {
-        py::object res = py::eval(expr, py::globals(), py_context->context_dict());
+        py::object res = py::eval(expr, py::globals(), py_context->dict());
         EvalResult result;
         result.value = res;
         result.status = VariableStatus::kExprEvalSuccess;
@@ -51,6 +49,11 @@ EvalResult PyExprEngine::Evaluate(const std::string &expr, const ExprContext *co
 ParseResult PyExprEngine::Parse(const std::string &expr)
 {
     return symbol_extractor_.Extract(expr);
+}
+
+std::unique_ptr<ExprContext> PyExprEngine::CreateContext()
+{
+    return std::unique_ptr<ExprContext>(new PyExprContext());
 }
 
 void PyExprEngine::InitializePyEnv()
