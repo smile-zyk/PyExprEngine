@@ -1,17 +1,11 @@
 {
   "dependencies": [
-    "pybind11",
     "gtest",
-    "boost-multi-index",
-    "boost-units"
+    "boost-multi-index"
   ],
   "overrides": [
     {
       "name": "boost-multi-index",
-      "version": "1.79.0"
-    },
-    {
-      "name": "boost-units",
       "version": "1.79.0"
     }
   ]

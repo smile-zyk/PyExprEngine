@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <pybind11/pytypes.h>
 
 #include "python/py_expr_engine.h"
 #include "python/py_expr_context.h"

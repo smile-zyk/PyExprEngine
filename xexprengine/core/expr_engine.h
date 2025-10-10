@@ -1,9 +1,10 @@
 #pragma once
+#include <memory>
+#include <string>
+
 #include "expr_common.h"
 #include "expr_context.h"
 #include "variable_manager.h"
-#include <memory>
-#include <string>
 
 namespace xexprengine
 {

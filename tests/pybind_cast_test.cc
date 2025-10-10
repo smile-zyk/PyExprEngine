@@ -145,14 +145,11 @@ TEST_F(PyObjectConverterTest, ConvertUnsignedInt) {
 }
 
 TEST_F(PyObjectConverterTest, RoundTripConversion) {
-    // 测试从 C++ -> Python -> C++ 的往返转换
     std::vector<int> original{1, 2, 3};
     Value value(original);
     
-    // 转换为 Python 对象
     py::object obj = py::cast(value);
     
-    // 再转换回 C++ 类型
     std::vector<int> result = obj.cast<std::vector<int>>();
     
     EXPECT_EQ(result, original);

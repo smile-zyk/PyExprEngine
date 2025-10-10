@@ -24,7 +24,8 @@ add_library(xexprengine STATIC ${XEXPRENGINE_SRC} )
 set_target_properties(xexprengine PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 target_include_directories(xexprengine PUBLIC . ${Python_INCLUDE_DIRS})
-target_link_libraries(xexprengine PRIVATE pybind11::embed ${Python_LIBRARIES})
+target_link_libraries(xexprengine PUBLIC pybind11::headers)
+target_link_libraries(xexprengine PRIVATE Python::Python)
 target_link_libraries(xexprengine PRIVATE Boost::serialization)
 
 target_include_directories(xexprengine PRIVATE ${Boost_INCLUDE_DIRS})
