@@ -1,4 +1,5 @@
 #include "variable_manager.h"
+#include "event_stamp.h"
 
 using namespace xexprengine;
 

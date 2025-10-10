@@ -1,5 +1,4 @@
 #include "py_symbol_extractor.h"
-#include "core/expr_common.h"
 
 using namespace xexprengine;
 

@@ -30,9 +30,12 @@ class ExprEngine
         ParseCallback parse_callback = [this](const std::string &expression) -> ParseResult {
             return Parse(expression);
         };
+
         return std::unique_ptr<VariableManager>(new VariableManager(evaluate_callback, parse_callback, CreateContext()));
     }
+
     virtual std::unique_ptr<ExprContext> CreateContext() = 0;
+
   protected:
     ExprEngine() = default;
     virtual ~ExprEngine() = default;
