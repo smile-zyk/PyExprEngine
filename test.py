@@ -1,6 +1,7 @@
 import sys
 import os
 import site
+import pybind11
 
 def print_python_config():
     print("Python path configuration:")
@@ -27,3 +28,4 @@ def print_python_config():
 
 if __name__ == "__main__":
     print_python_config()
+    print(pybind11.get_cmake_dir())

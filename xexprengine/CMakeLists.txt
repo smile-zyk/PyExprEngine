@@ -2,15 +2,13 @@ find_package(Python REQUIRED COMPONENTS Development Interpreter)
 
 if(Python_FOUND)
     execute_process(
-        COMMAND ${Python_EXECUTABLE} -c "import site; print(site.getsitepackages()[0])"
-        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+        COMMAND ${Python_EXECUTABLE} -c "import pybind11; print(pybind11.get_cmake_dir())"
+        OUTPUT_VARIABLE pybind11_DIR
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     
-    message(STATUS "Python site-packages: ${PYTHON_SITE_PACKAGES}")
+    message(STATUS "pybind11 DIR: ${pybind11_DIR}")
 endif()
-
-set(pybind11_DIR "${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11")
 
 find_package(pybind11 REQUIRED)
 
