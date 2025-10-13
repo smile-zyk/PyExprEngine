@@ -40,7 +40,6 @@ struct ParseResult
     VariableStatus status;
     std::string parse_error_message;
     std::unordered_set<std::string> variables;
-    std::unordered_set<std::string> functions;
 };
 
 class ExprContext;

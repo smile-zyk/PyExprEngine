@@ -1,7 +1,9 @@
 #pragma once
 #include <list>
+#include <pybind11/pybind11.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "py_common.h"
 #include "core/expr_common.h"
@@ -11,7 +13,7 @@ namespace xexprengine
 class PySymbolExtractor
 {
   public:
-    PySymbolExtractor() = default;
+    PySymbolExtractor();
     ~PySymbolExtractor() = default;
 
     PySymbolExtractor(const PySymbolExtractor &) = delete;
@@ -19,7 +21,7 @@ class PySymbolExtractor
     PySymbolExtractor &operator=(const PySymbolExtractor &) = delete;
     PySymbolExtractor &operator=(PySymbolExtractor &&) = delete;
 
-    ParseResult Extract(const std::string& py_code);
+    ParseResult Extract(const std::string& py_code, const std::unordered_set<std::string>& builtins = {}, const std::unordered_set<std::string>& modules = {});
 
     void ClearCache();
 
@@ -31,8 +33,9 @@ class PySymbolExtractor
     ParseResult Parse(const std::string& py_code);
 
     void ProcessNameNode(py::handle node, ParseResult& result);
-    void ProcessCallNode(py::handle node, ParseResult& result);
     void ProcessNode(py::handle node, ParseResult& result);
+
+    void ProcessResultWithBuiltinsAndModules(ParseResult& result, const std::unordered_set<std::string>& builtins = {}, const std::unordered_set<std::string>& modules = {});
 
     void MoveToFront(const std::string& key);
     void EvictLRU();
@@ -48,5 +51,6 @@ class PySymbolExtractor
     std::list<CacheEntry> cache_list_;
     std::unordered_map<std::string, typename std::list<CacheEntry>::iterator> cache_map_;
     size_t max_cache_size_ = 1000;
+    py::module ast_module_;
 };
 } // namespace xexprengine

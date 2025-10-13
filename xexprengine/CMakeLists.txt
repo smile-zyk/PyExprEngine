@@ -28,6 +28,7 @@ set(XEXPRENGINE_SRC
     python/py_symbol_extractor.cc
     python/py_expr_context.cc
     python/py_expr_engine.cc
+    python/py_restricted_evaluator.cc
 )
 
 add_library(xexprengine STATIC ${XEXPRENGINE_SRC} )

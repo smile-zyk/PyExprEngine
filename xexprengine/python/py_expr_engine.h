@@ -1,6 +1,8 @@
 #pragma once
 #include "core/expr_engine.h"
-#include "python/py_symbol_extractor.h"
+#include "py_symbol_extractor.h"
+#include "py_restricted_evaluator.h"
+#include <memory>
 
 namespace xexprengine
 {
@@ -26,7 +28,8 @@ class PyExprEngine : public ExprEngine<PyExprEngine>
 
   private:
     static PyEnvConfig config_;
-    PySymbolExtractor symbol_extractor_;
+    std::unique_ptr<PySymbolExtractor> symbol_extractor_ = nullptr;
+    std::unique_ptr<PyRestrictedEvaluator> restricted_evaluator_ = nullptr;
     bool manage_python_context_ = false;
 };
 } // namespace xexprengine

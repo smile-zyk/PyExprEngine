@@ -25,7 +25,6 @@ TEST_F(PySymbolExtractorTest, ExtractSimpleVariableReference) {
     EXPECT_EQ(result.status, VariableStatus::kParseSuccess);
     EXPECT_TRUE(result.variables.find("x") != result.variables.end());
     EXPECT_EQ(result.variables.size(), 1u);
-    EXPECT_TRUE(result.functions.empty());
 }
 
 TEST_F(PySymbolExtractorTest, ExtractFunctionCall) {
@@ -36,9 +35,7 @@ TEST_F(PySymbolExtractorTest, ExtractFunctionCall) {
     EXPECT_TRUE(result.variables.find("calculate_sum") != result.variables.end());
     EXPECT_TRUE(result.variables.find("a") != result.variables.end());
     EXPECT_TRUE(result.variables.find("b") != result.variables.end());
-    EXPECT_TRUE(result.functions.find("calculate_sum") != result.functions.end());
     EXPECT_EQ(result.variables.size(), 3u); // calculate_sum, a, b
-    EXPECT_EQ(result.functions.size(), 1u); // calculate_sum
 }
 
 TEST_F(PySymbolExtractorTest, ExtractBinaryOperation) {
@@ -50,7 +47,6 @@ TEST_F(PySymbolExtractorTest, ExtractBinaryOperation) {
     EXPECT_TRUE(result.variables.find("y") != result.variables.end());
     EXPECT_TRUE(result.variables.find("z") != result.variables.end());
     EXPECT_EQ(result.variables.size(), 3u);
-    EXPECT_TRUE(result.functions.empty());
 }
 
 TEST_F(PySymbolExtractorTest, CacheBasicFunctionality) {
@@ -64,7 +60,6 @@ TEST_F(PySymbolExtractorTest, CacheBasicFunctionality) {
     
     EXPECT_EQ(result1.status, result2.status);
     EXPECT_EQ(result1.variables.size(), result2.variables.size());
-    EXPECT_EQ(result1.functions.size(), result2.functions.size());
 }
 
 TEST_F(PySymbolExtractorTest, CacheDifferentExpressions) {

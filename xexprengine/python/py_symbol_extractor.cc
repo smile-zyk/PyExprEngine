@@ -2,7 +2,12 @@
 
 using namespace xexprengine;
 
-ParseResult PySymbolExtractor::Extract(const std::string &py_code)
+PySymbolExtractor::PySymbolExtractor()
+{
+    ast_module_ = py::module::import("ast");
+}
+
+ParseResult PySymbolExtractor::Extract(const std::string &py_code, const std::unordered_set<std::string>& builtins, const std::unordered_set<std::string>& modules)
 {
     auto it = cache_map_.find(py_code);
     if (it != cache_map_.end())
@@ -11,6 +16,7 @@ ParseResult PySymbolExtractor::Extract(const std::string &py_code)
     }
 
     ParseResult result = Parse(py_code);
+    ProcessResultWithBuiltinsAndModules(result, builtins, modules);
 
     cache_list_.emplace_front(py_code, result);
     cache_map_[py_code] = cache_list_.begin();
@@ -48,10 +54,9 @@ ParseResult PySymbolExtractor::Parse(const std::string &py_code)
     try
     {
         py::gil_scoped_acquire acquire;
-        py::object ast_module = py::module::import("ast");
-        auto tree = ast_module.attr("parse")(py_code);
+        auto tree = ast_module_.attr("parse")(py_code);
 
-        auto walk_iter = ast_module.attr("walk")(tree);
+        auto walk_iter = ast_module_.attr("walk")(tree);
 
         for (auto node : walk_iter)
         {
@@ -89,20 +94,6 @@ void PySymbolExtractor::ProcessNameNode(py::handle node, ParseResult &result)
     }
 }
 
-void PySymbolExtractor::ProcessCallNode(py::handle node, ParseResult &result)
-{
-    if (py::hasattr(node, "func"))
-    {
-        auto func = node.attr("func");
-
-        if (py::hasattr(func, "id"))
-        {
-            auto func_id = func.attr("id").cast<std::string>();
-            result.functions.insert(func_id);
-        }
-    }
-}
-
 void PySymbolExtractor::ProcessNode(py::handle node, ParseResult &result)
 {
     auto node_type = node.attr("__class__").attr("__name__").cast<std::string>();
@@ -110,10 +101,6 @@ void PySymbolExtractor::ProcessNode(py::handle node, ParseResult &result)
     if (node_type == "Name")
     {
         ProcessNameNode(node, result);
-    }
-    else if (node_type == "Call")
-    {
-        ProcessCallNode(node, result);
     }
 }
 
@@ -124,5 +111,27 @@ void PySymbolExtractor::EvictLRU()
         auto last = cache_list_.back();
         cache_map_.erase(last.key);
         cache_list_.pop_back();
+    }
+}
+
+void PySymbolExtractor::ProcessResultWithBuiltinsAndModules(ParseResult& result, const std::unordered_set<std::string>& builtins, const std::unordered_set<std::string>& modules)
+{
+    if(builtins.size() == 0 && modules.size() == 0)
+    {
+        return;
+    }
+
+    std::vector<std::string> will_remove_variables;
+    for(const std::string& var : result.variables)
+    {
+        if(builtins.count(var) || modules.count(var))
+        {
+            will_remove_variables.push_back(var);
+        }
+    }
+
+    for(const std::string& var : will_remove_variables)
+    {
+        result.variables.erase(var);
     }
 }
