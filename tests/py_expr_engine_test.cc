@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
+#include <map>
+#include <pybind11/cast.h>
+#include <string>
 
+#include "python/py_expr_context.h"
 #include "python/py_expr_engine.h"
 
 using namespace xexprengine;
@@ -28,6 +32,12 @@ TEST(PyExprEngineTest, EvalTest)
     variable_manager->SetExpression("d", "a + b * c");
     variable_manager->Update();
 
+    variable_manager->context();
+
+
+    auto py_context = dynamic_cast<const PyExprContext*>(variable_manager->context());
+    auto dict_ = py_context->dict();
+
     auto v = variable_manager->context()->Get("d");
     auto obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 16);
@@ -37,6 +47,13 @@ TEST(PyExprEngineTest, EvalTest)
     v = variable_manager->context()->Get("d");
     obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 26);
+
+    variable_manager->SetExpression("test", "sum([a,b,c,d])");
+    variable_manager->UpdateVariable("test");
+
+    v = variable_manager->context()->Get("test");
+    obj = v.Cast<py::object>();
+    EXPECT_EQ(obj.cast<int>(), 37);
 }
 
 int main(int argc, char **argv) {

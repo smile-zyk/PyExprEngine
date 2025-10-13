@@ -1,4 +1,5 @@
 #include "py_restricted_evaluator.h"
+#include <pybind11/cast.h>
 #include <pybind11/gil.h>
 #include <pybind11/pytypes.h>
 
@@ -27,20 +28,16 @@ PyRestrictedEvaluator::PyRestrictedEvaluator()
 
 py::object PyRestrictedEvaluator::Eval(const std::string &code, py::dict local)
 {
-    if (!Py_IsInitialized()) {
-        throw std::runtime_error("Python interpreter not initialized");
-    }
-    
-    if (_Py_IsFinalizing()) {
-        throw std::runtime_error("Python interpreter is finalizing");
-    }
-
     try
     {
         py::gil_scoped_acquire acquire{};
 
-        py::object result = py::eval<pybind11::eval_single_statement>(code, safe_globals_, local);
-
+        py::object compile_restricted = restrictedpython_module_.attr("compile_restricted");
+        py::object bytecode = compile_restricted(code, "<string>", "eval");
+        
+        py::object eval_func = builtins_module_.attr("eval");
+        py::object result = eval_func(bytecode, safe_globals_, local);
+        
         return result;
     }
     catch (const py::error_already_set &e)
@@ -144,7 +141,8 @@ void PyRestrictedEvaluator::SetupRestrictedEnvironment()
     safe_globals_["_getitem_"] = restrictedpython_eval_module_.attr("default_guarded_getitem");
     safe_globals_["_unpack_sequence_"] = restrictedpython_guards_module_.attr("guarded_unpack_sequence");
     safe_globals_["_iter_unpack_sequence_"] = restrictedpython_guards_module_.attr("guarded_iter_unpack_sequence");
-    safe_globals_["_write_guard_"] = restrictedpython_guards_module_.attr("full_write_guard");
+    safe_globals_["_write_"] = restrictedpython_guards_module_.attr("full_write_guard");
+    safe_globals_["_getattr_"] = restrictedpython_eval_module_.attr("default_guarded_getattr");
 }
 
 void PyRestrictedEvaluator::CacheBuiltins()

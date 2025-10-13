@@ -1,4 +1,5 @@
 #include "py_expr_engine.h"
+#include "core/expr_common.h"
 #include "py_restricted_evaluator.h"
 #include "py_symbol_extractor.h"
 #include "python/py_expr_context.h"
@@ -19,38 +20,6 @@ PyExprEngine::PyExprEngine()
     {
         manage_python_context_ = true;
         InitializePyEnv();
-        const char *python_code = R"(
-import sys
-import os
-
-def print_python_config():
-    print("Python path configuration:")
-    print(f"  PYTHONHOME = {os.environ.get('PYTHONHOME', '(not set)')}")
-    print(f"  PYTHONPATH = {os.environ.get('PYTHONPATH', '(not set)')}")
-    print(f"  program name = '{sys.argv[0] if len(sys.argv) > 0 else 'python'}'")
-    print(f"  isolated = {1 if sys.flags.isolated else 0}")
-    print(f"  environment = {0 if sys.flags.ignore_environment else 1}")
-    print(f"  user site = {0 if sys.flags.no_user_site else 1}")
-    print(f"  import site = {0 if sys.flags.no_site else 1}")
-    print(f"  is in build tree = {0}")
-    print(f"  stdlib dir = '{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}'")
-    print(f"  sys._base_executable = '{getattr(sys, '_base_executable', sys.executable)}'")
-    print(f"  sys.base_prefix = '{sys.base_prefix}'")
-    print(f"  sys.base_exec_prefix = '{sys.base_exec_prefix}'")
-    print(f"  sys.executable = '{sys.executable}'")
-    print(f"  sys.prefix = '{sys.prefix}'")
-    print(f"  sys.exec_prefix = '{sys.exec_prefix}'")
-    
-    print("  sys.path = [")
-    for path in sys.path:
-        print(f"    '{path}',")
-    print("  ]")
-
-if __name__ == "__main__":
-    print_python_config()
-)";
-
-        py::exec(python_code);
         symbol_extractor_ = std::unique_ptr<PySymbolExtractor>(new PySymbolExtractor());
         restricted_evaluator_ = std::unique_ptr<PyRestrictedEvaluator>(new PyRestrictedEvaluator());
     }
@@ -78,7 +47,59 @@ EvalResult PyExprEngine::Evaluate(const std::string &expr, const ExprContext *co
     }
     catch (const py::error_already_set &e)
     {
-        return EvalResult{Value::Null(), VariableStatus::kExprEvalSyntaxError, e.what()};
+        std::string error_msg = e.what();
+        VariableStatus error_status = VariableStatus::kInit;
+
+        if (error_msg.find("SyntaxError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalSyntaxError;
+        }
+        else if (error_msg.find("NameError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalNameError;
+        }
+        else if (error_msg.find("TypeError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalTypeError;
+        }
+        else if (error_msg.find("ZeroDivisionError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalZeroDivisionError;
+        }
+        else if (error_msg.find("ValueError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalValueError;
+        }
+        else if (error_msg.find("MemoryError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalMemoryError;
+        }
+        else if (error_msg.find("OverflowError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalOverflowError;
+        }
+        else if (error_msg.find("RecursionError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalRecursionError;
+        }
+        else if (error_msg.find("IndexError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalIndexError;
+        }
+        else if (error_msg.find("KeyError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalKeyError;
+        }
+        else if (error_msg.find("AttributeError") != std::string::npos)
+        {
+            error_status = VariableStatus::kExprEvalAttributeError;
+        }
+        else
+        {
+            error_status = VariableStatus::kExprEvalValueError; // 默认错误类型
+        }
+
+        return EvalResult{Value::Null(), error_status, e.what()};
     }
 }
 
@@ -144,6 +165,8 @@ PyExprEngine::~PyExprEngine()
 {
     if (manage_python_context_)
     {
+        symbol_extractor_.reset();
+        restricted_evaluator_.reset();
         FinalizePyEnv();
     }
 }

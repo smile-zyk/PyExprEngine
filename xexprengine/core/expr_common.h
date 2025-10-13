@@ -25,7 +25,7 @@ enum class VariableStatus
     kExprEvalRecursionError,
     kExprEvalIndexError,
     kExprEvalKeyError,
-    kExprEvalAttributeError
+    kExprEvalAttributeError,
 };
 
 struct EvalResult

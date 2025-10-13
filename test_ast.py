@@ -19,12 +19,6 @@ class SymbolExtractor:
                     # 如果是写入变量（赋值变量）
                     self.symbols['variables'].add(node.id)
             
-            # 处理函数调用
-            elif isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name):
-                    # 只处理普通函数调用（如 sin()）
-                    self.symbols['functions'].add(node.func.id)
-    
     def get_symbols(self):
         """返回整理后的符号"""
         return {
@@ -34,7 +28,7 @@ class SymbolExtractor:
 
 # 测试代码
 test_code = """
-calcuate_sum(a, b)
+eval('1')
 """
 
 def extract_symbols_from_code(code_string):

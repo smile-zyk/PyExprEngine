@@ -1,5 +1,7 @@
 #pragma once
 #include <memory>
+#include <string>
+#include <map>
 
 #include "dependency_graph.h"
 #include "expr_common.h"

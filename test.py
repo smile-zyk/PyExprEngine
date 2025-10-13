@@ -29,3 +29,8 @@ def print_python_config():
 if __name__ == "__main__":
     print_python_config()
     print(pybind11.get_cmake_dir())
+    a =1
+    b = 2
+    c = 3
+    d = sum([a,b,c])
+    print(d)
