@@ -21,7 +21,7 @@ class PySymbolExtractor
     PySymbolExtractor &operator=(const PySymbolExtractor &) = delete;
     PySymbolExtractor &operator=(PySymbolExtractor &&) = delete;
 
-    ParseResult Extract(const std::string& py_code, const std::unordered_set<std::string>& builtins = {}, const std::unordered_set<std::string>& modules = {});
+    ParseResult Extract(const std::string& py_code, const std::unordered_set<std::string>& exist_symbols = {});
 
     void ClearCache();
 
@@ -35,7 +35,7 @@ class PySymbolExtractor
     void ProcessNameNode(py::handle node, ParseResult& result);
     void ProcessNode(py::handle node, ParseResult& result);
 
-    void ProcessResultWithBuiltinsAndModules(ParseResult& result, const std::unordered_set<std::string>& builtins = {}, const std::unordered_set<std::string>& modules = {});
+    void ProcessResultWithExtraSymbols(ParseResult& result, const std::unordered_set<std::string>& exist_symbols);
 
     void MoveToFront(const std::string& key);
     void EvictLRU();

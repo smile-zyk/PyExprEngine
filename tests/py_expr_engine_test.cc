@@ -24,7 +24,8 @@ TEST(PyExprEngineTest, ParseTest)
 
 TEST(PyExprEngineTest, EvalTest)
 {
-    auto variable_manager = PyExprEngine::GetInstance().CreateVariableManager();
+    auto& engine = PyExprEngine::GetInstance();
+    auto variable_manager = engine.CreateVariableManager();
 
     variable_manager->SetValue("a", 1);
     variable_manager->SetValue("b", 3);
@@ -54,6 +55,12 @@ TEST(PyExprEngineTest, EvalTest)
     v = variable_manager->context()->Get("test");
     obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 37);
+
+    // variable_manager->SetExpression("f", "math.sin(a*math.pi)");
+    // variable_manager->UpdateVariable("f");
+    // v = variable_manager->context()->Get("f");
+    // obj = v.Cast<py::object>();
+    // double t = obj.cast<double>();
 }
 
 int main(int argc, char **argv) {

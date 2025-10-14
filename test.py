@@ -2,6 +2,7 @@ import sys
 import os
 import site
 import pybind11
+import math
 
 def print_python_config():
     print("Python path configuration:")
@@ -29,8 +30,6 @@ def print_python_config():
 if __name__ == "__main__":
     print_python_config()
     print(pybind11.get_cmake_dir())
-    a =1
-    b = 2
-    c = 3
-    d = sum([a,b,c])
+    a = 0.5
+    d = math.sin(a * math.pi)
     print(d)

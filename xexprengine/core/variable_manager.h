@@ -29,6 +29,10 @@ class VariableManager
     void SetExpression(const std::string &var_name, const std::string &expression);
     bool SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable);
 
+    void ImportDirectModule(const std::string& module_name);
+    void ImportCustomModule(const std::string& module_path);
+    bool SetModule(const ModuleInfo& module_info);
+
     // remove variable
     bool RemoveVariable(const std::string &var_name) noexcept;
     bool RemoveVariables(const std::vector<std::string> &var_name_list) noexcept;

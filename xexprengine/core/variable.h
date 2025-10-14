@@ -11,7 +11,7 @@ class Variable
     {
         Raw,
         Expr,
-        Func,
+        Module,
     };
 
     Variable(const std::string &name) : name_(name) {}
@@ -127,4 +127,19 @@ class ExprVariable : public Variable
   private:
     std::string expression_;
 };
+
+class ModuleVariable : public Variable
+{
+  public:
+    Variable::Type GetType() const override
+    {
+        return Variable::Type::Module;
+    }
+
+    
+
+  private:
+    ModuleInfo info;
+};
+
 } // namespace xexprengine

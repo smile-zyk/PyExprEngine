@@ -7,7 +7,7 @@ PySymbolExtractor::PySymbolExtractor()
     ast_module_ = py::module::import("ast");
 }
 
-ParseResult PySymbolExtractor::Extract(const std::string &py_code, const std::unordered_set<std::string>& builtins, const std::unordered_set<std::string>& modules)
+ParseResult PySymbolExtractor::Extract(const std::string &py_code, const std::unordered_set<std::string>& exist_symbols)
 {
     auto it = cache_map_.find(py_code);
     if (it != cache_map_.end())
@@ -16,7 +16,7 @@ ParseResult PySymbolExtractor::Extract(const std::string &py_code, const std::un
     }
 
     ParseResult result = Parse(py_code);
-    ProcessResultWithBuiltinsAndModules(result, builtins, modules);
+    ProcessResultWithExtraSymbols(result, exist_symbols);
 
     cache_list_.emplace_front(py_code, result);
     cache_map_[py_code] = cache_list_.begin();
@@ -114,9 +114,9 @@ void PySymbolExtractor::EvictLRU()
     }
 }
 
-void PySymbolExtractor::ProcessResultWithBuiltinsAndModules(ParseResult& result, const std::unordered_set<std::string>& builtins, const std::unordered_set<std::string>& modules)
+void PySymbolExtractor::ProcessResultWithExtraSymbols(ParseResult& result, const std::unordered_set<std::string>& exist_symbols)
 {
-    if(builtins.size() == 0 && modules.size() == 0)
+    if(exist_symbols.size() == 0)
     {
         return;
     }
@@ -124,7 +124,7 @@ void PySymbolExtractor::ProcessResultWithBuiltinsAndModules(ParseResult& result,
     std::vector<std::string> will_remove_variables;
     for(const std::string& var : result.variables)
     {
-        if(builtins.count(var) || modules.count(var))
+        if(exist_symbols.count(var))
         {
             will_remove_variables.push_back(var);
         }

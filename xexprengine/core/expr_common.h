@@ -26,6 +26,8 @@ enum class VariableStatus
     kExprEvalIndexError,
     kExprEvalKeyError,
     kExprEvalAttributeError,
+    kModuleImportSuccess,
+    kModuleImportError,
 };
 
 struct EvalResult
@@ -42,8 +44,32 @@ struct ParseResult
     std::unordered_set<std::string> variables;
 };
 
+enum class ModuleType
+{
+    kDirect,
+    kPath
+};
+
+struct ModuleInfo
+{
+    std::string name;
+    std::string alias;
+    std::string path;
+    ModuleType type;
+    bool is_import_to_global;
+    std::vector<std::string> import_symbols;
+};
+
+struct ModuleResult
+{
+    Value module_value;
+    std::string import_error_message;
+    VariableStatus status;
+};
+
 class ExprContext;
 
 typedef std::function<EvalResult(const std::string &, ExprContext*)> EvalCallback;
 typedef std::function<ParseResult(const std::string &)> ParseCallback;
+typedef std::function<ModuleResult(ModuleInfo&)> ImportModuleCallback;
 } // namespace xexprengine

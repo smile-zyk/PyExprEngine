@@ -20,9 +20,16 @@ PyExprEngine::PyExprEngine()
     {
         manage_python_context_ = true;
         InitializePyEnv();
-        symbol_extractor_ = std::unique_ptr<PySymbolExtractor>(new PySymbolExtractor());
-        restricted_evaluator_ = std::unique_ptr<PyRestrictedEvaluator>(new PyRestrictedEvaluator());
     }
+    symbol_extractor_ = std::unique_ptr<PySymbolExtractor>(new PySymbolExtractor());
+    restricted_evaluator_ = std::unique_ptr<PyRestrictedEvaluator>(new PyRestrictedEvaluator());
+
+    restricted_evaluator_->RegisterBuiltin("sum");
+    restricted_evaluator_->RegisterBuiltin("max");
+    restricted_evaluator_->RegisterBuiltin("min");
+
+    restricted_evaluator_->RegisterBuiltin("dict");
+    restricted_evaluator_->RegisterBuiltin("list");
 }
 
 void PyExprEngine::SetPyEnvConfig(const PyEnvConfig &config)
@@ -96,7 +103,7 @@ EvalResult PyExprEngine::Evaluate(const std::string &expr, const ExprContext *co
         }
         else
         {
-            error_status = VariableStatus::kExprEvalValueError; // 默认错误类型
+            error_status = VariableStatus::kExprEvalValueError;
         }
 
         return EvalResult{Value::Null(), error_status, e.what()};
@@ -105,7 +112,7 @@ EvalResult PyExprEngine::Evaluate(const std::string &expr, const ExprContext *co
 
 ParseResult PyExprEngine::Parse(const std::string &expr)
 {
-    return symbol_extractor_->Extract(expr, restricted_evaluator_->builtins(), restricted_evaluator_->active_modules());
+    return symbol_extractor_->Extract(expr, restricted_evaluator_->global_symbols());
 }
 
 std::unique_ptr<ExprContext> PyExprEngine::CreateContext()
@@ -163,10 +170,10 @@ void PyExprEngine::FinalizePyEnv()
 
 PyExprEngine::~PyExprEngine()
 {
+    symbol_extractor_.reset();
+    restricted_evaluator_.reset();
     if (manage_python_context_)
     {
-        symbol_extractor_.reset();
-        restricted_evaluator_.reset();
         FinalizePyEnv();
     }
 }
