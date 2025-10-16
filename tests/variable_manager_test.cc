@@ -206,7 +206,7 @@ class MockExprContext : public ExprContext
 class VariableManagerTest : public testing::Test
 {
   protected:
-    VariableManagerTest(): manager_(EvalExpr, ParseExpr, std::unique_ptr<MockExprContext>(new MockExprContext())){}
+    VariableManagerTest(): manager_(std::unique_ptr<MockExprContext>(new MockExprContext()), EvalExpr, ParseExpr){}
 
     void SetUp() override
     {

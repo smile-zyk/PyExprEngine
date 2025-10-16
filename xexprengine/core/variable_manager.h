@@ -13,7 +13,7 @@ namespace xexprengine
 class VariableManager
 {
   public:
-    VariableManager(EvalCallback eval_callback, ParseCallback parse_callback, std::unique_ptr<ExprContext> context) noexcept;
+    VariableManager(std::unique_ptr<ExprContext> context, EvalCallback eval_callback = nullptr, ParseCallback parse_callback = nullptr, ImportCallback import_callback = nullptr) noexcept;
     virtual ~VariableManager() noexcept = default;
 
     // get variable
@@ -92,5 +92,6 @@ class VariableManager
     std::unordered_map<std::string, std::unique_ptr<Variable>> variable_map_;
     EvalCallback evaluate_callback_;
     ParseCallback parse_callback_;
+    ImportCallback import_callback_;
 };
 } // namespace xexprengine

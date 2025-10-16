@@ -1,4 +1,5 @@
 #pragma once
+#include "core/expr_common.h"
 #include "core/expr_engine.h"
 #include "py_symbol_extractor.h"
 #include "py_restricted_evaluator.h"
@@ -18,6 +19,7 @@ class PyExprEngine : public ExprEngine<PyExprEngine>
     static void SetPyEnvConfig(const PyEnvConfig& config);
     EvalResult Evaluate(const std::string &expr, const ExprContext *context = nullptr) override;
     ParseResult Parse(const std::string &expr) override;
+    ImportResult Import(ModuleInfo& info) override;
     std::unique_ptr<ExprContext> CreateContext() override;
 
   private:

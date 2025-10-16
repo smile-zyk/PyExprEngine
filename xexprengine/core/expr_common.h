@@ -60,7 +60,7 @@ struct ModuleInfo
     std::vector<std::string> import_symbols;
 };
 
-struct ModuleResult
+struct ImportResult
 {
     Value module_value;
     std::string import_error_message;
@@ -71,5 +71,5 @@ class ExprContext;
 
 typedef std::function<EvalResult(const std::string &, ExprContext*)> EvalCallback;
 typedef std::function<ParseResult(const std::string &)> ParseCallback;
-typedef std::function<ModuleResult(ModuleInfo&)> ImportModuleCallback;
+typedef std::function<ImportResult(ModuleInfo&)> ImportCallback;
 } // namespace xexprengine

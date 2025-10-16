@@ -1,10 +1,11 @@
 #include "variable_manager.h"
+#include "core/expr_common.h"
 #include "event_stamp.h"
 
 using namespace xexprengine;
 
 VariableManager::VariableManager(
-    EvalCallback eval_callback, ParseCallback parse_callback, std::unique_ptr<ExprContext> context
+    std::unique_ptr<ExprContext> context, EvalCallback eval_callback, ParseCallback parse_callback, ImportCallback import_callback
 ) noexcept
     : graph_(std::unique_ptr<DependencyGraph>(new DependencyGraph())),
       context_(std::move(context)),
@@ -140,6 +141,21 @@ bool VariableManager::SetVariable(const std::string &var_name, std::unique_ptr<V
     variable_map_.insert({var_name, std::move(variable)});
 
     return true;
+}
+
+void VariableManager::ImportDirectModule(const std::string& module_name)
+{
+    
+}
+
+void VariableManager::ImportCustomModule(const std::string& module_path)
+{
+    
+}
+
+bool VariableManager::SetModule(const ModuleInfo& module_info)
+{
+    
 }
 
 bool VariableManager::RemoveVariable(const std::string &var_name) noexcept
