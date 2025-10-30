@@ -1,5 +1,6 @@
 #include "dependency_graph.h"
 #include <queue>
+#include <string>
 
 using namespace xexprengine;
 
@@ -18,16 +19,6 @@ std::string DependencyCycleException::BuildErrorMessage(const std::vector<std::s
 }
 
 const DependencyGraph::Node *DependencyGraph::GetNode(const std::string &node_name) const
-{
-    auto it = node_map_.find(node_name);
-    if (it != node_map_.end())
-    {
-        return it->second.get();
-    }
-    return nullptr;
-}
-
-DependencyGraph::Node *DependencyGraph::GetNode(const std::string &node_name)
 {
     auto it = node_map_.find(node_name);
     if (it != node_map_.end())
@@ -375,11 +366,11 @@ std::vector<std::string> DependencyGraph::TopologicalSort() const
 
 bool DependencyGraph::InvalidateNode(const std::string &node_name)
 {
-    auto node = GetNode(node_name);
-    if (node == nullptr)
+    if(IsNodeExist(node_name) == false)
     {
         return false;
     }
+    auto node = node_map_.at(node_name).get();
     node->set_dirty_flag(true);
     for(const auto& dependent : node->dependents_)
     {
@@ -388,16 +379,29 @@ bool DependencyGraph::InvalidateNode(const std::string &node_name)
     return true;
 }
 
-bool DependencyGraph::UpdateNodeEventStamp(const std::string &node_name)
+bool DependencyGraph::ValidateNode(const std::string &node_name)
 {
-    auto node = GetNode(node_name);
-    if (node == nullptr)
+    if(IsNodeExist(node_name) == false)
     {
         return false;
     }
+    auto node = node_map_.at(node_name).get();
+    node->set_dirty_flag(true);
+    return true;    
+}
+
+bool DependencyGraph::UpdateNodeEventStamp(const std::string &node_name)
+{
+    if(IsNodeExist(node_name) == false)
+    {
+        return false;
+    }
+    auto node = node_map_.at(node_name).get();
     node->set_event_stamp(EventStampGenerator::GetInstance().GetNextStamp());
     return true;
 }
+
+
 
 void DependencyGraph::Traversal(std::function<void(const std::string &)> callback) const
 {

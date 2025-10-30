@@ -1,7 +1,7 @@
 #pragma once
+#include <map>
 #include <memory>
 #include <string>
-#include <map>
 
 #include "dependency_graph.h"
 #include "expr_common.h"
@@ -10,31 +10,27 @@
 
 namespace xexprengine
 {
-class VariableManager
+class VariableManager : public VariableVisitor
 {
   public:
-    VariableManager(std::unique_ptr<ExprContext> context, EvalCallback eval_callback = nullptr, ParseCallback parse_callback = nullptr) noexcept;
+    VariableManager(
+        std::unique_ptr<ExprContext> context, EvalCallback eval_callback = nullptr,
+        ParseCallback parse_callback = nullptr
+    ) noexcept;
     virtual ~VariableManager() noexcept = default;
 
     // get variable
     const Variable *GetVariable(const std::string &var_name) const;
-    Variable *GetVariable(const std::string &var_name);
-
-    // add variable
-    bool AddVariable(std::unique_ptr<Variable> var);
-    bool AddVariables(std::vector<std::unique_ptr<Variable>> var_list);
 
     // set variable : if variable not exist , add variable, otherwise overwrite variable
     void SetValue(const std::string &var_name, const Value &value);
     void SetExpression(const std::string &var_name, const std::string &expression);
-    bool SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable);
+    void SetVariable(const std::string &var_name, std::unique_ptr<Variable> variable);
+    std::string ImportModule(const std::string &statement, const std::string &last_variable = "");
+    std::string DeclFunction(const std::string &statement, const std::string &last_variable = "");
 
     // remove variable
     bool RemoveVariable(const std::string &var_name) noexcept;
-    bool RemoveVariables(const std::vector<std::string> &var_name_list) noexcept;
-
-    // rename variable
-    bool RenameVariable(const std::string &old_name, const std::string &new_name);
 
     // check both graph node and variable exist
     bool IsVariableExist(const std::string &var_name) const;
@@ -46,14 +42,30 @@ class VariableManager
     void Update();
 
     // use graph update single varible and its dependents to context
-    bool UpdateVariable(const std::string& var_name);
+    bool UpdateVariable(const std::string &var_name);
+
+    // visitor interface
+    void Parse(RawVariable *) override;
+    void Parse(ExprVariable *) override;
+    void Parse(ImportVariable *) override;
+    void Parse(FuncVariable *) override;
+
+    void Update(RawVariable *) override;
+    void Update(ExprVariable *) override;
+    void Update(ImportVariable *) override;
+    void Update(FuncVariable *) override;
+
+    void Clear(RawVariable *) override;
+    void Clear(ExprVariable *) override;
+    void Clear(ImportVariable *) override;
+    void Clear(FuncVariable *) override;
 
     const DependencyGraph *graph()
     {
         return graph_.get();
     }
 
-    const ExprContext* context()
+    const ExprContext *context()
     {
         return context_.get();
     }
@@ -67,20 +79,17 @@ class VariableManager
 
     // update value to context and update statue to variable
     bool UpdateVariableInternal(const std::string &var_name);
-    
-    // update status when add variable to variable_map
-    void UpdateVariableStatus(Variable* var);
 
-    // for batch update
-    bool AddVariableToGraph(const Variable* var);
-    bool RemoveVariableToGraph(const std::string& var_name) noexcept;
+    // sync graph
+    bool AddNodeToGraph(const std::string &node_name, const std::vector<std::string> &node_dependencies);
+    bool RemoveNodeInGraph(const std::string &node_name) noexcept;
+
+    // sync context
+    bool UpdateVariableToContext(const std::string &var_name, const Value &value);
+    bool RemoveVariableInContext(const std::string &node_name);
 
     // graph helper functions
-    bool CheckNodeDependenciesComplete(const std::string& node_name, std::vector<std::string>& missing_dependencies) const;
-    bool UpdateNodeDependencies(const std::string& node_name, const std::unordered_set<std::string>& node_dependencies);
-
-    // for remove obsolete variable in context
-    void RemoveObsoleteVariablesInContext();
+    bool UpdateNodeDependencies(const std::string &node_name, const std::unordered_set<std::string> &node_dependencies);
 
   private:
     std::unique_ptr<DependencyGraph> graph_;

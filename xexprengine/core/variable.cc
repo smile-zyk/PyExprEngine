@@ -12,3 +12,13 @@ std::unique_ptr<Variable> VariableFactory::CreateExprVariable(const std::string 
 {
     return std::unique_ptr<Variable>(new ExprVariable(name, expression));
 }
+
+std::unique_ptr<Variable> VariableFactory::CreateImportVariable(const std::string &statement)
+{
+    return std::unique_ptr<Variable>(new ImportVariable(statement));
+}
+
+std::unique_ptr<Variable> VariableFactory::CreateFuncVariable(const std::string& statement)
+{
+    return std::unique_ptr<Variable>(new FuncVariable(statement));
+}

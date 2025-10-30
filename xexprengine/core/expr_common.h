@@ -14,6 +14,7 @@ enum class VariableStatus
     kInvalidContext,
     kRawVar,
     kMissingDependency,
+    kCycleDependency,
     kParseSuccess,
     kParseSyntaxError,
     kExprEvalSuccess,
@@ -28,8 +29,6 @@ enum class VariableStatus
     kExprEvalIndexError,
     kExprEvalKeyError,
     kExprEvalAttributeError,
-    kModuleImportSuccess,
-    kModuleImportError,
 };
 
 struct EvalResult
@@ -39,11 +38,21 @@ struct EvalResult
     std::string eval_error_message;
 };
 
+enum class ParseType
+{
+    kExpression,
+    kFunction,
+    kModule
+};
+
 struct ParseResult
 {
-    VariableStatus status;
+    ParseType type;
+    std::string content;
+    std::vector<std::string> generated_symbols;
+    std::vector<std::string> dependency_symbols;
+    bool is_success;
     std::string parse_error_message;
-    std::unordered_set<std::string> variables;
 };
 
 class ExprContext;
