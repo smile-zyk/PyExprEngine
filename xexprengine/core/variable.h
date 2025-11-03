@@ -1,19 +1,12 @@
 #pragma once
 #include "expr_common.h"
-#include "value.h"
+#include <string>
 
 namespace xexprengine
 {
 class Variable
 {
   public:
-    enum class Type
-    {
-        Raw,
-        Expr,
-        Module,
-    };
-
     Variable(const std::string &name) : name_(name) {}
     virtual ~Variable() = default;
 
@@ -27,106 +20,52 @@ class Variable
         return name_;
     }
 
-    template <typename T, typename std::enable_if<std::is_base_of<Variable, T>::value, int>::type = 0>
-    T *As() noexcept
+    void set_content(const std::string &content)
     {
-        return dynamic_cast<T *>(this);
+        content_ = content;
     }
 
-    template <typename T, typename std::enable_if<std::is_base_of<Variable, T>::value, int>::type = 0> 
-    const T *As() const noexcept 
+    const std::string &content() const
     {
-        return dynamic_cast<const T *>(this);
+        return content_;
     }
 
-    void set_error_message(const std::string &message)
+    void set_dependencies(const std::vector<std::string> &dependencies)
     {
-        error_message_ = message;
+        dependencies_ = dependencies;
     }
 
-    void set_status(VariableStatus code)
+    const std::vector<std::string> &dependencies() const
     {
-        status_ = code;
+        return dependencies_;
     }
 
-    std::string error_message() const
+    void set_type(ParseType type)
     {
-        return error_message_;
+        type_ = type;
     }
 
-    VariableStatus status() const
+    ParseType type() const
+    {
+        return type_;
+    }
+
+    void set_status(ExecStatus status)
+    {
+        status_ = status;
+    }
+
+    ExecStatus status() const
     {
         return status_;
     }
 
-    virtual Type GetType() const = 0;
-
   private:
     std::string name_;
-    std::string error_message_;
-    VariableStatus status_ = VariableStatus::kInit;
+    std::string content_;
+    std::vector<std::string> dependencies_;
+    ParseType type_;
+    ExecStatus status_;
+    std::string message_;
 };
-
-class VariableFactory
-{
-  public:
-    static std::unique_ptr<Variable> CreateRawVariable(const std::string &name, const Value &value);
-
-    static std::unique_ptr<Variable> CreateExprVariable(const std::string &name, const std::string &expression);
-};
-
-class RawVariable : public Variable
-{
-  public:
-    void set_value(const Value &value)
-    {
-        value_ = value;
-    }
-
-    const Value &value() const
-    {
-        return value_;
-    }
-
-    Variable::Type GetType() const override
-    {
-        return Variable::Type::Raw;
-    }
-
-  protected:
-    RawVariable(const std::string &name, const Value &value)
-        : Variable(name), value_(value)
-    {
-      set_status(VariableStatus::kRawVar);
-    }
-    friend class VariableFactory;
-  private:
-    Value value_;
-};
-
-class ExprVariable : public Variable
-{
-  public:
-    void set_expression(const std::string &expression)
-    {
-        expression_ = expression;
-    }
-
-    const std::string &expression() const
-    {
-        return expression_;
-    }
-
-    Variable::Type GetType() const override
-    {
-        return Variable::Type::Expr;
-    }
-
-  protected:
-    ExprVariable(const std::string &name, const std::string &expression) : Variable(name), expression_(expression) {}
-    friend class VariableFactory;
-  private:
-    std::string expression_;
-};
-
 } // namespace xexprengine

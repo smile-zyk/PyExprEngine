@@ -9,36 +9,27 @@
 using namespace xexprengine;
 
 VariableManager::VariableManager(
-    std::unique_ptr<ExprContext> context, EvalCallback eval_callback, ParseCallback parse_callback
+    std::unique_ptr<ExprContext> context, ExecCallback eval_callback, ParseCallback parse_callback
 ) noexcept
     : graph_(std::unique_ptr<DependencyGraph>(new DependencyGraph())),
       context_(std::move(context)),
-      evaluate_callback_(eval_callback),
+      exec_callback_(eval_callback),
       parse_callback_(parse_callback)
 {
 }
 
-const Variable *VariableManager::GetVariable(const std::string &var_name) const
+const Variable* VariableManager::GetVariable(const std::string &var_name) const
 {
     if (IsVariableExist(var_name) == true)
     {
-        return variable_map_.at(var_name).get();
+        return &variable_map_.at(var_name);
     }
     return nullptr;
 }
 
-Variable *VariableManager::GetVariable(const std::string &var_name)
+void VariableManager::AddEquation(const std::string& code)
 {
-    if (IsVariableExist(var_name) == true)
-    {
-        return variable_map_.at(var_name).get();
-    }
-    return nullptr;
-}
-
-bool VariableManager::AddVariable(std::unique_ptr<Variable> var)
-{
-    std::string var_name = var->name();
+    ParseResult res = parse_callback_(code);
     if (IsVariableExist(var_name) == false)
     {
         // update graph

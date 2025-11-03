@@ -1,53 +1,53 @@
 #pragma once
-#include "value.h"
-#include <map>
-#include <string>
+
 #include <functional>
-#include <unordered_map>
-#include <unordered_set>
+#include <string>
+#include <vector>
 
 namespace xexprengine
 {
-enum class VariableStatus
+class ExprContext;
+
+enum class ExecStatus
 {
     kInit,
-    kInvalidContext,
-    kRawVar,
-    kMissingDependency,
-    kParseSuccess,
-    kParseSyntaxError,
-    kExprEvalSuccess,
-    kExprEvalSyntaxError,
-    kExprEvalNameError,
-    kExprEvalTypeError,
-    kExprEvalZeroDivisionError,
-    kExprEvalValueError,
-    kExprEvalMemoryError,
-    kExprEvalOverflowError,
-    kExprEvalRecursionError,
-    kExprEvalIndexError,
-    kExprEvalKeyError,
-    kExprEvalAttributeError,
-    kModuleImportSuccess,
-    kModuleImportError,
+    kSuccess,
+    kSyntaxError,
+    kNameError,
+    kTypeError,
+    kZeroDivisionError,
+    kValueError,
+    kMemoryError,
+    kOverflowError,
+    kRecursionError,
+    kIndexError,
+    kKeyError,
+    kAttributeError,
 };
 
-struct EvalResult
+enum class ParseType
 {
-    Value value;
-    VariableStatus status;
-    std::string eval_error_message;
+    kImport,
+    kImportFrom,
+    kFuncDecl,
+    kClassDecl,
+    kVarDecl,
+};
+
+struct ExecResult
+{
+    ExecStatus status;
+    std::string message;
 };
 
 struct ParseResult
 {
-    VariableStatus status;
-    std::string parse_error_message;
-    std::unordered_set<std::string> variables;
+    std::string name;
+    std::string content;
+    ParseType type;
+    std::vector<std::string> dependencies;
 };
 
-class ExprContext;
-
-typedef std::function<EvalResult(const std::string &, ExprContext*)> EvalCallback;
+typedef std::function<ExecResult(const std::string &, ExprContext *)>ExecCallback;
 typedef std::function<ParseResult(const std::string &)> ParseCallback;
 } // namespace xexprengine

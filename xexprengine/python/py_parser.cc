@@ -1,5 +1,11 @@
-import ast
+#include "py_parser.h"
+#include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
+#include <string>
 
+namespace xexprengine
+{
+const std::string PyParser::kExceptionCode = R"(
 class SyntaxErrorException(Exception):
     pass
 
@@ -17,6 +23,10 @@ class AssignmentException(Exception):
 
 class AnalysisException(Exception):
     pass
+)";
+
+const std::string PyParser::kAnalysisCode = R"(
+import ast
 
 class _StatementAnalyzer:
     def __init__(self):
@@ -129,82 +139,98 @@ class _StatementAnalyzer:
         visitor = DependencyVisitor(dependencies)
         visitor.visit(node)
         return list(set(dependencies))
+)";
 
-def main():
-    analyzer = _StatementAnalyzer()
-    
-    # 测试用例列表
-    test_cases = [
-        # 函数定义
-        "def hello():\n    print('Hello World')",
-        
-        # 类定义
-        "class MyClass:\n    def __init__(self):\n        self.value = 42",
-        
-        # 简单导入
-        "import math",
-        
-        # 导入别名
-        "import numpy as np",
-        
-        # from...import
-        "from collections import defaultdict",
-        
-        # from...import 别名
-        "from datetime import datetime as dt",
-        
-        # 简单赋值
-        "x = 10",
-        
-        # 带依赖的赋值
-        "result = a + b * c",
-        
-        # 函数调用依赖
-        "value = max(numbers)",
-        
-        # 语法错误测试
-        "def invalid syntax",
-        
-        # 多个语句测试
-        "x = 1\ny = 2",
-        
-        # 不支持的语句类型
-        "for i in range(5):\n    print(i)",
-        
-        # 复杂表达式依赖
-        "data = process(raw_data, config=settings)"
-    ]
-    
-    print("=" * 60)
-    print("Statement Analyzer 测试")
-    print("=" * 60)
-    
-    for i, code in enumerate(test_cases, 1):
-        print(f"\n测试用例 {i}:")
-        print(f"代码: {repr(code)}")
-        print("-" * 40)
-        
-        try:
-            result = analyzer.analyze(code)
-            print("✓ 分析成功")
-            print(f"类型: {result['type']}")
-            print(f"名称: {result['name']}")
-            print(f"依赖: {result['dependencies']}")
-            print(f"内容: {result['content']}")
-        except SyntaxErrorException as e:
-            print(f"✗ 语法错误: {e}")
-        except MultipleStatementsException as e:
-            print(f"✗ 多语句错误: {e}")
-        except UnsupportedTypeException as e:
-            print(f"✗ 不支持的类型: {e}")
-        except ImportException as e:
-            print(f"✗ 导入错误: {e}")
-        except AssignmentException as e:
-            print(f"✗ 赋值错误: {e}")
-        except AnalysisException as e:
-            print(f"✗ 分析错误: {e}")
-        except Exception as e:
-            print(f"✗ 未知错误: {e}")
+PyParser::PyParser()
+{
+    try
+    {
+        py::dict analyze_dict;
+        analyze_dict["__builtins__"] = py::module::import("builtins");
+        py::exec(kExceptionCode, analyze_dict);
+        py::exec(kAnalysisCode, analyze_dict);
 
-if __name__ == "__main__":
-    main()
+        py::object AnalyzerClass = analyze_dict["_StatementAnalyzer"];
+        analyzer_ = AnalyzerClass();
+    }
+    catch (const py::error_already_set &e)
+    {
+        throw ParseException(ParseErrorCode::kAnalysisError, e.what());
+    }
+}
+
+VariableType StringToType(const std::string &type_str)
+{
+    static const std::unordered_map<std::string, VariableType> type_map = {
+        {"func", VariableType::kFuncDecl},
+        {"class", VariableType::kClassDecl},
+        {"var", VariableType::kVarDecl},
+        {"import", VariableType::kImport},
+        {"import_from", VariableType::kImportFrom}
+    };
+
+    auto it = type_map.find(type_str);
+    if (it != type_map.end())
+    {
+        return it->second;
+    }
+    throw ParseException(ParseErrorCode::kUnsupportedType, "Unknown type string: " + type_str);
+}
+
+ParseVariable PyParser::AnalyzeStatement(const std::string &code)
+{
+    try
+    {
+        auto analyze_func = analyzer_.attr("analyze");
+        py::dict result = analyze_func(code);
+
+        ParseVariable var;
+        var.name = result["name"].cast<std::string>();
+        var.content = result["content"].cast<std::string>();
+        var.type = StringToType(result["type"].cast<std::string>());
+
+        py::list deps = result["dependencies"];
+        for (const auto &dep : deps)
+        {
+            var.dependencies.push_back(dep.cast<std::string>());
+        }
+
+        return var;
+    }
+    catch (const py::error_already_set &e)
+    {
+        std::string error_type = e.type().attr("__name__").cast<std::string>();
+        std::string error_msg = e.what();
+
+        if (error_type == "SyntaxErrorException")
+        {
+            throw ParseException(ParseErrorCode::kSyntaxError, error_msg);
+        }
+        else if (error_type == "MultipleStatementsException")
+        {
+            throw ParseException(ParseErrorCode::kMultipleStatements, error_msg);
+        }
+        else if (error_type == "UnsupportedTypeException")
+        {
+            throw ParseException(ParseErrorCode::kUnsupportedType, error_msg);
+        }
+        else if (error_type == "ImportException")
+        {
+            throw ParseException(ParseErrorCode::kImportError, error_msg);
+        }
+        else if (error_type == "AssignmentException")
+        {
+            throw ParseException(ParseErrorCode::kAssignmentError, error_msg);
+        }
+        else if (error_type == "AnalysisException")
+        {
+            throw ParseException(ParseErrorCode::kAnalysisError, error_msg);
+        }
+        else
+        {
+            throw ParseException(ParseErrorCode::kAnalysisError, "Unknown error: " + error_msg);
+        }
+    }
+}
+
+} // namespace xexprengine

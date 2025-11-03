@@ -29,3 +29,4 @@ add_gtest_executable(variable_manager_test "VariableManager" variable_manager_te
 add_gtest_executable(pybind_cast_test "PyObjectConverter" pybind_cast_test.cc)
 add_gtest_executable(py_symbol_extractor_test "PySymbolExtractor" py_symbol_extractor_test.cc)
 add_gtest_executable(py_expr_engine_test "PyExprEngineTest" py_expr_engine_test.cc)
+add_gtest_executable(py_parser_test "PyParserTest" py_parser_test.cc)

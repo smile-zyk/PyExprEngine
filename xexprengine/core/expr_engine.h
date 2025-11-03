@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 
+#include "core/variable.h"
 #include "expr_common.h"
 #include "expr_context.h"
 #include "variable_manager.h"
@@ -18,20 +19,20 @@ class ExprEngine
         return instance;
     }
 
-    virtual EvalResult Evaluate(const std::string &expr, const ExprContext *context = nullptr) = 0;
-    virtual ParseResult Parse(const std::string &expr) = 0;
+    virtual ExecResult Exec(const std::string& code, const ExprContext *context = nullptr) = 0;
+    virtual Variable Parse(const std::string & code) = 0;
 
     virtual std::unique_ptr<VariableManager> CreateVariableManager()
     {
-        EvalCallback evaluate_callback = [this](const std::string &expression, ExprContext *context) -> EvalResult {
-            return Evaluate(expression, context);
+        ExecCallback exec_callback = [this](const std::string &code, ExprContext *context) -> ExecResult {
+            return Exec(code, context);
         };
 
-        ParseCallback parse_callback = [this](const std::string &expression) -> ParseResult {
-            return Parse(expression);
+        ParseCallback parse_callback = [this](const std::string &code) -> ParseResult {
+            return Parse(code);
         };
 
-        return std::unique_ptr<VariableManager>(new VariableManager(CreateContext(), evaluate_callback, parse_callback));
+        return std::unique_ptr<VariableManager>(new VariableManager(CreateContext(), exec_callback, parse_callback));
     }
 
     virtual std::unique_ptr<ExprContext> CreateContext() = 0;
