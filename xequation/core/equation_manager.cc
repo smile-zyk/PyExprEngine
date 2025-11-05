@@ -48,6 +48,11 @@ void EquationManager::AddEquation(const std::string &equation_code)
 
 void EquationManager::EditEquation(const std::string &eqn_name, const std::string &equation_code)
 {
+    if(IsEquationExist(eqn_name) == false)
+    {
+        return;
+    }
+
     ParseResult res = parse_callback_(equation_code);
 
     if (res.name != eqn_name && IsEquationExist(res.name))

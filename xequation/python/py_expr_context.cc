@@ -3,6 +3,12 @@
 using namespace xequation;
 using namespace xequation::python;
 
+PyExprContext::PyExprContext()
+{
+    py::object builtins = py::module_::import("builtins");
+    dict_["__builtins__"] = builtins;
+}
+
 Value PyExprContext::Get(const std::string &var_name) const
 {
     py::gil_scoped_acquire acquire;

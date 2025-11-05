@@ -1,6 +1,7 @@
 // Copyright 2024 Your Company. All rights reserved.
 
 #include "py_code_executor.h"
+#include "core/value.h"
 
 namespace xequation
 {
@@ -10,19 +11,13 @@ const char kExecutorPythonCode[] = R"(
 import builtins
 
 class PyCodeExecutor:
-    def __init__(self):
-        self.global_dict = {'__builtins__': builtins}
-    
     def exec(self, code_string, local_dict):
         # Execute code
-        exec(code_string, self.global_dict, local_dict)
+        exec(code_string, local_dict)
     
     def eval(self, expression, local_dict):
         # Evaluate expression
-        return eval(expression, self.global_dict, local_dict)
-    
-    def get_available_builtins(self):
-        return list(self.global_dict['__builtins__'].__dict__.keys())
+        return eval(expression, local_dict)
 )";
 
 PyCodeExecutor::PyCodeExecutor()
@@ -113,35 +108,24 @@ ExecResult PyCodeExecutor::Exec(const std::string &code_string, const py::dict &
     return res;
 }
 
-ExecResult PyCodeExecutor::Eval(const std::string &expression, const py::dict &local_dict)
+EvalResult PyCodeExecutor::Eval(const std::string &expression, const py::dict &local_dict)
 {
-    ExecResult res;
+    EvalResult res;
     try
     {
         py::object result = executor_.attr("eval")(expression, local_dict);
+        res.value = result;
         res.status = ExecStatus::kSuccess;
         res.message = "";
     }
     catch (const py::error_already_set &e)
     {
         ExecStatus status = MapPythonExceptionToStatus(e);
+        res.value = Value::Null();
         res.status = status;
         res.message = e.what();
     }
     return res;
-}
-
-std::vector<std::string> PyCodeExecutor::GetAvailableBuiltins()
-{
-    try
-    {
-        py::list result = executor_.attr("get_available_builtins")();
-        return result.cast<std::vector<std::string>>();
-    }
-    catch (const py::error_already_set &e)
-    {
-        throw std::runtime_error(e.what());
-    }
 }
 } // namespace python
 } // namespace xequation

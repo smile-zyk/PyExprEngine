@@ -23,11 +23,7 @@ class PyCodeExecutor {
   ExecResult Exec(const std::string& code_string, const py::dict& local_dict = py::dict());
   
   // Evaluates Python expression in the given local dictionary.
-  ExecResult Eval(const std::string& expression, const py::dict& local_dict = py::dict());
-  
-  // Returns list of available builtin function names.
-  std::vector<std::string> GetAvailableBuiltins();
-
+  EvalResult Eval(const std::string& expression, const py::dict& local_dict = py::dict());
  private:
   py::object executor_;
   

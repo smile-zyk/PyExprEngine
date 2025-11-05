@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/value.h"
 #include <exception>
 #include <functional>
 #include <string>
@@ -38,6 +39,13 @@ enum class ParseType
 
 struct ExecResult
 {
+    ExecStatus status;
+    std::string message;
+};
+
+struct EvalResult
+{
+    Value value;
     ExecStatus status;
     std::string message;
 };

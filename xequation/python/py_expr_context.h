@@ -38,7 +38,7 @@ class PyExprContext : public ExprContext
 
   private:
     friend class PyExprEngine;
-    PyExprContext() noexcept = default;
+    PyExprContext();
     ~PyExprContext() noexcept = default;
     PyExprContext(const PyExprContext &) = delete;
     PyExprContext &operator=(const PyExprContext &) = delete;

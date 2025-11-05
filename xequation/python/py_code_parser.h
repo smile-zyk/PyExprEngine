@@ -21,9 +21,25 @@ class PyCodeParser
     PyCodeParser &operator=(const PyCodeParser &) = delete;
 
     ParseResult Parse(const std::string &code);
+    void ClearCache();
+    void SetMaxCacheSize(size_t max_size);
+    size_t GetCacheSize();
+
+  private:
+    void EvictLRU();
 
   private:
     py::object parser_;
+    struct CacheEntry
+    {
+        std::string key;
+        ParseResult value;
+        CacheEntry(const std::string& k, const ParseResult& v) : key(k), value(v) {}
+    };
+
+    std::list<CacheEntry> cache_list_;
+    std::unordered_map<std::string, typename std::list<CacheEntry>::iterator> cache_map_;
+    size_t max_cache_size_ = 1000;
 };
 } // namespace python
 } // namespace xequation

@@ -4,7 +4,6 @@
 #include "core/equation.h"
 #include "core/equation_manager.h"
 
-#include <cstddef>
 #include <iterator>
 #include <memory>
 #include <regex>
@@ -264,7 +263,7 @@ class EquationManagerTest : public testing::Test
     EquationManager manager_;
 };
 
-TEST_F(EquationManagerTest, AddAndRemoveEquation)
+TEST_F(EquationManagerTest, AddEditRemove)
 {
     manager_.AddEquation("A=1");
     VerifyVar(manager_.GetEquation("A"), ParseType::kVarDecl, ExecStatus::kInit, "A=1");
@@ -283,10 +282,17 @@ TEST_F(EquationManagerTest, AddAndRemoveEquation)
     VerifyNode(manager_.graph()->GetNode("A"), {}, {});
     VerifyEdges({{"B", "D"}}, true);
 
+    manager_.EditEquation("A", "D=C");
+    EXPECT_FALSE(manager_.graph()->IsNodeExist("A"));
+    EXPECT_TRUE(manager_.graph()->IsNodeExist("D"));
+    VerifyNode(manager_.graph()->GetNode("B"), {"D"}, {});
+    VerifyNode(manager_.graph()->GetNode("D"), {}, {"B"});
+    VerifyEdges({{"B", "D"}, {"D", "C"}}, true);
+
     manager_.RemoveEquation("B");
     EXPECT_EQ(manager_.GetEquation("B"), nullptr);
-    VerifyEdges({}, true);
-    VerifyNode(manager_.graph()->GetNode("A"), {}, {});
+    VerifyEdges({{"D", "C"}}, true);
+    VerifyNode(manager_.graph()->GetNode("D"), {}, {});
 }
 
 TEST_F(EquationManagerTest, CycleDetection)
@@ -414,6 +420,7 @@ TEST_F(EquationManagerTest, UpdateContext)
     VerifyVar(manager_.GetEquation("F"), ParseType::kVarDecl, ExecStatus::kSuccess, "F=0", {});
     EXPECT_FALSE(manager_.context()->Contains("A"));
     EXPECT_FALSE(manager_.context()->Contains("C"));
+
 }
 
 int main(int argc, char **argv)

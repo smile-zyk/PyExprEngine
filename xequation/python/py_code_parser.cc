@@ -1,6 +1,8 @@
 // Copyright 2024 Your Company. All rights reserved.
 
 #include "py_code_parser.h"
+#include <pybind11/cast.h>
+#include <string>
 
 namespace xequation
 {
@@ -21,7 +23,7 @@ class PyCodeParser:
         }
         self.builtin_names = set(dir(builtins))
     
-    def analyze(self, code):
+    def parse(self, code):
         try:
             tree = ast.parse(code)
             
@@ -113,7 +115,7 @@ class PyCodeParser:
         
         target = node.targets[0]
         if not isinstance(target, ast.Name):
-            raise ValueError("Assignment target must be a simple variable name")
+            raise ValueError("Assignment target must be a variable name")
         
         self._check_builtin_name(target.id)
         dependencies = self._extract_dependencies(node.value)
@@ -177,9 +179,14 @@ ParseType StringToType(const std::string &type_str)
 
 ParseResult PyCodeParser::Parse(const std::string &code)
 {
+    auto it = cache_map_.find(code);
+    if (it != cache_map_.end())
+    {
+        return it->second->value;
+    }
     try
     {
-        py::dict result = parser_.attr("analyze")(code);
+        py::dict result = parser_.attr("parse")(code);
 
         ParseResult res;
         res.name = result["name"].cast<std::string>();
@@ -187,12 +194,50 @@ ParseResult PyCodeParser::Parse(const std::string &code)
         res.type = StringToType(result["type"].cast<std::string>());
         res.content = result["content"].cast<std::string>();
 
+        cache_list_.emplace_front(code, res);
+        cache_map_[code] = cache_list_.begin();
+
+        EvictLRU();
         return res;
     }
     catch (const py::error_already_set &e)
     {
-        throw ParseException(e.what());
+        py::object pv = e.value();
+        py::object str_func = py::module_::import("builtins").attr("str");
+        std::string error_msg = str_func(pv).cast<std::string>();
+        throw ParseException(error_msg);
     }
 }
+
+void PyCodeParser::ClearCache() 
+{
+    cache_list_.clear();
+    cache_map_.clear();
+}
+
+void PyCodeParser::SetMaxCacheSize(size_t max_size) 
+{
+    max_cache_size_ = max_size;
+    while (cache_list_.size() > max_cache_size_)
+    {
+        EvictLRU();
+    }
+}
+
+size_t PyCodeParser::GetCacheSize() 
+{
+    return cache_list_.size();
+}
+
+void PyCodeParser::EvictLRU() 
+{
+    if (cache_list_.size() > max_cache_size_)
+    {
+        auto last = cache_list_.back();
+        cache_map_.erase(last.key);
+        cache_list_.pop_back();
+    }
+}
+
 } // namespace python
 } // namespace xequation
