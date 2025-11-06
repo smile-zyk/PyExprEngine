@@ -231,6 +231,7 @@ class DependencyGraph
     // topological sort
     std::vector<std::string> TopologicalSort() const;
     std::vector<std::string> TopologicalSort(const std::string& node) const;
+    std::vector<std::string> TopologicalSort(const std::vector<std::string>& nodes) const;
 
   private:
     // for rollback

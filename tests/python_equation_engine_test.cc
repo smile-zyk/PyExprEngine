@@ -53,8 +53,9 @@ TEST(PythonEquationEngine, EvalTest)
     obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 37);
 
-    variable_manager->AddMultipleEquations("from math import*;p=pi");
-    variable_manager->Update();
+    std::string statement = "from math import*;p=pi";
+    variable_manager->AddMultipleEquations(statement);
+    variable_manager->UpdateMultipleEquations(statement);
     variable_manager->AddEquation("f", "sin(a*p)");
     variable_manager->UpdateEquation("f");
     v = variable_manager->context()->Get("f");

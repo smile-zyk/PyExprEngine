@@ -13,6 +13,32 @@ class PythonParser:
         }
         self.builtin_names = set(dir(builtins))
     
+    def get_ast_signature(code_string):
+        try:
+            tree = ast.parse(code_string)
+            
+            def normalize_node(node):
+                if isinstance(node, ast.AST):
+                    result = {}
+                    result['type'] = type(node).__name__
+                    for field, value in ast.iter_fields(node):
+                        if field not in ['lineno', 'col_offset', 'end_lineno', 'end_col_offset']:
+                            if isinstance(value, list):
+                                result[field] = [normalize_node(item) for item in value]
+                            elif isinstance(value, ast.AST):
+                                result[field] = normalize_node(value)
+                            else:
+                                result[field] = value
+                    return result
+                return node
+            
+            normalized_ast = normalize_node(tree)
+            signature = str(normalized_ast)
+            return hashlib.md5(signature.encode()).hexdigest()
+            
+        except SyntaxError:
+            return hashlib.md5(code_string.encode()).hexdigest()
+
     def split_statements(self, code):
         try:
             tree = ast.parse(code)

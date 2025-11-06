@@ -94,7 +94,7 @@ class Equation
         message_ = message;
     }
 
-    const std::string &message()
+    const std::string &message() const
     {
         return message_;
     }

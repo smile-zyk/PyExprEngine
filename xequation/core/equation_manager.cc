@@ -359,6 +359,16 @@ void EquationManager::UpdateMultipleEquations(const std::string& eqn_code)
     }
 
     ParseResult res = parse_callback_(eqn_code);
+    std::vector<std::string> eqn_list;
+    for(const auto& eqn : res)
+    {
+        eqn_list.push_back(eqn.name());
+    }
 
-    // TODO : add a interface to get vector node topo sort result
+    auto topo_order = graph_->TopologicalSort(eqn_list);
+
+    for(const auto &node_name : topo_order)
+    {
+        UpdateEquationInternal(node_name);
+    }
 }

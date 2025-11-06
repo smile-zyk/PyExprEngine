@@ -1,76 +1,40 @@
 import ast
+import hashlib
 
-class AdvancedVariableVisitor(ast.NodeVisitor):
-    def __init__(self):
-        self.variables = set()
-        self.function_calls = set()
-        self.attributes = set()
-    
-    def visit_Name(self, node):
-        if isinstance(node.ctx, ast.Load):
-            self.variables.add(node.id)
-        self.generic_visit(node)
-    
-    def visit_Call(self, node):
-        # 处理函数调用
-        if isinstance(node.func, ast.Name):
-            self.function_calls.add(node.func.id)
-        elif isinstance(node.func, ast.Attribute):
-            # 处理类似 module.function() 的调用
-            attr_name = self._get_attribute_chain(node.func)
-            self.attributes.add(attr_name)
-        self.generic_visit(node)
-    
-    def visit_Attribute(self, node):
-        # 处理属性访问，如 obj.attr
-        attr_name = self._get_attribute_chain(node)
-        self.attributes.add(attr_name)
-        self.generic_visit(node)
-    
-    def _get_attribute_chain(self, node):
-        """获取属性访问链，如 a.b.c"""
-        parts = []
-        current = node
-        while isinstance(current, ast.Attribute):
-            parts.append(current.attr)
-            current = current.value
-        if isinstance(current, ast.Name):
-            parts.append(current.id)
-        return '.'.join(reversed(parts))
-
-def analyze_expression(expr):
-    """全面分析表达式"""
+def get_ast_signature(code_string):
     try:
-        tree = ast.parse(expr, mode='eval')
-        visitor = AdvancedVariableVisitor()
-        visitor.visit(tree)
+        tree = ast.parse(code_string)
         
-        return {
-            'variables': sorted(list(visitor.variables)),
-            'function_calls': sorted(list(visitor.function_calls)),
-            'attributes': sorted(list(visitor.attributes)),
-            'expression': expr
-        }
-    except SyntaxError as e:
-        return {'error': str(e), 'expression': expr}
+        def normalize_node(node):
+            if isinstance(node, ast.AST):
+                result = {}
+                result['type'] = type(node).__name__
+                for field, value in ast.iter_fields(node):
+                    if field not in ['lineno', 'col_offset', 'end_lineno', 'end_col_offset']:
+                        if isinstance(value, list):
+                            result[field] = [normalize_node(item) for item in value]
+                        elif isinstance(value, ast.AST):
+                            result[field] = normalize_node(value)
+                        else:
+                            result[field] = value
+                return result
+            return node
+        
+        normalized_ast = normalize_node(tree)
+        signature = str(normalized_ast)
+        return hashlib.md5(signature.encode()).hexdigest()
+        
+    except SyntaxError:
+        return hashlib.md5(code_string.encode()).hexdigest()
 
-# 测试复杂表达式
-complex_expressions = [
-    "x + math.sin(y) + z**2",
-    "df['column'].sum() + len(items)",
-    "np.array(data).reshape(rows, cols)",
-    "obj.method(x) + Class.attribute",
-    "(a + b) if condition else default_value",
-    "os.path.join('folder', 'file.txt')"
+test_cases = [
+    "x = 1 + 2",
+    "x=1+2", 
+    "x = 1+2",
+    "def f(): return 42",
+    "def f():return 42"
 ]
 
-for expr in complex_expressions:
-    result = analyze_expression(expr)
-    print(f"表达式: {expr}")
-    if 'error' not in result:
-        print(f"变量: {result['variables']}")
-        print(f"函数调用: {result['function_calls']}")
-        print(f"属性访问: {result['attributes']}")
-    else:
-        print(f"错误: {result['error']}")
-    print("=" * 50)
+for code in test_cases:
+    sig = get_ast_signature(code)
+    print(f"{code:20} -> {sig}")

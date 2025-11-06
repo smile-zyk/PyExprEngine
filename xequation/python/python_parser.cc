@@ -15,6 +15,7 @@ const char kParserPythonCode[] = R"(
 import builtins
 import ast
 import importlib
+import hashlib
 
 class PythonParser:
     def __init__(self):
@@ -27,6 +28,32 @@ class PythonParser:
         }
         self.builtin_names = set(dir(builtins))
     
+    def get_ast_signature(self,code_string):
+        try:
+            tree = ast.parse(code_string)
+            
+            def normalize_node(node):
+                if isinstance(node, ast.AST):
+                    result = {}
+                    result['type'] = type(node).__name__
+                    for field, value in ast.iter_fields(node):
+                        if field not in ['lineno', 'col_offset', 'end_lineno', 'end_col_offset']:
+                            if isinstance(value, list):
+                                result[field] = [normalize_node(item) for item in value]
+                            elif isinstance(value, ast.AST):
+                                result[field] = normalize_node(value)
+                            else:
+                                result[field] = value
+                    return result
+                return node
+            
+            normalized_ast = normalize_node(tree)
+            signature = str(normalized_ast)
+            return hashlib.md5(signature.encode()).hexdigest()
+            
+        except SyntaxError:
+            return hashlib.md5(code_string.encode()).hexdigest()
+
     def split_statements(self, code):
         try:
             tree = ast.parse(code)
@@ -300,7 +327,9 @@ ParseResult PythonParser::ParseSingleStatement(const std::string &code)
 {
     py::gil_scoped_acquire acquire;
 
-    auto it = cache_map_.find(code);
+    std::string code_hash = parser_.attr("get_ast_signature")(code).cast<std::string>();
+
+    auto it = cache_map_.find(code_hash);
     if (it != cache_map_.end())
     {
         return it->second->value;
@@ -317,7 +346,7 @@ ParseResult PythonParser::ParseSingleStatement(const std::string &code)
             std::vector<std::string> dependencies = item_dict["dependencies"].cast<std::vector<std::string>>();
             Equation::Type type = StringToType(item_dict["type"].cast<std::string>());
             std::string content = item_dict["content"].cast<std::string>();
-
+            
             Equation eqn(name);
             eqn.set_dependencies(dependencies);
             eqn.set_type(type);
@@ -325,8 +354,8 @@ ParseResult PythonParser::ParseSingleStatement(const std::string &code)
             res.push_back(eqn);
         }
 
-        cache_list_.emplace_front(code, res);
-        cache_map_[code] = cache_list_.begin();
+        cache_list_.emplace_front(code_hash, res);
+        cache_map_[code_hash] = cache_list_.begin();
 
         EvictLRU();
         return res;
