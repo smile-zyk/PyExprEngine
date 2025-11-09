@@ -17,9 +17,9 @@ using namespace xequation;
 class EquationParser
 {
   public:
-    static std::vector<Equation> parseMultipleExpressions(const std::string &input)
+    static ParseResult parseMultipleExpressions(const std::string &input)
     {
-        std::vector<Equation> equations;
+        ParseResult result;
 
         size_t start = 0;
         size_t end = 0;
@@ -34,8 +34,8 @@ class EquationParser
 
             if (!expr.empty())
             {
-                Equation equation = parseExpression(expr);
-                equations.push_back(equation);
+                ParseResultItem item = parseExpression(expr);
+                result.push_back(item);
             }
 
             if (end != std::string::npos)
@@ -44,14 +44,14 @@ class EquationParser
             }
         }
 
-        return equations;
+        return result;
     }
 
   private:
-    static Equation parseExpression(const std::string &expr)
+    static ParseResultItem parseExpression(const std::string &expr)
     {
-        Equation equation;
-        equation.set_content(expr);
+        ParseResultItem item;
+        item.content = expr;
 
         std::regex assign_regex(R"(^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)\s*$)");
         std::smatch assign_match;
@@ -61,20 +61,20 @@ class EquationParser
             std::string variable_name = assign_match[1].str();
             std::string expression = assign_match[2].str();
 
-            equation.set_name(variable_name);
+            item.name = variable_name;
 
-            parseDependencies(expression, equation);
-            equation.set_type(Equation::Type::kVariable);
+            parseDependencies(expression, item);
+            item.type = Equation::Type::kVariable;
         }
         else
         {
             throw ParseException("Syntax error: assignment operator '=' not found or variable name missing");
         }
 
-        return equation;
+        return item;
     }
 
-    static void parseDependencies(const std::string &expr, Equation &equation)
+    static void parseDependencies(const std::string &expr, ParseResultItem &item)
     {
         std::regex var_regex(R"(\b[A-Za-z_][A-Za-z0-9_]*\b)");
         auto words_begin = std::sregex_iterator(expr.begin(), expr.end(), var_regex);
@@ -96,7 +96,7 @@ class EquationParser
         std::sort(res.begin(), res.end());
         auto last = std::unique(res.begin(), res.end());
         res.erase(last, res.end());
-        equation.set_dependencies(res);
+        item.dependencies = res;
     }
 };
 

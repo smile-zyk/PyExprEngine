@@ -24,24 +24,67 @@ struct EvalResult
     std::string message;
 };
 
-using ParseResult = std::vector<Equation>;
+struct ParseResultItem
+{
+    std::string name;
+    std::string content;
+    Equation::Type type;
+    std::vector<std::string> dependencies;
 
-class ParseException : public std::exception {
-private:
+    bool operator==(const ParseResultItem &other) const
+    {
+        return name == other.name && content == other.content && type == other.type &&
+               dependencies == other.dependencies;
+    }
+};
+
+using ParseResult = std::vector<ParseResultItem>;
+
+class ParseException : public std::exception
+{
+  private:
     std::string error_message_;
 
-public:
-    ParseException(const std::string& message)
-        :error_message_(message) {}
+  public:
+    ParseException(const std::string &message) : error_message_(message) {}
 
-    const char* what() const noexcept override {
+    const char *what() const noexcept override
+    {
         return error_message_.c_str();
     }
 
-    const std::string& error_message() const { return error_message_; }
+    const std::string &error_message() const
+    {
+        return error_message_;
+    }
 };
 
-typedef std::function<ExecResult(const std::string &, EquationContext *)>ExecCallback;
-typedef std::function<EvalResult(const std::string &, EquationContext *)>EvalCallback;
+typedef std::function<ExecResult(const std::string &, EquationContext *)> ExecCallback;
+typedef std::function<EvalResult(const std::string &, EquationContext *)> EvalCallback;
 typedef std::function<ParseResult(const std::string &)> ParseCallback;
 } // namespace xequation
+
+namespace std
+{
+template <>
+struct hash<xequation::ParseResultItem>
+{
+    size_t operator()(const xequation::ParseResultItem &item) const
+    {
+        size_t h = 0;
+        std::hash<std::string> string_hasher;
+        std::hash<xequation::Equation::Type> type_hasher;
+
+        h ^= string_hasher(item.name) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= string_hasher(item.content) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= type_hasher(item.type) + 0x9e3779b9 + (h << 6) + (h >> 2);
+
+        for (const auto &dep : item.dependencies)
+        {
+            h ^= string_hasher(dep) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        }
+
+        return h;
+    }
+};
+} // namespace std

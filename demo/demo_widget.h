@@ -1,7 +1,12 @@
 #pragma once
 
+
 #include <QWidget>
 #include <QMainWindow>
+#include <memory>
+
+#include "core/equation_manager.h"
+#include "equation_manager_widget.h"
 
 class QMenu;
 class QAction;
@@ -38,4 +43,7 @@ private:
     QAction *dependencyGraphAction;
     QAction *equationInspectorAction;
     QAction *equationResultInspectorAction;
+
+    xequation::gui::EquationManagerWidget* equation_manager_widget_;
+    std::unique_ptr<xequation::EquationManager> equation_manager_;
 };

@@ -29,55 +29,55 @@ TEST_F(PythonParserTest, ParseSimpleAssignment)
 {
     auto parse_result = parser_->ParseSingleStatement("a = b + c");
     EXPECT_EQ(parse_result.size(), 1);
-    auto result = parse_result[0];
-    EXPECT_EQ(result.name(), "a");
-    EXPECT_THAT(result.dependencies(), testing::UnorderedElementsAre("b", "c"));
-    EXPECT_EQ(result.type(), Equation::Type::kVariable);
-    EXPECT_EQ(result.content(), "a = b + c");
+    auto item = parse_result[0];
+    EXPECT_EQ(item.name, "a");
+    EXPECT_THAT(item.dependencies, testing::UnorderedElementsAre("b", "c"));
+    EXPECT_EQ(item.type, Equation::Type::kVariable);
+    EXPECT_EQ(item.content, "a = b + c");
 }
 
 TEST_F(PythonParserTest, ParseImport)
 {
     auto parse_result = parser_->ParseSingleStatement("import math as mt");
     EXPECT_EQ(parse_result.size(), 1);
-    auto result = parse_result[0];
-    EXPECT_EQ(result.name(), "mt");
-    EXPECT_THAT(result.dependencies(), testing::IsEmpty());
-    EXPECT_EQ(result.type(), Equation::Type::kImport);
-    EXPECT_EQ(result.content(), "import math as mt");
+    auto item = parse_result[0];
+    EXPECT_EQ(item.name, "mt");
+    EXPECT_THAT(item.dependencies, testing::IsEmpty());
+    EXPECT_EQ(item.type, Equation::Type::kImport);
+    EXPECT_EQ(item.content, "import math as mt");
 }
 
 TEST_F(PythonParserTest, ParseFromImport)
 {
     auto parse_result = parser_->ParseSingleStatement("from math import cos");
     EXPECT_EQ(parse_result.size(), 1);
-    auto result = parse_result[0];
-    EXPECT_EQ(result.name(), "cos");
-    EXPECT_THAT(result.dependencies(), testing::IsEmpty());
-    EXPECT_EQ(result.type(), Equation::Type::kImportFrom);
-    EXPECT_EQ(result.content(), "from math import cos");
+    auto item = parse_result[0];
+    EXPECT_EQ(item.name, "cos");
+    EXPECT_THAT(item.dependencies, testing::IsEmpty());
+    EXPECT_EQ(item.type, Equation::Type::kImportFrom);
+    EXPECT_EQ(item.content, "from math import cos");
 }
 
 TEST_F(PythonParserTest, ParseFunction)
 {
     auto parse_result = parser_->ParseSingleStatement("def hello(): print('Hello World')");
     EXPECT_EQ(parse_result.size(), 1);
-    auto result = parse_result[0];
-    EXPECT_EQ(result.name(), "hello");
-    EXPECT_THAT(result.dependencies(), testing::IsEmpty());
-    EXPECT_EQ(result.type(), Equation::Type::kFunction);
-    EXPECT_EQ(result.content(), "def hello(): print('Hello World')");
+    auto item = parse_result[0];
+    EXPECT_EQ(item.name, "hello");
+    EXPECT_THAT(item.dependencies, testing::IsEmpty());
+    EXPECT_EQ(item.type, Equation::Type::kFunction);
+    EXPECT_EQ(item.content, "def hello(): print('Hello World')");
 }
 
 TEST_F(PythonParserTest, ParseClass)
 {
     auto parse_result = parser_->ParseSingleStatement("class Person: pass");
     EXPECT_EQ(parse_result.size(), 1);
-    auto result = parse_result[0];
-    EXPECT_EQ(result.name(), "Person");
-    EXPECT_THAT(result.dependencies(), testing::IsEmpty());
-    EXPECT_EQ(result.type(), Equation::Type::kClass);
-    EXPECT_EQ(result.content(), "class Person: pass");
+    auto item = parse_result[0];
+    EXPECT_EQ(item.name, "Person");
+    EXPECT_THAT(item.dependencies, testing::IsEmpty());
+    EXPECT_EQ(item.type, Equation::Type::kClass);
+    EXPECT_EQ(item.content, "class Person: pass");
 }
 
 TEST_F(PythonParserTest, ParseErrorUnsupportedStatement)
@@ -116,10 +116,10 @@ TEST_F(PythonParserTest, ParseComplexNumeric)
 {
     auto result = parser_->ParseSingleStatement("a = 3 + 4j + 2 - 1j + 1 + 2j");
     ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0].name(), "a");
-    EXPECT_THAT(result[0].dependencies(), testing::IsEmpty());
-    EXPECT_EQ(result[0].type(), Equation::Type::kVariable);
-    EXPECT_EQ(result[0].content(), "a = 3 + 4j + 2 - 1j + 1 + 2j");
+    EXPECT_EQ(result[0].name, "a");
+    EXPECT_THAT(result[0].dependencies, testing::IsEmpty());
+    EXPECT_EQ(result[0].type, Equation::Type::kVariable);
+    EXPECT_EQ(result[0].content, "a = 3 + 4j + 2 - 1j + 1 + 2j");
 }
 
 TEST_F(PythonParserTest, ParseComplexListComprehension)
@@ -128,9 +128,9 @@ TEST_F(PythonParserTest, ParseComplexListComprehension)
         "matrix = [[(i * j) + (i - j) * 1j for j in range(1, 4)] for i in range(1, 5)]"
     );
     ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0].name(), "matrix");
-    EXPECT_THAT(result[0].dependencies(), testing::UnorderedElementsAre("i", "j"));
-    EXPECT_EQ(result[0].type(), Equation::Type::kVariable);
+    EXPECT_EQ(result[0].name, "matrix");
+    EXPECT_THAT(result[0].dependencies, testing::UnorderedElementsAre("i", "j"));
+    EXPECT_EQ(result[0].type, Equation::Type::kVariable);
 }
 
 TEST_F(PythonParserTest, ParseComplexConditional)
@@ -139,9 +139,9 @@ TEST_F(PythonParserTest, ParseComplexConditional)
         "condition = (global_flag := True) and any(complex(i, j).real > 0 for i in range(1, 10, 3) for j in range(1, 10, 4))"
     );
     ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0].name(), "condition");
-    EXPECT_THAT(result[0].dependencies(), testing::UnorderedElementsAre("i", "j"));
-    EXPECT_EQ(result[0].type(), Equation::Type::kVariable);
+    EXPECT_EQ(result[0].name, "condition");
+    EXPECT_THAT(result[0].dependencies, testing::UnorderedElementsAre("i", "j"));
+    EXPECT_EQ(result[0].type, Equation::Type::kVariable);
 }
 
 TEST_F(PythonParserTest, ParseFunctionCallChain)
@@ -150,10 +150,10 @@ TEST_F(PythonParserTest, ParseFunctionCallChain)
         "func = process_data(filter_data(load_data(\"file.txt\")))"
     );
     ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0].name(), "func");
-    EXPECT_THAT(result[0].dependencies(), 
+    EXPECT_EQ(result[0].name, "func");
+    EXPECT_THAT(result[0].dependencies, 
                 testing::UnorderedElementsAre("process_data", "filter_data", "load_data"));
-    EXPECT_EQ(result[0].type(), Equation::Type::kVariable);
+    EXPECT_EQ(result[0].type, Equation::Type::kVariable);
 }
 
 TEST_F(PythonParserTest, ParseEmptyString)
@@ -184,16 +184,16 @@ TEST_F(PythonParserTest, ParseWithComments)
 {
     auto result = parser_->ParseSingleStatement("a = b + c  # add b and c");
     ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0].name(), "a");
-    EXPECT_THAT(result[0].dependencies(), testing::UnorderedElementsAre("b", "c"));
+    EXPECT_EQ(result[0].name, "a");
+    EXPECT_THAT(result[0].dependencies, testing::UnorderedElementsAre("b", "c"));
 }
 
 TEST_F(PythonParserTest, ParseSpecialCharacters)
 {
     auto result = parser_->ParseSingleStatement("_private_var = public_var * 2");
     ASSERT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0].name(), "_private_var");
-    EXPECT_THAT(result[0].dependencies(), testing::UnorderedElementsAre("public_var"));
+    EXPECT_EQ(result[0].name, "_private_var");
+    EXPECT_THAT(result[0].dependencies, testing::UnorderedElementsAre("public_var"));
 }
 
 TEST_F(PythonParserTest, CacheBasicFunctionality)
@@ -207,8 +207,8 @@ TEST_F(PythonParserTest, CacheBasicFunctionality)
     EXPECT_EQ(parser_->GetCacheSize(), 1u);
 
     EXPECT_EQ(result1.size(), result2.size());
-    EXPECT_EQ(result1[0].name(), result2[0].name());
-    EXPECT_EQ(result1[0].content(), result2[0].content());
+    EXPECT_EQ(result1[0].name, result2[0].name);
+    EXPECT_EQ(result1[0].content, result2[0].content);
 }
 
 TEST_F(PythonParserTest, CacheDifferentExpressions)
@@ -321,12 +321,12 @@ TEST_F(PythonParserTest, ParseMultipleStatements)
     auto results = parser_->ParseMultipleStatements("a = 1\nb = a + 2\nc = b * 3");
     EXPECT_EQ(results.size(), 3);
     
-    EXPECT_EQ(results[0].name(), "a");
-    EXPECT_EQ(results[1].name(), "b");
-    EXPECT_EQ(results[2].name(), "c");
+    EXPECT_EQ(results[0].name, "a");
+    EXPECT_EQ(results[1].name, "b");
+    EXPECT_EQ(results[2].name, "c");
     
-    EXPECT_THAT(results[1].dependencies(), testing::UnorderedElementsAre("a"));
-    EXPECT_THAT(results[2].dependencies(), testing::UnorderedElementsAre("b"));
+    EXPECT_THAT(results[1].dependencies, testing::UnorderedElementsAre("a"));
+    EXPECT_THAT(results[2].dependencies, testing::UnorderedElementsAre("b"));
 }
 
 TEST_F(PythonParserTest, ParseMultipleStatementsWithError)
@@ -387,8 +387,8 @@ TEST_F(PythonParserTest, CachePerformance)
     EXPECT_LE(duration2.count(), duration1.count() * 10);
 
     EXPECT_EQ(result1.size(), result2.size());
-    EXPECT_EQ(result1[0].name(), result2[0].name());
-    EXPECT_EQ(result1[0].content(), result2[0].content());
+    EXPECT_EQ(result1[0].name, result2[0].name);
+    EXPECT_EQ(result1[0].content, result2[0].content);
 }
 
 TEST_F(PythonParserTest, ParseMultipleImport)
@@ -396,13 +396,13 @@ TEST_F(PythonParserTest, ParseMultipleImport)
     auto parse_result = parser_->ParseSingleStatement("import os, math");
     EXPECT_EQ(parse_result.size(), 2);
     
-    EXPECT_EQ(parse_result[0].name(), "os");
-    EXPECT_EQ(parse_result[0].type(), Equation::Type::kImport);
-    EXPECT_EQ(parse_result[0].content(), "import os");
+    EXPECT_EQ(parse_result[0].name, "os");
+    EXPECT_EQ(parse_result[0].type, Equation::Type::kImport);
+    EXPECT_EQ(parse_result[0].content, "import os");
     
-    EXPECT_EQ(parse_result[1].name(), "math");
-    EXPECT_EQ(parse_result[1].type(), Equation::Type::kImport);
-    EXPECT_EQ(parse_result[1].content(), "import math");
+    EXPECT_EQ(parse_result[1].name, "math");
+    EXPECT_EQ(parse_result[1].type, Equation::Type::kImport);
+    EXPECT_EQ(parse_result[1].content, "import math");
 }
 
 TEST_F(PythonParserTest, ParseMultipleImportWithAliases)
@@ -410,13 +410,13 @@ TEST_F(PythonParserTest, ParseMultipleImportWithAliases)
     auto parse_result = parser_->ParseSingleStatement("import os as operating_system, math as mathematics");
     EXPECT_EQ(parse_result.size(), 2);
     
-    EXPECT_EQ(parse_result[0].name(), "operating_system");
-    EXPECT_EQ(parse_result[0].type(), Equation::Type::kImport);
-    EXPECT_EQ(parse_result[0].content(), "import os as operating_system");
+    EXPECT_EQ(parse_result[0].name, "operating_system");
+    EXPECT_EQ(parse_result[0].type, Equation::Type::kImport);
+    EXPECT_EQ(parse_result[0].content, "import os as operating_system");
     
-    EXPECT_EQ(parse_result[1].name(), "mathematics");
-    EXPECT_EQ(parse_result[1].type(), Equation::Type::kImport);
-    EXPECT_EQ(parse_result[1].content(), "import math as mathematics");
+    EXPECT_EQ(parse_result[1].name, "mathematics");
+    EXPECT_EQ(parse_result[1].type, Equation::Type::kImport);
+    EXPECT_EQ(parse_result[1].content, "import math as mathematics");
 }
 
 TEST_F(PythonParserTest, ParseMultipleFromImport)
@@ -424,13 +424,13 @@ TEST_F(PythonParserTest, ParseMultipleFromImport)
     auto parse_result = parser_->ParseSingleStatement("from math import sin, cos");
     EXPECT_EQ(parse_result.size(), 2);
     
-    EXPECT_EQ(parse_result[0].name(), "sin");
-    EXPECT_EQ(parse_result[0].type(), Equation::Type::kImportFrom);
-    EXPECT_EQ(parse_result[0].content(), "from math import sin");
+    EXPECT_EQ(parse_result[0].name, "sin");
+    EXPECT_EQ(parse_result[0].type, Equation::Type::kImportFrom);
+    EXPECT_EQ(parse_result[0].content, "from math import sin");
     
-    EXPECT_EQ(parse_result[1].name(), "cos"); 
-    EXPECT_EQ(parse_result[1].type(), Equation::Type::kImportFrom);
-    EXPECT_EQ(parse_result[1].content(), "from math import cos");
+    EXPECT_EQ(parse_result[1].name, "cos"); 
+    EXPECT_EQ(parse_result[1].type, Equation::Type::kImportFrom);
+    EXPECT_EQ(parse_result[1].content, "from math import cos");
 }
 
 TEST_F(PythonParserTest, ParseMultipleFromImportWithAliases)
@@ -438,13 +438,13 @@ TEST_F(PythonParserTest, ParseMultipleFromImportWithAliases)
     auto parse_result = parser_->ParseSingleStatement("from math import sin as sine, cos as cosine");
     EXPECT_EQ(parse_result.size(), 2);
     
-    EXPECT_EQ(parse_result[0].name(), "sine");
-    EXPECT_EQ(parse_result[0].type(), Equation::Type::kImportFrom);
-    EXPECT_EQ(parse_result[0].content(), "from math import sin as sine");
+    EXPECT_EQ(parse_result[0].name, "sine");
+    EXPECT_EQ(parse_result[0].type, Equation::Type::kImportFrom);
+    EXPECT_EQ(parse_result[0].content, "from math import sin as sine");
     
-    EXPECT_EQ(parse_result[1].name(), "cosine");
-    EXPECT_EQ(parse_result[1].type(), Equation::Type::kImportFrom);
-    EXPECT_EQ(parse_result[1].content(), "from math import cos as cosine");
+    EXPECT_EQ(parse_result[1].name, "cosine");
+    EXPECT_EQ(parse_result[1].type, Equation::Type::kImportFrom);
+    EXPECT_EQ(parse_result[1].content, "from math import cos as cosine");
 }
 
 TEST_F(PythonParserTest, ParseStarImport)
@@ -458,13 +458,13 @@ TEST_F(PythonParserTest, ParseStarImport)
     bool has_pi = false;
     
     for (const auto& eqn : parse_result) {
-        EXPECT_EQ(eqn.type(), Equation::Type::kImportFrom);
-        EXPECT_TRUE(eqn.name().length() > 0);
-        EXPECT_TRUE(eqn.content().find("from math import") != std::string::npos);
+        EXPECT_EQ(eqn.type, Equation::Type::kImportFrom);
+        EXPECT_TRUE(eqn.name.length() > 0);
+        EXPECT_TRUE(eqn.content.find("from math import") != std::string::npos);
         
-        if (eqn.name() == "sin") has_sin = true;
-        if (eqn.name() == "cos") has_cos = true;
-        if (eqn.name() == "pi") has_pi = true;
+        if (eqn.name == "sin") has_sin = true;
+        if (eqn.name == "cos") has_cos = true;
+        if (eqn.name == "pi") has_pi = true;
     }
     
     EXPECT_TRUE(has_sin || has_cos || has_pi);
@@ -490,22 +490,22 @@ TEST_F(PythonParserTest, ParseMixedImportStatements)
     bool has_star_import = false;
     
     for (const auto& eqn : results) {
-        if (eqn.name() == "os" && eqn.type() == Equation::Type::kImport) {
+        if (eqn.name == "os" && eqn.type == Equation::Type::kImport) {
             has_os = true;
         }
-        if (eqn.name() == "m" && eqn.type() == Equation::Type::kImport) {
+        if (eqn.name == "m" && eqn.type == Equation::Type::kImport) {
             has_math_alias = true;
         }
-        if (eqn.name() == "version" && eqn.type() == Equation::Type::kImportFrom) {
+        if (eqn.name == "version" && eqn.type == Equation::Type::kImportFrom) {
             has_version = true;
         }
-        if (eqn.name() == "join" && eqn.type() == Equation::Type::kImportFrom) {
+        if (eqn.name == "join" && eqn.type == Equation::Type::kImportFrom) {
             has_join = true;
         }
-        if (eqn.name() == "exists" && eqn.type() == Equation::Type::kImportFrom) {
+        if (eqn.name == "exists" && eqn.type == Equation::Type::kImportFrom) {
             has_exists = true;
         }
-        if (eqn.content().find("from collections import") != std::string::npos) {
+        if (eqn.content.find("from collections import") != std::string::npos) {
             has_star_import = true;
         }
     }
@@ -546,13 +546,13 @@ TEST_F(PythonParserTest, ParseComplexImportScenarios)
     bool has_np = false;
     
     for (const auto& eqn : results) {
-        if (eqn.name() == "ospath") {
+        if (eqn.name == "ospath") {
             has_ospath = true;
-            EXPECT_EQ(eqn.type(), Equation::Type::kImport);
+            EXPECT_EQ(eqn.type, Equation::Type::kImport);
         }
-        if (eqn.name() == "np") {
+        if (eqn.name == "np") {
             has_np = true;
-            EXPECT_EQ(eqn.type(), Equation::Type::kImport);
+            EXPECT_EQ(eqn.type, Equation::Type::kImport);
         }
     }
     

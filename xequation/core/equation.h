@@ -110,6 +110,108 @@ class Equation
         return !(*this == other);
     }
 
+    static Type StringToType(const std::string &type_str)
+    {
+        if (type_str == "Variable")
+            return Type::kVariable;
+        else if (type_str == "Function")
+            return Type::kFunction;
+        else if (type_str == "Class")
+            return Type::kClass;
+        else if (type_str == "Import")
+            return Type::kImport;
+        else if (type_str == "ImportFrom")
+            return Type::kImportFrom;
+        else
+            return Type::kError;
+    }
+
+    static Status StringToStatus(const std::string &status_str)
+    {
+        if (status_str == "Init")
+            return Status::kInit;
+        else if (status_str == "Success")
+            return Status::kSuccess;
+        else if (status_str == "SyntaxError")
+            return Status::kSyntaxError;
+        else if (status_str == "NameError")
+            return Status::kNameError;
+        else if (status_str == "TypeError")
+            return Status::kTypeError;
+        else if (status_str == "ZeroDivisionError")
+            return Status::kZeroDivisionError;
+        else if (status_str == "ValueError")
+            return Status::kValueError;
+        else if (status_str == "MemoryError")
+            return Status::kMemoryError;
+        else if (status_str == "OverflowError")
+            return Status::kOverflowError;
+        else if (status_str == "RecursionError")
+            return Status::kRecursionError;
+        else if (status_str == "IndexError")
+            return Status::kIndexError;
+        else if (status_str == "KeyError")
+            return Status::kKeyError;
+        else if (status_str == "AttributeError")
+            return Status::kAttributeError;
+        else
+            return Status::kInit;
+    }
+
+    static std::string TypeToString(Type type)
+    {
+        switch (type)
+        {
+        case Type::kVariable:
+            return "Variable";
+        case Type::kFunction:
+            return "Function";
+        case Type::kClass:
+            return "Class";
+        case Type::kImport:
+            return "Import";
+        case Type::kImportFrom:
+            return "ImportFrom";
+        default:
+            return "Error";
+        }
+    }
+
+    static std::string StatusToString(Status status)
+    {
+        switch (status)
+        {
+        case Status::kInit:
+            return "Init";
+        case Status::kSuccess:
+            return "Success";
+        case Status::kSyntaxError:
+            return "SyntaxError";
+        case Status::kNameError:
+            return "NameError";
+        case Status::kTypeError:
+            return "TypeError";
+        case Status::kZeroDivisionError:
+            return "ZeroDivisionError";
+        case Status::kValueError:
+            return "ValueError";
+        case Status::kMemoryError:
+            return "MemoryError";
+        case Status::kOverflowError:
+            return "OverflowError";
+        case Status::kRecursionError:
+            return "RecursionError";
+        case Status::kIndexError:
+            return "IndexError";
+        case Status::kKeyError:
+            return "KeyError";
+        case Status::kAttributeError:
+            return "AttributeError";
+        default:
+            return "Unknown";
+        }
+    }
+
   private:
     std::string name_;
     std::string content_;
@@ -119,20 +221,3 @@ class Equation
     std::string message_;
 };
 } // namespace xequation
-
-namespace std
-{
-template <>
-struct hash<xequation::Equation>
-{
-    std::size_t operator()(const xequation::Equation &eq) const noexcept
-    {
-        std::size_t h1 = std::hash<std::string>{}(eq.name());
-        std::size_t h2 = std::hash<std::string>{}(eq.content());
-        std::size_t h3 = std::hash<int>{}(static_cast<int>(eq.type()));
-        std::size_t h4 = std::hash<int>{}(static_cast<int>(eq.status()));
-
-        return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
-    }
-};
-} // namespace std

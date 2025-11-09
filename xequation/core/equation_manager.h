@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <string>
@@ -51,6 +52,10 @@ class EquationManager
     virtual ~EquationManager() noexcept = default;
 
     const Equation *GetEquation(const std::string &eqn_name) const;
+
+    const std::vector<std::string> GetAllEquationNames() const;
+
+    size_t GetEquationCount() const;
 
     void AddEquation(const std::string &eqn_name, const std::string &expression);
 
@@ -105,7 +110,7 @@ class EquationManager
   private:
     std::unique_ptr<DependencyGraph> graph_;
     std::unique_ptr<EquationContext> context_;
-    std::unordered_map<std::string, Equation> equation_map_;
+    std::unordered_map<std::string, std::unique_ptr<Equation>> equation_map_;
     std::unordered_set<std::string> single_variable_equation_name_set_;
     std::unordered_set<std::string> multiple_variable_equation_code_set_;
     ExecCallback exec_callback_;

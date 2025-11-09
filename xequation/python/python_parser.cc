@@ -347,11 +347,12 @@ ParseResult PythonParser::ParseSingleStatement(const std::string &code)
             Equation::Type type = StringToType(item_dict["type"].cast<std::string>());
             std::string content = item_dict["content"].cast<std::string>();
             
-            Equation eqn(name);
-            eqn.set_dependencies(dependencies);
-            eqn.set_type(type);
-            eqn.set_content(content);
-            res.push_back(eqn);
+            ParseResultItem parse_item;
+            parse_item.name = name;
+            parse_item.dependencies = dependencies;
+            parse_item.type = type;
+            parse_item.content = content;
+            res.push_back(parse_item);
         }
 
         cache_list_.emplace_front(code_hash, res);

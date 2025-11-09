@@ -11,19 +11,28 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QDebug>
-#include <qaction.h>
+
+#ifdef slots
+#undef slots
+#endif
+#include "python/python_equation_engine.h"
+#define slots Q_SLOTS
 
 DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent)
 {
     setWindowTitle("Qt Demo Widget - Equation Editor");
     setMinimumSize(800, 600);
     
-    // Create central widget
-    QWidget *centralWidget = new QWidget(this);
-    setCentralWidget(centralWidget);
-    
-    // Create layout
-    QVBoxLayout *layout = new QVBoxLayout(centralWidget);
+    equation_manager_ = xequation::python::PythonEquationEngine::GetInstance().CreateEquationManager();
+
+    equation_manager_->AddEquation("a", "1");
+    equation_manager_->AddEquation("b", "2");
+    equation_manager_->AddEquation("c", "a + b");
+
+    equation_manager_->Update();
+
+    equation_manager_widget_ = new xequation::gui::EquationManagerWidget(equation_manager_.get(), this);
+    setCentralWidget(equation_manager_widget_);
     
     // Create menus and actions
     createActions();
