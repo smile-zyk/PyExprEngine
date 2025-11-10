@@ -108,7 +108,10 @@ ExecResult PythonExecutor::Exec(const std::string &code_string, const py::dict &
     {
         Equation::Status status = MapPythonExceptionToStatus(e);
         res.status = status;
-        res.message = e.what();
+        py::object pv = e.value();
+        py::object str_func = py::module_::import("builtins").attr("str");
+        std::string error_msg = str_func(pv).cast<std::string>();
+        res.message = error_msg;
     }
     return res;
 }
@@ -130,7 +133,10 @@ EvalResult PythonExecutor::Eval(const std::string &expression, const py::dict &l
         Equation::Status status = MapPythonExceptionToStatus(e);
         res.value = Value::Null();
         res.status = status;
-        res.message = e.what();
+        py::object pv = e.value();
+        py::object str_func = py::module_::import("builtins").attr("str");
+        std::string error_msg = str_func(pv).cast<std::string>();
+        res.message = error_msg;
     }
     return res;
 }

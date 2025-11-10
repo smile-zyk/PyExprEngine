@@ -16,7 +16,7 @@ struct EquationPropertyData
 {
     std::string name;
     std::string content;
-    Equation::Type type;
+    Equation::Type type;                  
     Equation::Status status;
     std::string message;
     std::vector<std::string> dependencies;

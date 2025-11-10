@@ -15,6 +15,37 @@ bool Equation::operator!=(const Equation &other) const
     return !(*this == other);
 }
 
+void Equation::SetContent(const std::string &content)
+{
+    content_ = content;
+    NotifyObservers("content", content_);
+}
+void Equation::SetDependencies(const std::vector<std::string> &dependencies)
+{
+    dependencies_ = dependencies;
+    NotifyObservers("dependencies", Value::FromVector(dependencies_));
+}
+
+void Equation::SetType(Type type)
+{
+    type_ = type;
+    NotifyObservers("type", Value::FromString(TypeToString(type_)));
+}
+
+void Equation::SetStatus(Status status)
+{
+    status_ = status;
+    NotifyObservers("status", Value::FromString(StatusToString(status_)));
+}
+
+void Equation::NotifyObservers(const std::string &field_name, const Value& new_value)
+{
+    for (auto observer : observers_)
+    {
+        observer->OnEquationUpdated(name_, field_name, &new_value);
+    }
+}
+
 Value Equation::GetValue()
 {
     return manager_->context()->Get(name_);

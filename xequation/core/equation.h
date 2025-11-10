@@ -9,6 +9,17 @@ namespace xequation
 {
 class EquationManager;
 
+class Equation;
+
+class EquationObserver
+{
+  public:
+    virtual ~EquationObserver() = default;
+    virtual void
+    OnEquationUpdated(const std::string &equation_name, const std::string &field_name, const Value *new_value) = 0;
+    virtual void OnEquationRemoved(const std::string &equation_name) = 0;
+};
+
 class Equation
 {
   public:
@@ -40,31 +51,47 @@ class Equation
     };
 
     Equation() = default;
-    Equation(EquationManager* manager) : manager_(manager) {}
+    Equation(const std::string &name, EquationManager *manager) : name_(name), manager_(manager) {}
     virtual ~Equation() = default;
 
-    void set_name(const std::string &name) { name_ = name; }
-    const std::string &name() const { return name_; }
+    const std::string &name() const
+    {
+        return name_;
+    }
 
-    void set_content(const std::string &content) { content_ = content; }
-    const std::string &content() const { return content_; }
+    void SetContent(const std::string &content);
+    void SetDependencies(const std::vector<std::string> &dependencies);
+    void SetType(Type type);
+    void SetStatus(Status status);
+    void SetMessage(const std::string &message);
 
-    void set_dependencies(const std::vector<std::string> &dependencies) { dependencies_ = dependencies; }
-    const std::vector<std::string> &dependencies() const { return dependencies_; }
-
-    void set_type(Type type) { type_ = type; }
-    Type type() const { return type_; }
-
-    void set_status(Status status) { status_ = status; }
-    Status status() const { return status_; }
-
-    void set_message(const std::string &message) { message_ = message; }
-    const std::string &message() const { return message_; }
+    const std::string &content() const
+    {
+        return content_;
+    }
+    const std::vector<std::string> &dependencies() const
+    {
+        return dependencies_;
+    }
+    Type type() const
+    {
+        return type_;
+    }
+    Status status() const
+    {
+        return status_;
+    }
+    const std::string &message() const
+    {
+        return message_;
+    }
 
     Value GetValue();
 
     bool operator==(const Equation &other) const;
     bool operator!=(const Equation &other) const;
+
+    void NotifyObservers(const std::string &field_name, const Value& new_value);
 
     static Type StringToType(const std::string &type_str);
     static Status StringToStatus(const std::string &status_str);
@@ -78,6 +105,7 @@ class Equation
     Type type_ = Type::kError;
     Status status_ = Status::kInit;
     std::string message_;
-    EquationManager* manager_ = nullptr;
+    EquationManager *manager_ = nullptr;
+    std::vector<EquationObserver *> observers_;
 };
 } // namespace xequation

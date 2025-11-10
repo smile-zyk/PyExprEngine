@@ -384,11 +384,10 @@ void EquationManager::RemoveNodeInGraph(const std::string &node_name)
 
 std::unique_ptr<Equation> EquationManager::ConstructEquationPtr(const ParseResultItem &item)
 {
-    std::unique_ptr<Equation> equation = std::unique_ptr<Equation>(new Equation(this));
-    equation->set_name(item.name);
-    equation->set_content(item.content);
-    equation->set_type(item.type);
-    equation->set_dependencies(item.dependencies);
+    std::unique_ptr<Equation> equation = std::unique_ptr<Equation>(new Equation(item.name, this));
+    equation->SetContent(item.content);
+    equation->SetType(item.type);
+    equation->SetDependencies(item.dependencies);
     return equation;
 }
 
@@ -401,9 +400,9 @@ void EquationManager::UpdateEquationPtr(const ParseResultItem& item)
 
     Equation* eqn = equation_map_.at(item.name).get();
     
-    eqn->set_content(item.content);
-    eqn->set_type(item.type);
-    eqn->set_dependencies(item.dependencies);
+    eqn->SetContent(item.content);
+    eqn->SetType(item.type);
+    eqn->SetDependencies(item.dependencies);
 }
 
 void EquationManager::Update()
