@@ -24,19 +24,19 @@ class EquationEngine
 
     virtual std::unique_ptr<EquationManager> CreateEquationManager()
     {
-        ExecCallback exec_callback = [this](const std::string &code, EquationContext *context) -> ExecResult {
+        ExecHandler exec_handler = [this](const std::string &code, EquationContext *context) -> ExecResult {
             return Exec(code, context);
         };
 
-        EvalCallback eval_callback = [this](const std::string &code, EquationContext *context) -> EvalResult {
+        EvalHandler eval_callback = [this](const std::string &code, EquationContext *context) -> EvalResult {
             return Eval(code, context);
         };
 
-        ParseCallback parse_callback = [this](const std::string &code) -> ParseResult {
+        ParseHandler parse_callback = [this](const std::string &code) -> ParseResult {
             return Parse(code);
         };
 
-        return std::unique_ptr<EquationManager>(new EquationManager(CreateContext(), exec_callback, parse_callback, eval_callback));
+        return std::unique_ptr<EquationManager>(new EquationManager(CreateContext(), exec_handler, parse_callback, eval_callback));
     }
 
     virtual std::unique_ptr<EquationContext> CreateContext() = 0;

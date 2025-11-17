@@ -7,6 +7,7 @@
 
 #include "core/equation_manager.h"
 #include "equation_manager_widget.h"
+#include "mock_equation_list_widget.h"
 
 class QMenu;
 class QAction;
@@ -25,8 +26,8 @@ private slots:
     void onInsertEquation();
     void onInsertMultiEquations();
     void onShowDependencyGraph();
+    void onShowEquationManager();
     void onShowEquationInspector();
-    void onShowEquationResultInspector() {}
 
 private:
     void createMenus();
@@ -41,9 +42,10 @@ private:
     QAction *insertEquationAction;
     QAction *insertMultiEquationsAction;
     QAction *dependencyGraphAction;
+    QAction *equationManagerAction;
     QAction *equationInspectorAction;
-    QAction *equationResultInspectorAction;
 
     xequation::gui::EquationManagerWidget* equation_manager_widget_;
+    MockEquationListWidget* mock_equation_list_widget_;
     std::unique_ptr<xequation::EquationManager> equation_manager_;
 };

@@ -18,27 +18,28 @@
 #include "python/python_equation_engine.h"
 #define slots Q_SLOTS
 
-DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent)
+DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent), equation_manager_widget_(nullptr)
 {
     setWindowTitle("Qt Demo Widget - Equation Editor");
-    setMinimumSize(800, 600);
+    setFixedSize(800, 600);
     
     equation_manager_ = xequation::python::PythonEquationEngine::GetInstance().CreateEquationManager();
 
-    equation_manager_->AddEquation("a", "1");
-    equation_manager_->AddEquation("b", "2");
-    equation_manager_->AddEquation("c", "a + b");
+    mock_equation_list_widget_ = new MockEquationListWidget(equation_manager_.get(), this);
 
-    equation_manager_->Update();
-
-    equation_manager_widget_ = new xequation::gui::EquationManagerWidget(equation_manager_.get(), this);
-    setCentralWidget(equation_manager_widget_);
+    setCentralWidget(mock_equation_list_widget_);
     
     // Create menus and actions
     createActions();
     createMenus();
     
     statusBar()->showMessage("Application started", 3000);
+
+    equation_manager_->AddEquation("a", "1");
+    equation_manager_->AddEquation("b", "2");
+    equation_manager_->AddEquation("c", "a + b");
+
+    equation_manager_->Update();
 }
 
 void DemoWidget::createActions()
@@ -71,14 +72,15 @@ void DemoWidget::createActions()
     dependencyGraphAction->setStatusTip("Show equation dependency graph");
     connect(dependencyGraphAction, &QAction::triggered, this, &DemoWidget::onShowDependencyGraph);
     
+    equationManagerAction = new QAction("Equation &Manager", this);
+    equationManagerAction->setShortcut(QKeySequence("Ctrl+M"));
+    equationManagerAction->setStatusTip("Manage equations");
+    connect(equationManagerAction, &QAction::triggered, this, &DemoWidget::onShowEquationManager);
+
     equationInspectorAction = new QAction("Equation &Inspector", this);
     equationInspectorAction->setShortcut(QKeySequence("Ctrl+I"));
     equationInspectorAction->setStatusTip("Inspect equation properties");
     connect(equationInspectorAction, &QAction::triggered, this, &DemoWidget::onShowEquationInspector);
-
-    equationResultInspectorAction = new QAction("Equation Result Inspector", this);
-    equationResultInspectorAction->setStatusTip("Inspect equation result properties");
-    connect(equationResultInspectorAction, &QAction::triggered, this, &DemoWidget::onShowEquationResultInspector);
 }
 
 void DemoWidget::onOpen()
@@ -100,6 +102,8 @@ void DemoWidget::createMenus()
     // View menu
     viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction(dependencyGraphAction);
+    viewMenu->addAction(dependencyGraphAction);
+    viewMenu->addAction(equationManagerAction);
     viewMenu->addAction(equationInspectorAction);
 }
 
@@ -135,6 +139,22 @@ void DemoWidget::onShowDependencyGraph()
         "Dependency Graph Feature\n\n"
         "This will display dependency relationships between equations.\n"
         "To be implemented: Visualize equation dependencies.");
+}
+
+void DemoWidget::onShowEquationManager()
+{
+    if(equation_manager_widget_ == nullptr)
+    {
+       equation_manager_widget_ = new xequation::gui::EquationManagerWidget(equation_manager_.get(), this);
+       equation_manager_widget_->show();
+    }
+    else
+    {
+        equation_manager_widget_->raise();
+        equation_manager_widget_->activateWindow();
+    }
+
+    statusBar()->showMessage("Opening equation manager", 2000);
 }
 
 void DemoWidget::onShowEquationInspector()

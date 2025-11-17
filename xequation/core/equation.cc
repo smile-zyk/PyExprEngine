@@ -1,12 +1,16 @@
 #include "equation.h"
 #include "equation_manager.h"
 
+#include <random>
+#include <string>
+#include <sstream>
+
 namespace xequation
 {
 
 bool Equation::operator==(const Equation &other) const
 {
-    return name_ == other.name_ && content_ == other.content_ && dependencies_ == other.dependencies_ &&
+    return id_ == other.id_ && content_ == other.content_ && dependencies_ == other.dependencies_ &&
            type_ == other.type_ && status_ == other.status_ && message_ == other.message_;
 }
 
@@ -18,37 +22,59 @@ bool Equation::operator!=(const Equation &other) const
 void Equation::SetContent(const std::string &content)
 {
     content_ = content;
-    NotifyObservers("content", content_);
+    NotifyObserversFieldChanged("content");
 }
+
 void Equation::SetDependencies(const std::vector<std::string> &dependencies)
 {
     dependencies_ = dependencies;
-    NotifyObservers("dependencies", Value::FromVector(dependencies_));
+    NotifyObserversFieldChanged("dependencies");
 }
 
 void Equation::SetType(Type type)
 {
     type_ = type;
-    NotifyObservers("type", Value::FromString(TypeToString(type_)));
+    NotifyObserversFieldChanged("type");
 }
 
 void Equation::SetStatus(Status status)
 {
     status_ = status;
-    NotifyObservers("status", Value::FromString(StatusToString(status_)));
+    NotifyObserversFieldChanged("status");
 }
 
-void Equation::NotifyObservers(const std::string &field_name, const Value& new_value)
+void Equation::SetMessage(const std::string &message)
+{
+    message_ = message;
+    NotifyObserversFieldChanged("message");
+}
+
+void Equation::UpdateValue()
+{
+    NotifyObserversFieldChanged("value");
+}
+
+void Equation::NotifyObserversFieldChanged(const std::string &field_name) const
 {
     for (auto observer : observers_)
     {
-        observer->OnEquationUpdated(name_, field_name, &new_value);
+        observer->OnEquationFieldChanged(this, field_name);
     }
 }
 
 Value Equation::GetValue()
 {
-    return manager_->context()->Get(name_);
+    return manager_->context()->Get(id_);
+}
+
+const EquationBase *Equation::GetDependencyEquation(const std::string &equation_name)
+{
+    auto it = std::find(dependencies_.begin(), dependencies_.end(), equation_name);
+    if (it != dependencies_.end())
+    {
+        return manager_->GetEquation(equation_name);
+    }
+    return nullptr;
 }
 
 Equation::Type Equation::StringToType(const std::string &type_str)
@@ -151,6 +177,46 @@ std::string Equation::StatusToString(Status status)
     default:
         return "Unknown";
     }
+}
+
+void EquationGroup::AddSubEquation(const std::string& sub_equation_name, std::unique_ptr<Equation> sub_equation)
+{
+    sub_equations_map.insert({sub_equation_name, std::move(sub_equation)});
+}
+
+void EquationGroup::RemoveSubEquation(const std::string& sub_equation_name)
+{
+    sub_equations_map.erase(sub_equation_name);
+}
+
+
+std::string EquationGroup::GenerateGroupId()
+{
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<> dis(0, 15);
+    static std::uniform_int_distribution<> dis2(8, 11);
+    
+    std::stringstream ss;
+    
+    for (int i = 0; i < 8; i++) {
+        if (i == 4) {
+            ss << "-";
+        }
+        ss << std::hex << dis(gen);
+    }
+    
+    return ss.str();
+}
+
+std::ostream &operator<<(std::ostream &os, Equation::Type type)
+{
+    return os << Equation::TypeToString(type);
+}
+
+std::ostream &operator<<(std::ostream &os, Equation::Status status)
+{
+    return os << Equation::StatusToString(status);
 }
 
 } // namespace xequation

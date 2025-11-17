@@ -3,6 +3,10 @@ project(xequation LANGUAGES CXX)
 
 find_package(Python REQUIRED COMPONENTS Development Interpreter)
 
+message(STATUS "Python executable: ${Python_EXECUTABLE}")
+message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
+message(STATUS "Python libraries: ${Python_LIBRARIES}")
+
 if(Python_FOUND)
     execute_process(
         COMMAND ${Python_EXECUTABLE} -c "import pybind11; print(pybind11.get_cmake_dir())"

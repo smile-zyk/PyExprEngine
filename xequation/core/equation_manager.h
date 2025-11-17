@@ -3,13 +3,13 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "core/equation_common.h"
 #include "dependency_graph.h"
 #include "equation.h"
 #include "equation_common.h"
 #include "equation_context.h"
-
 
 namespace xequation
 {
@@ -46,33 +46,37 @@ class DuplicateEquationNameError : public std::exception
 class EquationManager
 {
   public:
+    using EquationCallback = std::function<void(const EquationManager *manager, const std::string &equation_name)>;
+
+    using CallbackId = size_t;
+
     EquationManager(
-        std::unique_ptr<EquationContext> context, ExecCallback exec_callback, ParseCallback parse_callback,
-        EvalCallback eval_callback = nullptr
+        std::unique_ptr<EquationContext> context, ExecHandler exec_handler, ParseHandler parse_callback,
+        EvalHandler eval_callback = nullptr
     ) noexcept;
+
     virtual ~EquationManager() noexcept = default;
 
-    const Equation *GetEquation(const std::string &eqn_name) const;
+    const EquationBase *GetEquation(const std::string &eqn_name) const;
 
-    const std::vector<std::string> GetAllEquationNames() const;
-
-    size_t GetEquationCount() const;
+    const std::vector<std::string> GetEquationNames() const;
 
     void AddEquation(const std::string &eqn_name, const std::string &expression);
 
-    void EditEquation(const std::string &old_eqn_name, const std::string& new_eqn_name, const std::string &new_eqn_expr);
+    void
+    EditEquation(const std::string &old_eqn_name, const std::string &new_eqn_name, const std::string &new_eqn_expr);
 
     void RemoveEquation(const std::string &eqn_name);
 
-    void AddMultipleEquations(const std::string& eqn_code);
+    std::string AddMultiEquations(const std::string &eqn_code);
 
-    void EditMultipleEquations(const std::string& old_eqn_code, const std::string& new_eqn_code);
+    void EditMultiEquations(const std::string &old_multieqn_name, const std::string &new_eqn_code);
 
-    void RemoveMultipleEquations(const std::string& eqn_code);
+    void RemoveMultiEquations(const std::string &multieqn_name);
 
     bool IsEquationExist(const std::string &eqn_name) const;
 
-    EvalResult Eval(const std::string& expression) const;
+    EvalResult Eval(const std::string &expression) const;
 
     void Reset();
 
@@ -92,6 +96,15 @@ class EquationManager
         return context_.get();
     }
 
+    CallbackId RegisterEquationAddedCallback(EquationCallback callback);
+    void UnRegisterEquationAddedCallback(CallbackId callback_id);
+
+    CallbackId RegisterEquationRemovingCallback(EquationCallback callback);
+    void UnRegisterEquationRemovingCallback(CallbackId callback_id);
+
+    void NotifyEquationAdded(const std::string& equation_name) const;
+    void NotifyEquationRemoving(const std::string& equation_name) const;
+
   private:
     EquationManager(const EquationManager &) = delete;
     EquationManager &operator=(const EquationManager &) = delete;
@@ -103,22 +116,31 @@ class EquationManager
     void EditEquationStatement(const std::string &old_eqn_code, const std::string &equation_code);
     void RemoveEquationStatement(const std::string &eqn_code);
 
+    Equation* GetEquationInteral(const std::string& equation_name);
     void UpdateEquationInternal(const std::string &var_name);
 
     void AddNodeToGraph(const std::string &node_name, const std::vector<std::string> &dependencies);
     void RemoveNodeInGraph(const std::string &node_name);
 
-    std::unique_ptr<Equation> ConstructEquationPtr(const ParseResultItem& item);
-    void UpdateEquationPtr(const ParseResultItem& item);
+    void UpdateValueToContext(const std::string &equation_name, const Value &old_value);
+    void RemoveValueInContext(const std::string &equation_name);
+
+    std::unique_ptr<Equation> ConstructEquationPtr(const ParseResultItem &item);
+    void UpdateEquationPtr(const ParseResultItem &item);
 
   private:
     std::unique_ptr<DependencyGraph> graph_;
     std::unique_ptr<EquationContext> context_;
-    std::unordered_map<std::string, std::unique_ptr<Equation>> equation_map_;
-    std::unordered_set<std::string> single_variable_equation_name_set_;
-    std::unordered_set<std::string> multiple_variable_equation_code_set_;
-    ExecCallback exec_callback_;
-    ParseCallback parse_callback_;
-    EvalCallback eval_callback_;
+    std::vector<std::string> equation_order_;
+    std::unordered_map<std::string, std::unique_ptr<EquationBase>> equation_map_;
+    std::unordered_map<std::string, std::string> equation_to_multiequations_map_;
+
+    CallbackId next_callback_id = 0;
+    std::unordered_map<CallbackId, EquationCallback> equation_callback_map_;
+    std::unordered_set<CallbackId> equation_add_callback_set_;
+    std::unordered_set<CallbackId> equation_remove_callback_set_;
+    ExecHandler exec_handler_ = nullptr;
+    ParseHandler parse_handler_ = nullptr;
+    EvalHandler eval_handler_ = nullptr;
 };
 } // namespace xequation
