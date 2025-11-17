@@ -1,71 +1,43 @@
 #pragma once
 
+#include <boost/uuid/uuid.hpp>
 #include <memory>
 #include <string>
 #include <vector>
-#include <unordered_map>
+
+#include <boost/uuid.hpp>
+#include <tsl/ordered_map.h>
 
 #include "value.h"
 
 namespace xequation
 {
+class Equation;
+class EquationGroup;
 class EquationManager;
 
-class Equation;
+using EquationGroupId = boost::uuids::uuid;
+using EquationPtrOrderedMap = tsl::ordered_map<std::string, std::unique_ptr<Equation>>;
+using EquationGroupPtrOrderedMap = tsl::ordered_map<boost::uuids::uuid, std::unique_ptr<EquationGroup>>;
 
 class EquationObserver
 {
   public:
-    virtual ~EquationObserver() = default;
-    virtual void OnEquationFieldChanged(const Equation *equation, const std::string &field_name) = 0;
-};
-
-class EquationBase
-{
-  public:
-    enum class Category
+    enum class ChangeType
     {
-        kSingle,
-        kGroup
+      kContent,
+      kType,
+      kStatus,
+      kMessage,
+      kDependencies,
+      kValue
     };
 
-    EquationBase() = default;
-    EquationBase(const std::string &id, EquationManager *manager, Category category)
-        : id_(id), manager_(manager)
-    {
-    }
-
-    const std::string &id() const
-    {
-        return id_;
-    }
-
-    const std::string &content() const
-    {
-        return content_;
-    }
-
-    const std::vector<std::string> &dependencies() const
-    {
-        return dependencies_;
-    }
-
-    EquationManager *manager() const
-    {
-        return manager_;
-    }
-
-    virtual Category category() const = 0;
-
-  protected:
-    std::string id_;
-    std::string content_;
-    std::vector<std::string> dependencies_;
-    EquationManager *manager_ = nullptr;
-    std::string group_id_;
+    virtual ~EquationObserver() = default;
+    virtual void OnEquationFieldChanged(const Equation* equation, ChangeType change_type) = 0;
 };
 
-class Equation : public EquationBase
+class Equation
 {
   public:
     enum class Type
@@ -95,12 +67,7 @@ class Equation : public EquationBase
         kAttributeError,
     };
 
-    Equation() = default;
-    Equation(const std::string &id, EquationManager *manager)
-        : EquationBase(id, manager, EquationBase::Category::kSingle)
-    {
-    }
-
+    explicit Equation(const std::string &name, const boost::uuids::uuid& group_id, EquationManager *manager);
     virtual ~Equation() = default;
 
     void SetContent(const std::string &content);
@@ -109,6 +76,21 @@ class Equation : public EquationBase
     void SetStatus(Status status);
     void SetMessage(const std::string &message);
     void UpdateValue();
+
+    const std::string& name() const
+    {
+        return name_;
+    }
+
+    const std::string& content() const
+    {
+        return content_;
+    }
+
+    const std::vector<std::string> dependencies() const
+    {
+        return dependencies_;
+    }
 
     Type type() const
     {
@@ -125,19 +107,22 @@ class Equation : public EquationBase
         return message_;
     }
 
-    Category category() const override
+    const EquationManager* manager() const
     {
-        return EquationBase::Category::kSingle;
+        return manager_;
+    }
+
+    const EquationGroupId& group_id() const
+    {
+        return group_id_;
     }
 
     Value GetValue();
 
-    const EquationBase *GetDependencyEquation(const std::string &equation_name);
-
     bool operator==(const Equation &other) const;
     bool operator!=(const Equation &other) const;
 
-    void NotifyObserversFieldChanged(const std::string &field_name) const;
+    void NotifyValueChanged();
 
     static Type StringToType(const std::string &type_str);
     static Status StringToStatus(const std::string &status_str);
@@ -145,33 +130,50 @@ class Equation : public EquationBase
     static std::string StatusToString(Status status);
 
   private:
+    void NotifyObserversFieldChanged(EquationObserver::ChangeType change_type) const;
+  
+  private:
+    std::string name_;
+    std::string content_;
     Type type_ = Type::kError;
     Status status_ = Status::kInit;
     std::string message_;
+    std::vector<std::string> dependencies_;
+    EquationGroupId group_id_;
+    EquationManager *manager_ = nullptr;
     std::vector<EquationObserver *> observers_;
 };
 
-class EquationGroup : public EquationBase
+class EquationGroup
 {
   public:
-    EquationGroup(const std::string &id, EquationManager *manager)
-        : EquationBase(id, manager, EquationBase::Category::kGroup)
+    EquationGroup(const EquationManager *manager);
+
+    void AddEquation(std::unique_ptr<Equation> equation);
+
+    void RemoveEquation(const std::string& equation_name);
+
+    const Equation* GetEquation(const std::string& equation_name);
+
+    const EquationManager* manaegr()
     {
+        return manager_;
     }
 
-    void AddSubEquation(const std::string& sub_equation_name, std::unique_ptr<Equation> sub_equation);
-
-    void RemoveSubEquation(const std::string& sub_equation_name);
-
-    Category category() const override
+    const EquationPtrOrderedMap& equation_map()
     {
-        return EquationBase::Category::kGroup;
+        return equation_map_;
     }
 
-    static std::string GenerateGroupId();
+    const EquationGroupId& id()
+    {
+        return id_;
+    }
 
   private:
-    std::unordered_map<std::string, std::unique_ptr<Equation>> sub_equations_map;
+    EquationPtrOrderedMap equation_map_;
+    EquationGroupId id_;
+    const EquationManager* manager_;
 };
 
 std::ostream &operator<<(std::ostream &os, Equation::Type type);

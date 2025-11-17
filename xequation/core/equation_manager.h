@@ -57,24 +57,19 @@ class EquationManager
 
     virtual ~EquationManager() noexcept = default;
 
-    const EquationBase *GetEquation(const std::string &eqn_name) const;
-
-    const std::vector<std::string> GetEquationNames() const;
-
-    void AddEquation(const std::string &eqn_name, const std::string &expression);
-
-    void
-    EditEquation(const std::string &old_eqn_name, const std::string &new_eqn_name, const std::string &new_eqn_expr);
-
-    void RemoveEquation(const std::string &eqn_name);
-
-    std::string AddMultiEquations(const std::string &eqn_code);
-
-    void EditMultiEquations(const std::string &old_multieqn_name, const std::string &new_eqn_code);
-
-    void RemoveMultiEquations(const std::string &multieqn_name);
+    const Equation* GetEquation(const std::string& equation_name) const;
+    
+    const EquationGroup* GetEquationGroup(const EquationGroupId& group_id) const;
 
     bool IsEquationExist(const std::string &eqn_name) const;
+
+    bool IsEquatoinGroupExist(const EquationGroupId& group_id) const;
+
+    EquationGroupId AddEquationGroup(const std::string &equation_statements);
+
+    void EditEquationGroup(const std::string &old_eqn_name, const std::string &new_eqn_name, const std::string &new_eqn_expr);
+
+    void RemoveEquationGroup(const std::string &eqn_name);
 
     EvalResult Eval(const std::string &expression) const;
 
@@ -94,6 +89,11 @@ class EquationManager
     const EquationContext *context()
     {
         return context_.get();
+    }
+
+    const EquationGroupPtrOrderedMap& equation_group_map()
+    {
+        return equation_group_map_;
     }
 
     CallbackId RegisterEquationAddedCallback(EquationCallback callback);
@@ -132,8 +132,8 @@ class EquationManager
     std::unique_ptr<DependencyGraph> graph_;
     std::unique_ptr<EquationContext> context_;
     std::vector<std::string> equation_order_;
-    std::unordered_map<std::string, std::unique_ptr<EquationBase>> equation_map_;
-    std::unordered_map<std::string, std::string> equation_to_multiequations_map_;
+    EquationGroupPtrOrderedMap equation_group_map_;
+    std::unordered_map<std::string, boost::uuids::uuid> equation_name_to_group_id_map_;
 
     CallbackId next_callback_id = 0;
     std::unordered_map<CallbackId, EquationCallback> equation_callback_map_;

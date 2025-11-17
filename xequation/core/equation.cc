@@ -1,17 +1,21 @@
 #include "equation.h"
 #include "equation_manager.h"
 
-#include <random>
 #include <string>
-#include <sstream>
 
 namespace xequation
 {
 
+Equation::Equation(const std::string &name, const boost::uuids::uuid &group_id, EquationManager *manager)
+    : name_(name), group_id_(group_id), manager_(manager)
+{
+}
+
 bool Equation::operator==(const Equation &other) const
 {
-    return id_ == other.id_ && content_ == other.content_ && dependencies_ == other.dependencies_ &&
-           type_ == other.type_ && status_ == other.status_ && message_ == other.message_;
+    return name_ == other.name_ && content_ == other.content_ && dependencies_ == other.dependencies_ &&
+           type_ == other.type_ && status_ == other.status_ && message_ == other.message_ &&
+           group_id_ == other.group_id_ && manager_ == other.manager_;
 }
 
 bool Equation::operator!=(const Equation &other) const
@@ -22,59 +26,49 @@ bool Equation::operator!=(const Equation &other) const
 void Equation::SetContent(const std::string &content)
 {
     content_ = content;
-    NotifyObserversFieldChanged("content");
+    NotifyObserversFieldChanged(EquationObserver::ChangeType::kContent);
 }
 
 void Equation::SetDependencies(const std::vector<std::string> &dependencies)
 {
     dependencies_ = dependencies;
-    NotifyObserversFieldChanged("dependencies");
+    NotifyObserversFieldChanged(EquationObserver::ChangeType::kDependencies);
 }
 
 void Equation::SetType(Type type)
 {
     type_ = type;
-    NotifyObserversFieldChanged("type");
+    NotifyObserversFieldChanged(EquationObserver::ChangeType::kType);
 }
 
 void Equation::SetStatus(Status status)
 {
     status_ = status;
-    NotifyObserversFieldChanged("status");
+    NotifyObserversFieldChanged(EquationObserver::ChangeType::kStatus);
 }
 
 void Equation::SetMessage(const std::string &message)
 {
     message_ = message;
-    NotifyObserversFieldChanged("message");
+    NotifyObserversFieldChanged(EquationObserver::ChangeType::kMessage);
 }
 
-void Equation::UpdateValue()
+void Equation::NotifyValueChanged()
 {
-    NotifyObserversFieldChanged("value");
+    NotifyObserversFieldChanged(EquationObserver::ChangeType::kValue);
 }
 
-void Equation::NotifyObserversFieldChanged(const std::string &field_name) const
+void Equation::NotifyObserversFieldChanged(EquationObserver::ChangeType change_type) const
 {
     for (auto observer : observers_)
     {
-        observer->OnEquationFieldChanged(this, field_name);
+        observer->OnEquationFieldChanged(this, change_type);
     }
 }
 
 Value Equation::GetValue()
 {
-    return manager_->context()->Get(id_);
-}
-
-const EquationBase *Equation::GetDependencyEquation(const std::string &equation_name)
-{
-    auto it = std::find(dependencies_.begin(), dependencies_.end(), equation_name);
-    if (it != dependencies_.end())
-    {
-        return manager_->GetEquation(equation_name);
-    }
-    return nullptr;
+    return manager_->context()->Get(name_);
 }
 
 Equation::Type Equation::StringToType(const std::string &type_str)
@@ -179,34 +173,20 @@ std::string Equation::StatusToString(Status status)
     }
 }
 
-void EquationGroup::AddSubEquation(const std::string& sub_equation_name, std::unique_ptr<Equation> sub_equation)
+EquationGroup::EquationGroup(const EquationManager *manager) : manager_(manager)
 {
-    sub_equations_map.insert({sub_equation_name, std::move(sub_equation)});
+    static boost::uuids::random_generator rgen;
+    id_ = rgen();
 }
 
-void EquationGroup::RemoveSubEquation(const std::string& sub_equation_name)
+void EquationGroup::AddEquation(std::unique_ptr<Equation> equation)
 {
-    sub_equations_map.erase(sub_equation_name);
+    equation_map_.insert({equation->name(), std::move(equation)});
 }
 
-
-std::string EquationGroup::GenerateGroupId()
+void EquationGroup::RemoveEquation(const std::string &equation_name)
 {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    static std::uniform_int_distribution<> dis(0, 15);
-    static std::uniform_int_distribution<> dis2(8, 11);
-    
-    std::stringstream ss;
-    
-    for (int i = 0; i < 8; i++) {
-        if (i == 4) {
-            ss << "-";
-        }
-        ss << std::hex << dis(gen);
-    }
-    
-    return ss.str();
+    equation_map_.erase(equation_name);
 }
 
 std::ostream &operator<<(std::ostream &os, Equation::Type type)

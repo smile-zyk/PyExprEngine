@@ -1,6 +1,8 @@
 {
   "dependencies": [
     "gtest",
-    "boost-multi-index"
+    "boost-multi-index",
+    "boost-uuid",
+    "tsl-ordered-map"
   ]
 }

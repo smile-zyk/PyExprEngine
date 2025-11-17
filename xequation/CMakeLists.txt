@@ -1,9 +1,5 @@
-find_package(Boost REQUIRED COMPONENTS multi_index)
-
-message(STATUS "Python executable: ${Python_EXECUTABLE}")
-message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
-message(STATUS "Python libraries: ${Python_LIBRARIES}")
-
+find_package(Boost REQUIRED COMPONENTS multi_index uuid)
+find_path(TSL_ORDERED_MAP_INCLUDE_DIRS "tsl/ordered_hash.h")
 set(xequation_SRC
     core/value.h
     core/value.cc
@@ -40,3 +36,5 @@ target_link_libraries(xequation PUBLIC Python::Python)
 target_link_libraries(xequation PUBLIC Boost::multi_index)
 
 target_include_directories(xequation PUBLIC ./)
+target_include_directories(xequation PUBLIC ${TSL_ORDERED_MAP_INCLUDE_DIRS})
+target_link_libraries(xequation PUBLIC Boost::uuid)
