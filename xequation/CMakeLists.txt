@@ -7,6 +7,8 @@ set(xequation_SRC
     core/dependency_graph.cc
     core/equation.h
     core/equation.cc
+    core/equation_group.h
+    core/equation_group.cc
     core/event_stamp.h
     core/event_stamp.cc
     core/equation_manager.h

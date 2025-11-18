@@ -3,6 +3,7 @@
     "gtest",
     "boost-multi-index",
     "boost-uuid",
+    "boost-signals2",
     "tsl-ordered-map"
   ]
 }

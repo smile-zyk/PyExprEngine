@@ -1,11 +1,12 @@
 #pragma once
 
-#include "core/equation.h"
-#include "core/value.h"
 #include <exception>
 #include <functional>
 #include <string>
 #include <vector>
+
+#include "value.h"
+#include "equation.h"
 
 namespace xequation
 {

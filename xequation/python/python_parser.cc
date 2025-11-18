@@ -273,7 +273,7 @@ Equation::Type StringToType(const std::string &type_str)
     {
         return it->second;
     }
-    return Equation::Type::kError;
+    return Equation::Type::kUnknown;
 }
 
 std::vector<std::string> PythonParser::SplitStatements(const std::string &code)

@@ -6,9 +6,25 @@
 namespace xequation
 {
 
-Equation::Equation(const std::string &name, const boost::uuids::uuid &group_id, EquationManager *manager)
-    : name_(name), group_id_(group_id), manager_(manager)
+Equation::Equation(const ParseResultItem &item, const boost::uuids::uuid &group_id, EquationManager *manager)
+    : name_(item.name),
+      content_(item.content),
+      type_(item.type),
+      status_(Status::kPending),
+      group_id_(group_id),
+      manager_(manager)
 {
+}
+
+Equation::Equation(const std::string &name, const boost::uuids::uuid &group_id, EquationManager *manager)
+    : name_(name), type_(Type::kUnknown), status_(Status::kPending), group_id_(group_id), manager_(manager)
+{
+}
+
+EquationPtr Equation::Create(const ParseResultItem& item, const boost::uuids::uuid &group_id, EquationManager *manager)
+{
+    EquationPtr equation = EquationPtr(new Equation(item, group_id, manager));
+    return equation;
 }
 
 bool Equation::operator==(const Equation &other) const
@@ -21,49 +37,6 @@ bool Equation::operator==(const Equation &other) const
 bool Equation::operator!=(const Equation &other) const
 {
     return !(*this == other);
-}
-
-void Equation::SetContent(const std::string &content)
-{
-    content_ = content;
-    NotifyObserversFieldChanged(EquationObserver::ChangeType::kContent);
-}
-
-void Equation::SetDependencies(const std::vector<std::string> &dependencies)
-{
-    dependencies_ = dependencies;
-    NotifyObserversFieldChanged(EquationObserver::ChangeType::kDependencies);
-}
-
-void Equation::SetType(Type type)
-{
-    type_ = type;
-    NotifyObserversFieldChanged(EquationObserver::ChangeType::kType);
-}
-
-void Equation::SetStatus(Status status)
-{
-    status_ = status;
-    NotifyObserversFieldChanged(EquationObserver::ChangeType::kStatus);
-}
-
-void Equation::SetMessage(const std::string &message)
-{
-    message_ = message;
-    NotifyObserversFieldChanged(EquationObserver::ChangeType::kMessage);
-}
-
-void Equation::NotifyValueChanged()
-{
-    NotifyObserversFieldChanged(EquationObserver::ChangeType::kValue);
-}
-
-void Equation::NotifyObserversFieldChanged(EquationObserver::ChangeType change_type) const
-{
-    for (auto observer : observers_)
-    {
-        observer->OnEquationFieldChanged(this, change_type);
-    }
 }
 
 Value Equation::GetValue()
@@ -84,14 +57,12 @@ Equation::Type Equation::StringToType(const std::string &type_str)
     else if (type_str == "ImportFrom")
         return Type::kImportFrom;
     else
-        return Type::kError;
+        return Type::kUnknown;
 }
 
 Equation::Status Equation::StringToStatus(const std::string &status_str)
 {
-    if (status_str == "Init")
-        return Status::kInit;
-    else if (status_str == "Success")
+    if (status_str == "Success")
         return Status::kSuccess;
     else if (status_str == "SyntaxError")
         return Status::kSyntaxError;
@@ -116,7 +87,7 @@ Equation::Status Equation::StringToStatus(const std::string &status_str)
     else if (status_str == "AttributeError")
         return Status::kAttributeError;
     else
-        return Status::kInit;
+        return Status::kPending;
 }
 
 std::string Equation::TypeToString(Type type)
@@ -134,7 +105,7 @@ std::string Equation::TypeToString(Type type)
     case Type::kImportFrom:
         return "ImportFrom";
     default:
-        return "Error";
+        return "Unknown";
     }
 }
 
@@ -142,8 +113,8 @@ std::string Equation::StatusToString(Status status)
 {
     switch (status)
     {
-    case Status::kInit:
-        return "Init";
+    case Status::kPending:
+        return "Pending";
     case Status::kSuccess:
         return "Success";
     case Status::kSyntaxError:
@@ -171,22 +142,6 @@ std::string Equation::StatusToString(Status status)
     default:
         return "Unknown";
     }
-}
-
-EquationGroup::EquationGroup(const EquationManager *manager) : manager_(manager)
-{
-    static boost::uuids::random_generator rgen;
-    id_ = rgen();
-}
-
-void EquationGroup::AddEquation(std::unique_ptr<Equation> equation)
-{
-    equation_map_.insert({equation->name(), std::move(equation)});
-}
-
-void EquationGroup::RemoveEquation(const std::string &equation_name)
-{
-    equation_map_.erase(equation_name);
 }
 
 std::ostream &operator<<(std::ostream &os, Equation::Type type)

@@ -1,11 +1,10 @@
 #pragma once
 
-#include <boost/uuid/uuid.hpp>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <boost/uuid.hpp>
+#include <boost/uuid/uuid.hpp>
 #include <tsl/ordered_map.h>
 
 #include "value.h"
@@ -13,36 +12,19 @@
 namespace xequation
 {
 class Equation;
-class EquationGroup;
 class EquationManager;
+class ParseResultItem;
 
 using EquationGroupId = boost::uuids::uuid;
-using EquationPtrOrderedMap = tsl::ordered_map<std::string, std::unique_ptr<Equation>>;
-using EquationGroupPtrOrderedMap = tsl::ordered_map<boost::uuids::uuid, std::unique_ptr<EquationGroup>>;
-
-class EquationObserver
-{
-  public:
-    enum class ChangeType
-    {
-      kContent,
-      kType,
-      kStatus,
-      kMessage,
-      kDependencies,
-      kValue
-    };
-
-    virtual ~EquationObserver() = default;
-    virtual void OnEquationFieldChanged(const Equation* equation, ChangeType change_type) = 0;
-};
+using EquationPtr = std::unique_ptr<Equation>;
+using EquationPtrOrderedMap = tsl::ordered_map<std::string, EquationPtr>;
 
 class Equation
 {
   public:
     enum class Type
     {
-        kError,
+        kUnknown,
         kVariable,
         kFunction,
         kClass,
@@ -52,7 +34,7 @@ class Equation
 
     enum class Status
     {
-        kInit,
+        kPending,
         kSuccess,
         kSyntaxError,
         kNameError,
@@ -67,22 +49,40 @@ class Equation
         kAttributeError,
     };
 
-    explicit Equation(const std::string &name, const boost::uuids::uuid& group_id, EquationManager *manager);
+    explicit Equation(const ParseResultItem& item, const boost::uuids::uuid &group_id, EquationManager *manager);
+    explicit Equation(const std::string &name, const boost::uuids::uuid &group_id, EquationManager *manager);
     virtual ~Equation() = default;
 
-    void SetContent(const std::string &content);
-    void SetDependencies(const std::vector<std::string> &dependencies);
-    void SetType(Type type);
-    void SetStatus(Status status);
-    void SetMessage(const std::string &message);
-    void UpdateValue();
+    static EquationPtr Create(const ParseResultItem& item, const boost::uuids::uuid &group_id, EquationManager *manager);
 
-    const std::string& name() const
+    void set_content(const std::string &content)
+    {
+        content_ = content;
+    }
+
+    void set_dependencies(const std::vector<std::string> &dependencies)
+    {
+        dependencies_ = dependencies;
+    }
+
+    void set_type(Type type)
+    {
+        type_ = type;
+    }
+
+    void set_status(Status status)
+    {
+        status_ = status;
+    }
+
+    void SetMessage(const std::string &message);
+
+    const std::string &name() const
     {
         return name_;
     }
 
-    const std::string& content() const
+    const std::string &content() const
     {
         return content_;
     }
@@ -107,12 +107,12 @@ class Equation
         return message_;
     }
 
-    const EquationManager* manager() const
+    const EquationManager *manager() const
     {
         return manager_;
     }
 
-    const EquationGroupId& group_id() const
+    const EquationGroupId &group_id() const
     {
         return group_id_;
     }
@@ -130,50 +130,15 @@ class Equation
     static std::string StatusToString(Status status);
 
   private:
-    void NotifyObserversFieldChanged(EquationObserver::ChangeType change_type) const;
-  
   private:
     std::string name_;
     std::string content_;
-    Type type_ = Type::kError;
-    Status status_ = Status::kInit;
+    Type type_;
+    Status status_;
     std::string message_;
     std::vector<std::string> dependencies_;
     EquationGroupId group_id_;
     EquationManager *manager_ = nullptr;
-    std::vector<EquationObserver *> observers_;
-};
-
-class EquationGroup
-{
-  public:
-    EquationGroup(const EquationManager *manager);
-
-    void AddEquation(std::unique_ptr<Equation> equation);
-
-    void RemoveEquation(const std::string& equation_name);
-
-    const Equation* GetEquation(const std::string& equation_name);
-
-    const EquationManager* manaegr()
-    {
-        return manager_;
-    }
-
-    const EquationPtrOrderedMap& equation_map()
-    {
-        return equation_map_;
-    }
-
-    const EquationGroupId& id()
-    {
-        return id_;
-    }
-
-  private:
-    EquationPtrOrderedMap equation_map_;
-    EquationGroupId id_;
-    const EquationManager* manager_;
 };
 
 std::ostream &operator<<(std::ostream &os, Equation::Type type);
