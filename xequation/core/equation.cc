@@ -9,6 +9,7 @@ namespace xequation
 Equation::Equation(const ParseResultItem &item, const boost::uuids::uuid &group_id, EquationManager *manager)
     : name_(item.name),
       content_(item.content),
+      dependencies_(item.dependencies),
       type_(item.type),
       status_(Status::kPending),
       group_id_(group_id),
@@ -41,7 +42,7 @@ bool Equation::operator!=(const Equation &other) const
 
 Value Equation::GetValue()
 {
-    return manager_->context()->Get(name_);
+    return manager_->context().Get(name_);
 }
 
 Equation::Type Equation::StringToType(const std::string &type_str)

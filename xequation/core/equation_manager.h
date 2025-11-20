@@ -36,17 +36,17 @@ class EquationException : public std::exception
         return message_cache_.c_str();
     }
 
-    const std::string &equation_name()
+    const std::string &equation_name() const
     {
         return equation_name_;
     }
 
-    const EquationGroupId &group_id()
+    const EquationGroupId &group_id() const
     {
         return group_id_;
     }
 
-    ErrorCode error_code()
+    ErrorCode error_code() const
     {
         return error_code_;
     }
@@ -154,19 +154,19 @@ class EquationManager
 
     void UpdateEquationGroup(const EquationGroupId &group_id);
 
-    const DependencyGraph *graph()
+    const DependencyGraph& graph()
     {
-        return graph_.get();
+        return *graph_;
     }
 
-    const EquationContext *context()
+    const EquationContext& context()
     {
-        return context_.get();
+        return *context_;
     }
 
-    EquationSignalsManager *signals_manager()
+    EquationSignalsManager& signals_manager()
     {
-        return signals_manager_.get();
+        return *signals_manager_;
     }
 
   private:

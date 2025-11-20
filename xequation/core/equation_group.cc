@@ -5,7 +5,7 @@
 namespace xequation
 {
 
-EquationGroupPtr Create(const EquationManager *manager)
+EquationGroupPtr EquationGroup::Create(const EquationManager *manager)
 {
     EquationGroupPtr group = EquationGroupPtr(new EquationGroup(manager));
     return group;

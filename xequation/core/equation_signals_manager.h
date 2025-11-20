@@ -74,7 +74,6 @@ class EquationSignalsManager
   public:
     EquationSignalsManager()
     {
-        EquationAddedSignal signal;
         signals_[EquationEvent::kEquationAdded] = std::unique_ptr<EquationAddedSignal>(new EquationAddedSignal());
         signals_[EquationEvent::kEquationRemoving] =
             std::unique_ptr<EquationRemovingSignal>(new EquationRemovingSignal());

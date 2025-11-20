@@ -1,15 +1,15 @@
-#include "core/dependency_graph.h"
 #include "core/equation.h"
+#include "core/equation_group.h"
 #include "core/equation_manager.h"
 #include "core/equation_common.h"
 #include "core/equation_context.h"
 
-#include <iterator>
+#include "gmock/gmock.h"
 #include <regex>
-#include <stdexcept>
 #include <string>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <unordered_set>
 
 using namespace xequation;
@@ -51,7 +51,6 @@ class EquationParser
     static ParseResultItem parseExpression(const std::string &expr)
     {
         ParseResultItem item;
-        item.content = expr;
 
         std::regex assign_regex(R"(^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)\s*$)");
         std::smatch assign_match;
@@ -64,6 +63,7 @@ class EquationParser
             item.name = variable_name;
 
             parseDependencies(expression, item);
+            item.content = expression;
             item.type = Equation::Type::kVariable;
         }
         else
@@ -292,235 +292,314 @@ class EquationManagerTest : public testing::Test
         manager_.Reset();
     }
 
-    void VerifyVar(
-        const Equation *var, Equation::Type type, Equation::Status status, const std::string &content,
-        std::vector<std::string> dependencies = {}
-    )
-    {
-        EXPECT_TRUE(var != nullptr);
-        EXPECT_TRUE(var->type() == type);
-        EXPECT_TRUE(var->status() == status);
-        EXPECT_TRUE(var->content() == content);
-        EXPECT_EQ(var->dependencies(), dependencies);
-    }
-
-    void VerifyNode(
-        const DependencyGraph::Node *node, const std::vector<std::string> &dependencies,
-        const std::vector<std::string> &dependents
-    )
-    {
-        EXPECT_TRUE(node != nullptr);
-        EXPECT_EQ(node->dependencies().size(), dependencies.size());
-        for (const auto &dep : dependencies)
-        {
-            EXPECT_NE(node->dependencies().find(dep), node->dependencies().end());
-        }
-        EXPECT_EQ(node->dependents().size(), dependents.size());
-        for (const auto &dep : dependents)
-        {
-            EXPECT_NE(node->dependents().find(dep), node->dependents().end());
-        }
-    }
-
-    void VerifyEdges(const std::vector<DependencyGraph::Edge> &edge_list, bool is_all = false)
-    {
-        if (is_all)
-        {
-            auto range = manager_.graph()->GetAllEdges();
-            EXPECT_TRUE(std::distance(range.first, range.second) == edge_list.size());
-        }
-        for (const auto &edge : edge_list)
-        {
-            EXPECT_TRUE(manager_.graph()->IsEdgeExist(edge));
-        }
-    }
-
     EquationManager manager_;
 };
 
-TEST_F(EquationManagerTest, AddEditRemoveEquation)
+TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
 {
-    manager_.AddEquation("A", "1");
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kInit, "A=1");
-    VerifyNode(manager_.graph()->GetNode("A"), {}, {});
-    EXPECT_THROW(manager_.AddEquation("A", "2"), DuplicateEquationNameError);
+    EquationGroupId id_0 = manager_.AddEquationGroup("A=1");
+    EXPECT_TRUE(manager_.IsEquationGroupExist(id_0));
+    EXPECT_TRUE(manager_.IsEquationExist("A"));
 
-    manager_.AddEquation("B", "A+C");
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=A+C", {"A", "C"});
-    VerifyNode(manager_.graph()->GetNode("B"), {"A"}, {});
-    VerifyNode(manager_.graph()->GetNode("A"), {}, {"B"});
-    VerifyEdges({{"B", "A"}, {"B", "C"}}, true);
+    const EquationGroup* group_0 = manager_.GetEquationGroup(id_0);
+    const Equation* equation_a = manager_.GetEquation("A");
 
-    manager_.EditEquation("B", "B", "D");
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=D", {"D"});
-    VerifyNode(manager_.graph()->GetNode("B"), {}, {});
-    VerifyNode(manager_.graph()->GetNode("A"), {}, {});
-    VerifyEdges({{"B", "D"}}, true);
+    EXPECT_TRUE(group_0);
+    EXPECT_EQ(group_0->id(), id_0);
+    EXPECT_EQ(group_0->GetEquationNames(), std::vector<std::string>{"A"});
+    EXPECT_EQ(group_0->manaegr(), &manager_);
+    EXPECT_EQ(group_0->statement(), "A=1");
 
-    manager_.AddEquation("D", "C");
-    EXPECT_TRUE(manager_.graph()->IsNodeExist("D"));
-    VerifyNode(manager_.graph()->GetNode("B"), {"D"}, {});
-    VerifyNode(manager_.graph()->GetNode("D"), {}, {"B"});
-    VerifyEdges({{"B", "D"}, {"D", "C"}}, true);
+    EXPECT_TRUE(equation_a);
+    EXPECT_TRUE(group_0->IsEquationExist("A"));
+    EXPECT_TRUE(equation_a == group_0->GetEquation("A"));
+    EXPECT_EQ(equation_a->name(), "A");
+    EXPECT_EQ(equation_a->dependencies(), std::vector<std::string>{});
+    EXPECT_EQ(equation_a->content(), "1");
+    EXPECT_EQ(equation_a->group_id(), id_0);
+    EXPECT_EQ(equation_a->manager(), &manager_);
+    EXPECT_EQ(equation_a->message(), "");
+    EXPECT_EQ(equation_a->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_a->status(), Equation::Status::kPending);
 
-    manager_.RemoveEquation("B");
-    EXPECT_FALSE(manager_.graph()->IsNodeExist("B"));
-    EXPECT_EQ(manager_.GetEquation("B"), nullptr);
-    VerifyEdges({{"D", "C"}}, true);
-    VerifyNode(manager_.graph()->GetNode("D"), {}, {});
-}
+    manager_.EditEquationGroup(id_0, "A=2;B=A");
+    EXPECT_TRUE(manager_.IsEquationExist("A"));
+    EXPECT_TRUE(manager_.IsEquationExist("B"));
 
-TEST_F(EquationManagerTest, AddEditRemoveEquationStatement)
-{
-    std::string multiple_statements = "A=1;B=A+C";
+    EXPECT_TRUE(equation_a);
+    EXPECT_TRUE(group_0->IsEquationExist("A"));
+    EXPECT_TRUE(equation_a == group_0->GetEquation("A"));
+    EXPECT_EQ(equation_a->name(), "A");
+    EXPECT_EQ(equation_a->dependencies(), std::vector<std::string>{});
+    EXPECT_EQ(equation_a->content(), "2");
+    EXPECT_EQ(equation_a->group_id(), id_0);
+    EXPECT_EQ(equation_a->manager(), &manager_);
+    EXPECT_EQ(equation_a->message(), "");
+    EXPECT_EQ(equation_a->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_a->status(), Equation::Status::kPending);
 
-    manager_.AddMultipleEquations(multiple_statements);
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kInit, "A=1");
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=A+C", {"A", "C"});
-    VerifyNode(manager_.graph()->GetNode("B"), {"A"}, {});
-    VerifyNode(manager_.graph()->GetNode("A"), {}, {"B"});
-    VerifyEdges({{"B", "A"}, {"B", "C"}}, true);
+    const Equation* equation_b = manager_.GetEquation("B");
+    EXPECT_TRUE(equation_b);
+    EXPECT_TRUE(group_0->IsEquationExist("B"));
+    EXPECT_TRUE(equation_b == group_0->GetEquation("B"));
+    EXPECT_EQ(equation_b->name(), "B");
+    EXPECT_EQ(equation_b->dependencies(), std::vector<std::string>{"A"});
+    EXPECT_EQ(equation_b->content(), "A");
+    EXPECT_EQ(equation_b->group_id(), id_0);
+    EXPECT_EQ(equation_b->manager(), &manager_);
+    EXPECT_EQ(equation_b->message(), "");
+    EXPECT_EQ(equation_b->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_b->status(), Equation::Status::kPending);
 
-    EXPECT_THROW(manager_.AddEquation("A", "2"), DuplicateEquationNameError);
-    EXPECT_THROW(manager_.EditEquation("A", "C", "D"), std::runtime_error);
-    EXPECT_THROW(manager_.RemoveEquation("A"), std::runtime_error);
-
-    std::string new_statements = "C=A;B=A+C;E=1";
-    EXPECT_THROW(manager_.AddMultipleEquations(new_statements), DuplicateEquationNameError);
-    manager_.EditMultipleEquations(multiple_statements, new_statements);
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kInit, "C=A", {"A"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=A+C", {"A", "C"});
-    VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kInit, "E=1");
+    manager_.EditEquationGroup(id_0, "B=3;C=B+1");
     EXPECT_FALSE(manager_.IsEquationExist("A"));
-    VerifyNode(manager_.graph()->GetNode("B"), {"C"}, {});
-    VerifyNode(manager_.graph()->GetNode("C"), {}, {"B"});
-    VerifyNode(manager_.graph()->GetNode("E"), {}, {});
-    VerifyEdges({{"C", "A"}, {"B", "C"}, {"B", "A"}}, true);
+    EXPECT_TRUE(manager_.IsEquationExist("B"));
+    EXPECT_TRUE(manager_.IsEquationExist("C"));
 
-    EXPECT_THROW(manager_.AddMultipleEquations(multiple_statements), DuplicateEquationNameError);
+    EXPECT_TRUE(equation_b);
+    EXPECT_TRUE(group_0->IsEquationExist("B"));
+    EXPECT_TRUE(equation_b == group_0->GetEquation("B"));
+    EXPECT_EQ(equation_b->name(), "B");
+    EXPECT_EQ(equation_b->dependencies(), std::vector<std::string>{});
+    EXPECT_EQ(equation_b->content(), "3");
+    EXPECT_EQ(equation_b->group_id(), id_0);
+    EXPECT_EQ(equation_b->manager(), &manager_);
+    EXPECT_EQ(equation_b->message(), "");
+    EXPECT_EQ(equation_b->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_b->status(), Equation::Status::kPending);
+
+    const Equation* equation_c = manager_.GetEquation("C");
+    EXPECT_TRUE(equation_c);
+    EXPECT_TRUE(group_0->IsEquationExist("C"));
+    EXPECT_TRUE(equation_c == group_0->GetEquation("C"));
+    EXPECT_EQ(equation_c->name(), "C");
+    EXPECT_EQ(equation_c->dependencies(), std::vector<std::string>{"B"});
+    EXPECT_EQ(equation_c->content(), "B+1");
+    EXPECT_EQ(equation_c->group_id(), id_0);
+    EXPECT_EQ(equation_c->manager(), &manager_);
+    EXPECT_EQ(equation_c->message(), "");
+    EXPECT_EQ(equation_c->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_c->status(), Equation::Status::kPending);
+
+    EquationGroupId id_1 = manager_.AddEquationGroup("D=B+2;E=D+B");
+    EXPECT_TRUE(manager_.IsEquationGroupExist(id_1));
+    EXPECT_TRUE(manager_.IsEquationExist("D"));
+    EXPECT_TRUE(manager_.IsEquationExist("E"));
+
+    const EquationGroup* group_1 = manager_.GetEquationGroup(id_1);
+    const Equation* equation_d = manager_.GetEquation("D");
+    const Equation* equation_e = manager_.GetEquation("E");
+
+    EXPECT_TRUE(group_1);
+    EXPECT_EQ(group_1->id(), id_1);
+    EXPECT_THAT(group_1->GetEquationNames(), ::testing::ElementsAre("D", "E"));
     
-    EXPECT_THROW(manager_.RemoveMultipleEquations(multiple_statements), std::runtime_error);
-    manager_.RemoveMultipleEquations(new_statements);
-    EXPECT_FALSE(manager_.IsEquationExist("A"));
-    EXPECT_FALSE(manager_.IsEquationExist("B"));
-    EXPECT_FALSE(manager_.IsEquationExist("C"));
-    EXPECT_FALSE(manager_.IsEquationExist("E"));
-}
+    EXPECT_TRUE(equation_d);
+    EXPECT_TRUE(group_1->IsEquationExist("D"));
+    EXPECT_TRUE(equation_d == group_1->GetEquation("D"));
+    EXPECT_EQ(equation_d->name(), "D");
+    EXPECT_EQ(equation_d->dependencies(), std::vector<std::string>{"B"});
+    EXPECT_EQ(equation_d->content(), "B+2");
+    EXPECT_EQ(equation_d->group_id(), id_1);
+    EXPECT_EQ(equation_d->manager(), &manager_);
+    EXPECT_EQ(equation_d->message(), "");
+    EXPECT_EQ(equation_d->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_d->status(), Equation::Status::kPending);
 
+    EXPECT_TRUE(equation_e);
+    EXPECT_TRUE(group_1->IsEquationExist("E"));
+    EXPECT_TRUE(equation_e == group_1->GetEquation("E"));
+    EXPECT_EQ(equation_e->name(), "E");
+    EXPECT_THAT(equation_e->dependencies(), ::testing::ElementsAre("D", "B"));
+    EXPECT_EQ(equation_e->content(), "D+B");
+    EXPECT_EQ(equation_e->group_id(), id_1);
+    EXPECT_EQ(equation_e->manager(), &manager_);
+    EXPECT_EQ(equation_e->message(), "");
+    EXPECT_EQ(equation_e->type(), Equation::Type::kVariable);
+    EXPECT_EQ(equation_e->status(), Equation::Status::kPending);
 
-TEST_F(EquationManagerTest, CycleDetection)
-{
-    std::string statements = "A=B*C;B=D;C=2";
-    manager_.AddMultipleEquations(statements);    
-
-    VerifyNode(manager_.graph()->GetNode("A"), {"B", "C"}, {});
-    VerifyNode(manager_.graph()->GetNode("B"), {}, {"A"});
-    VerifyNode(manager_.graph()->GetNode("C"), {}, {"A"});
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kInit, "A=B*C", {"B", "C"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=D", {"D"});
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kInit, "C=2");
-    VerifyEdges({{"A", "B"}, {"A", "C"}, {"B", "D"}}, true);
-
-    EXPECT_THROW(manager_.EditEquation("B", "D", "B"), std::runtime_error);
-    EXPECT_THROW(manager_.AddEquation("D", "A+B"), DependencyCycleException);
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kInit, "A=B*C", {"B", "C"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=D", {"D"});
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kInit, "C=2");
-    EXPECT_EQ(manager_.GetEquation("D"), nullptr);
-    VerifyEdges({{"A", "B"}, {"A", "C"}, {"B", "D"}}, true);
-
-    manager_.AddEquation("D", "E");
-    EXPECT_THROW(manager_.AddEquation("E", "B"), DependencyCycleException);
-    VerifyNode(manager_.graph()->GetNode("D"), {}, {"B"});
-    VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kInit, "D=E", {"E"});
-    EXPECT_FALSE(manager_.IsEquationExist("E"));
-    VerifyEdges({{"A", "B"}, {"A", "C"}, {"B", "D"}, {"D", "E"}}, true);
-}
-
-TEST_F(EquationManagerTest, UpdateContext)
-{
-    std::string statements0 = "A=B+C;B=D+E;C=F;D=1;F=10";
-    manager_.AddMultipleEquations(statements0);
-    manager_.AddEquation("E", "5");
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kInit, "A=B+C", {"B", "C"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kInit, "B=D+E", {"D", "E"});
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kInit, "C=F", {"F"});
-    VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kInit, "D=1", {});
-    VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kInit, "E=5", {});
-    VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kInit, "F=10", {});
-    manager_.Update();
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kSuccess, "A=B+C", {"B", "C"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kSuccess, "B=D+E", {"D", "E"});
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kSuccess, "C=F", {"F"});
-    VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kSuccess, "D=1", {});
-    VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kSuccess, "E=5", {});
-    VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kSuccess, "F=10", {});
-    EXPECT_TRUE(manager_.context()->Contains("A"));
-    EXPECT_TRUE(manager_.context()->Contains("B"));
-    EXPECT_TRUE(manager_.context()->Contains("C"));
-    EXPECT_TRUE(manager_.context()->Contains("D"));
-    EXPECT_TRUE(manager_.context()->Contains("E"));
-    EXPECT_TRUE(manager_.context()->Contains("F"));
-    EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 16);
-    EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 6);
-    EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 10);
-    EXPECT_TRUE(manager_.context()->Get("D").Cast<int>() == 1);
-    EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 5);
-    EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
-
-    std::string statements1 = "A=B+C;B=D+E;C=F;F=10";
-    manager_.EditMultipleEquations(statements0,statements1);
-    EXPECT_FALSE(manager_.context()->Contains("D"));
+    manager_.RemoveEquationGroup(id_1);
+    EXPECT_FALSE(manager_.IsEquationGroupExist(id_1));
     EXPECT_FALSE(manager_.IsEquationExist("D"));
-    manager_.Update();
-    EXPECT_FALSE(manager_.context()->Contains("D"));
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kNameError, "A=B+C", {"B", "C"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kNameError, "B=D+E", {"D", "E"});
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kSuccess, "C=F", {"F"});
-    VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kSuccess, "E=5", {});
-    VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kSuccess, "F=10", {});
-    EXPECT_FALSE(manager_.context()->Contains("A"));
-    EXPECT_FALSE(manager_.context()->Contains("B"));
-    EXPECT_TRUE(manager_.context()->Contains("C"));
-    EXPECT_FALSE(manager_.context()->Contains("D"));
-    EXPECT_TRUE(manager_.context()->Contains("E"));
-    EXPECT_TRUE(manager_.context()->Contains("F"));
-    EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 10);
-    EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 5);
-    EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
-
-    manager_.AddEquation("D", "E");
-    std::string statements2 = "A=B+C;B=D+E;C=E+F;F=10";
-    manager_.EditMultipleEquations(statements1, statements2);
-    manager_.Update();
-    VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kSuccess, "A=B+C", {"B", "C"});
-    VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kSuccess, "B=D+E", {"D", "E"});
-    VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kSuccess, "C=E+F", {"E", "F"});
-    VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kSuccess, "D=E", {"E"});
-    VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kSuccess, "E=5", {});
-    VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kSuccess, "F=10", {});
-    EXPECT_TRUE(manager_.context()->Contains("A"));
-    EXPECT_TRUE(manager_.context()->Contains("B"));
-    EXPECT_TRUE(manager_.context()->Contains("C"));
-    EXPECT_TRUE(manager_.context()->Contains("D"));
-    EXPECT_TRUE(manager_.context()->Contains("E"));
-    EXPECT_TRUE(manager_.context()->Contains("F"));
-    EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 25);
-    EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 10);
-    EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 15);
-    EXPECT_TRUE(manager_.context()->Get("D").Cast<int>() == 5);
-    EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 5);
-    EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
-
-    manager_.EditEquation("E", "E", "6");
-    manager_.UpdateEquation("E");
-    EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 28);
-    EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 12);
-    EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 16);
-    EXPECT_TRUE(manager_.context()->Get("D").Cast<int>() == 6);
-    EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 6);
-    EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
+    EXPECT_FALSE(manager_.IsEquationExist("E"));
 }
+
+TEST_F(EquationManagerTest, EquationException)
+{
+    auto id = manager_.AddEquationGroup("A=1;B=2");
+    try
+    {
+        auto tmp_id = manager_.AddEquationGroup("A=3");
+        FAIL();
+    }
+    catch(const EquationException& e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationAlreayExists);
+        EXPECT_EQ(e.equation_name(), "A");
+    }
+}
+
+TEST_F(EquationManagerTest, EquationManagerUpdate)
+{
+
+}
+
+TEST_F(EquationManagerTest, Eval)
+{
+
+}
+
+// TEST_F(EquationManagerTest, AddEditRemoveEquationStatement)
+// {
+//     std::string multiple_statements = "A=1;B=A+C";
+
+//     manager_.AddMultipleEquations(multiple_statements);
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kPending, "A=1");
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kPending, "B=A+C", {"A=C"});
+//     VerifyNode(manager_.graph()->GetNode("B"), {"A"}, {});
+//     VerifyNode(manager_.graph()->GetNode("A"), {}, {"B"});
+//     VerifyEdges({{"B=A"}, {"B=C"}}, true);
+
+//     EXPECT_THROW(manager_.AddEquationGroup("A=2"), DuplicateEquationNameError);
+//     EXPECT_THROW(manager_.EditEquation("A=C=D"), std::runtime_error);
+//     EXPECT_THROW(manager_.RemoveEquation("A"), std::runtime_error);
+
+//     std::string new_statements = "C=A;B=A+C;E=1";
+//     EXPECT_THROW(manager_.AddMultipleEquations(new_statements), DuplicateEquationNameError);
+//     manager_.EditMultipleEquations(multiple_statements, new_statements);
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kPending, "C=A", {"A"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kPending, "B=A+C", {"A=C"});
+//     VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kPending, "E=1");
+//     EXPECT_FALSE(manager_.IsEquationExist("A"));
+//     VerifyNode(manager_.graph()->GetNode("B"), {"C"}, {});
+//     VerifyNode(manager_.graph()->GetNode("C"), {}, {"B"});
+//     VerifyNode(manager_.graph()->GetNode("E"), {}, {});
+//     VerifyEdges({{"C=A"}, {"B=C"}, {"B=A"}}, true);
+
+//     EXPECT_THROW(manager_.AddMultipleEquations(multiple_statements), DuplicateEquationNameError);
+    
+//     EXPECT_THROW(manager_.RemoveMultipleEquations(multiple_statements), std::runtime_error);
+//     manager_.RemoveMultipleEquations(new_statements);
+//     EXPECT_FALSE(manager_.IsEquationExist("A"));
+//     EXPECT_FALSE(manager_.IsEquationExist("B"));
+//     EXPECT_FALSE(manager_.IsEquationExist("C"));
+//     EXPECT_FALSE(manager_.IsEquationExist("E"));
+// }
+
+
+// TEST_F(EquationManagerTest, CycleDetection)
+// {
+//     std::string statements = "A=B*C;B=D;C=2";
+//     manager_.AddMultipleEquations(statements);    
+
+//     VerifyNode(manager_.graph()->GetNode("A"), {"B=C"}, {});
+//     VerifyNode(manager_.graph()->GetNode("B"), {}, {"A"});
+//     VerifyNode(manager_.graph()->GetNode("C"), {}, {"A"});
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kPending, "A=B*C", {"B=C"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kPending, "B=D", {"D"});
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kPending, "C=2");
+//     VerifyEdges({{"A=B"}, {"A=C"}, {"B=D"}}, true);
+
+//     EXPECT_THROW(manager_.EditEquation("B=D=B"), std::runtime_error);
+//     EXPECT_THROW(manager_.AddEquationGroup("D=A+B"), DependencyCycleException);
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kPending, "A=B*C", {"B=C"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kPending, "B=D", {"D"});
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kPending, "C=2");
+//     EXPECT_EQ(manager_.GetEquation("D"), nullptr);
+//     VerifyEdges({{"A=B"}, {"A=C"}, {"B=D"}}, true);
+
+//     manager_.AddEquationGroup("D=E");
+//     EXPECT_THROW(manager_.AddEquationGroup("E=B"), DependencyCycleException);
+//     VerifyNode(manager_.graph()->GetNode("D"), {}, {"B"});
+//     VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kPending, "D=E", {"E"});
+//     EXPECT_FALSE(manager_.IsEquationExist("E"));
+//     VerifyEdges({{"A=B"}, {"A=C"}, {"B=D"}, {"D=E"}}, true);
+// }
+
+// TEST_F(EquationManagerTest, UpdateContext)
+// {
+//     std::string statements0 = "A=B+C;B=D+E;C=F;D=1;F=10";
+//     manager_.AddMultipleEquations(statements0);
+//     manager_.AddEquationGroup("E=5");
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kPending, "A=B+C", {"B=C"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kPending, "B=D+E", {"D=E"});
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kPending, "C=F", {"F"});
+//     VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kPending, "D=1", {});
+//     VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kPending, "E=5", {});
+//     VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kPending, "F=10", {});
+//     manager_.Update();
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kSuccess, "A=B+C", {"B=C"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kSuccess, "B=D+E", {"D=E"});
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kSuccess, "C=F", {"F"});
+//     VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kSuccess, "D=1", {});
+//     VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kSuccess, "E=5", {});
+//     VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kSuccess, "F=10", {});
+//     EXPECT_TRUE(manager_.context()->Contains("A"));
+//     EXPECT_TRUE(manager_.context()->Contains("B"));
+//     EXPECT_TRUE(manager_.context()->Contains("C"));
+//     EXPECT_TRUE(manager_.context()->Contains("D"));
+//     EXPECT_TRUE(manager_.context()->Contains("E"));
+//     EXPECT_TRUE(manager_.context()->Contains("F"));
+//     EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 16);
+//     EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 6);
+//     EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 10);
+//     EXPECT_TRUE(manager_.context()->Get("D").Cast<int>() == 1);
+//     EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 5);
+//     EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
+
+//     std::string statements1 = "A=B+C;B=D+E;C=F;F=10";
+//     manager_.EditMultipleEquations(statements0,statements1);
+//     EXPECT_FALSE(manager_.context()->Contains("D"));
+//     EXPECT_FALSE(manager_.IsEquationExist("D"));
+//     manager_.Update();
+//     EXPECT_FALSE(manager_.context()->Contains("D"));
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kNameError, "A=B+C", {"B=C"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kNameError, "B=D+E", {"D=E"});
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kSuccess, "C=F", {"F"});
+//     VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kSuccess, "E=5", {});
+//     VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kSuccess, "F=10", {});
+//     EXPECT_FALSE(manager_.context()->Contains("A"));
+//     EXPECT_FALSE(manager_.context()->Contains("B"));
+//     EXPECT_TRUE(manager_.context()->Contains("C"));
+//     EXPECT_FALSE(manager_.context()->Contains("D"));
+//     EXPECT_TRUE(manager_.context()->Contains("E"));
+//     EXPECT_TRUE(manager_.context()->Contains("F"));
+//     EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 10);
+//     EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 5);
+//     EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
+
+//     manager_.AddEquationGroup("D=E");
+//     std::string statements2 = "A=B+C;B=D+E;C=E+F;F=10";
+//     manager_.EditMultipleEquations(statements1, statements2);
+//     manager_.Update();
+//     VerifyVar(manager_.GetEquation("A"), Equation::Type::kVariable, Equation::Status::kSuccess, "A=B+C", {"B=C"});
+//     VerifyVar(manager_.GetEquation("B"), Equation::Type::kVariable, Equation::Status::kSuccess, "B=D+E", {"D=E"});
+//     VerifyVar(manager_.GetEquation("C"), Equation::Type::kVariable, Equation::Status::kSuccess, "C=E+F", {"E=F"});
+//     VerifyVar(manager_.GetEquation("D"), Equation::Type::kVariable, Equation::Status::kSuccess, "D=E", {"E"});
+//     VerifyVar(manager_.GetEquation("E"), Equation::Type::kVariable, Equation::Status::kSuccess, "E=5", {});
+//     VerifyVar(manager_.GetEquation("F"), Equation::Type::kVariable, Equation::Status::kSuccess, "F=10", {});
+//     EXPECT_TRUE(manager_.context()->Contains("A"));
+//     EXPECT_TRUE(manager_.context()->Contains("B"));
+//     EXPECT_TRUE(manager_.context()->Contains("C"));
+//     EXPECT_TRUE(manager_.context()->Contains("D"));
+//     EXPECT_TRUE(manager_.context()->Contains("E"));
+//     EXPECT_TRUE(manager_.context()->Contains("F"));
+//     EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 25);
+//     EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 10);
+//     EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 15);
+//     EXPECT_TRUE(manager_.context()->Get("D").Cast<int>() == 5);
+//     EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 5);
+//     EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
+
+//     manager_.EditEquation("E=E=6");
+//     manager_.UpdateEquation("E");
+//     EXPECT_TRUE(manager_.context()->Get("A").Cast<int>() == 28);
+//     EXPECT_TRUE(manager_.context()->Get("B").Cast<int>() == 12);
+//     EXPECT_TRUE(manager_.context()->Get("C").Cast<int>() == 16);
+//     EXPECT_TRUE(manager_.context()->Get("D").Cast<int>() == 6);
+//     EXPECT_TRUE(manager_.context()->Get("E").Cast<int>() == 6);
+//     EXPECT_TRUE(manager_.context()->Get("F").Cast<int>() == 10);
+// }
 
 int main(int argc, char **argv)
 {

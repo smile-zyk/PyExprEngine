@@ -1,16 +1,5 @@
 #include "equation_manager.h"
 
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include "core/equation_signals_manager.h"
-#include "dependency_graph.h"
-#include "equation.h"
-#include "equation_common.h"
-#include "equation_group.h"
-
 namespace xequation
 {
 EquationManager::EquationManager(
@@ -18,6 +7,7 @@ EquationManager::EquationManager(
     EvalHandler exec_handler
 ) noexcept
     : graph_(std::unique_ptr<DependencyGraph>(new DependencyGraph())),
+      signals_manager_(std::unique_ptr<EquationSignalsManager>(new EquationSignalsManager())),
       context_(std::move(context)),
       exec_handler_(eval_callback),
       parse_handler_(parse_callback),
@@ -33,12 +23,21 @@ bool EquationManager::IsEquationGroupExist(const EquationGroupId &group_id) cons
 bool EquationManager::IsEquationExist(const std::string &equation_name) const
 {
     bool is_name_exist = equation_name_to_group_id_map_.count(equation_name) != 0;
+    if(!is_name_exist)
+    {
+        return false;
+    }
+
     const EquationGroupId &id = equation_name_to_group_id_map_.at(equation_name);
     bool is_group_exist = equation_group_map_.contains(id);
+    if(!is_group_exist)
+    {
+        return false;
+    }
+    
     const EquationGroup *group = equation_group_map_.at(id).get();
     bool is_equation_exist = group->IsEquationExist(equation_name);
-
-    return is_name_exist && is_group_exist && is_equation_exist;
+    return is_equation_exist;
 }
 
 const EquationGroup *EquationManager::GetEquationGroup(const EquationGroupId &group_id) const
@@ -318,6 +317,18 @@ void EquationManager::RemoveNodeInGraph(const std::string &node_name)
     graph_->RemoveEdges(edges_to_remove);
 }
 
+void EquationManager::AddEquationToGroup(EquationGroup* group, EquationPtr equation)
+{
+    equation_name_to_group_id_map_.insert({equation->name(), equation->group_id()});
+    group->AddEquation(std::move(equation));
+}
+
+void EquationManager::RemoveEquationInGroup(EquationGroup* group, const std::string& equation_name)
+{
+    equation_name_to_group_id_map_.erase(equation_name);
+    group->RemoveEquation(equation_name);
+}
+
 void EquationManager::NotifyEquationGroupAdded(const EquationGroupId& group_id) const
 {
     const EquationGroup* group = GetEquationGroup(group_id);
@@ -378,4 +389,39 @@ void EquationManager::UpdateEquationGroup(const EquationGroupId &group_id)
         UpdateEquationInternal(node_name);
     }
 }
+
+Equation *EquationManager::GetEquationInternal(const std::string &equation_name)
+{
+    bool is_name_exist = equation_name_to_group_id_map_.count(equation_name) != 0;
+    if (!is_name_exist)
+    {
+        return nullptr;
+    }
+
+    const EquationGroupId &id = equation_name_to_group_id_map_.at(equation_name);
+    bool is_group_exist = equation_group_map_.contains(id);
+    if (!is_group_exist)
+    {
+        return nullptr;
+    }
+
+    EquationGroup *group = equation_group_map_.at(id).get();
+    bool is_equation_exist = group->IsEquationExist(equation_name);
+    if (!is_equation_exist)
+    {
+        return nullptr;
+    }
+
+    return group->GetEquation(equation_name);
+}
+
+EquationGroup *EquationManager::GetEquationGroupInternal(const EquationGroupId &group_id)
+{
+    if (equation_group_map_.contains(group_id))
+    {
+        return equation_group_map_.at(group_id).get();
+    }
+    return nullptr;
+}
+
 } // namespace xequation
