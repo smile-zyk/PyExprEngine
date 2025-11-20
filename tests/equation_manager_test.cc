@@ -1,15 +1,15 @@
 #include "core/equation.h"
-#include "core/equation_group.h"
-#include "core/equation_manager.h"
 #include "core/equation_common.h"
 #include "core/equation_context.h"
+#include "core/equation_group.h"
+#include "core/equation_manager.h"
 
 #include "gmock/gmock.h"
 #include <regex>
 #include <string>
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <unordered_set>
 
 using namespace xequation;
@@ -93,9 +93,6 @@ class EquationParser
 
             res.push_back(var_name);
         }
-        std::sort(res.begin(), res.end());
-        auto last = std::unique(res.begin(), res.end());
-        res.erase(last, res.end());
         item.dependencies = res;
     }
 };
@@ -103,7 +100,7 @@ class EquationParser
 ExecResult ExecExpr(const std::string &code, EquationContext *context)
 {
     ExecResult result;
-    
+
     std::regex assign_regex(R"(^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)\s*$)");
     std::smatch assign_match;
 
@@ -111,8 +108,10 @@ ExecResult ExecExpr(const std::string &code, EquationContext *context)
     {
         std::string name = assign_match[1];
         std::string expr = assign_match[2];
-        
-        std::regex expr_regex(R"(^\s*(([A-Za-z_][A-Za-z0-9_]*|\d+)(\s*([\+\-\*\/])\s*([A-Za-z_][A-Za-z0-9_]*|\d+))?)\s*$)");
+
+        std::regex expr_regex(
+            R"(^\s*(([A-Za-z_][A-Za-z0-9_]*|\d+)(\s*([\+\-\*\/])\s*([A-Za-z_][A-Za-z0-9_]*|\d+))?)\s*$)"
+        );
         std::smatch expr_match;
 
         if (std::regex_match(expr, expr_match, expr_regex))
@@ -226,7 +225,7 @@ ExecResult ExecExpr(const std::string &code, EquationContext *context)
         result.status = Equation::Status::kSyntaxError;
         result.message = "Invalid assignment syntax. Expected: variable = expression";
     }
-    
+
     return result;
 }
 
@@ -285,7 +284,13 @@ class MockExprContext : public EquationContext
 class EquationManagerTest : public testing::Test
 {
   protected:
-    EquationManagerTest() : manager_(std::unique_ptr<MockExprContext>(new MockExprContext()), ExecExpr, EquationParser::parseMultipleExpressions) {}
+    EquationManagerTest()
+        : manager_(
+              std::unique_ptr<MockExprContext>(new MockExprContext()), ExecExpr,
+              EquationParser::parseMultipleExpressions
+          )
+    {
+    }
 
     void SetUp() override
     {
@@ -301,8 +306,8 @@ TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
     EXPECT_TRUE(manager_.IsEquationGroupExist(id_0));
     EXPECT_TRUE(manager_.IsEquationExist("A"));
 
-    const EquationGroup* group_0 = manager_.GetEquationGroup(id_0);
-    const Equation* equation_a = manager_.GetEquation("A");
+    const EquationGroup *group_0 = manager_.GetEquationGroup(id_0);
+    const Equation *equation_a = manager_.GetEquation("A");
 
     EXPECT_TRUE(group_0);
     EXPECT_EQ(group_0->id(), id_0);
@@ -338,7 +343,7 @@ TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
     EXPECT_EQ(equation_a->type(), Equation::Type::kVariable);
     EXPECT_EQ(equation_a->status(), Equation::Status::kPending);
 
-    const Equation* equation_b = manager_.GetEquation("B");
+    const Equation *equation_b = manager_.GetEquation("B");
     EXPECT_TRUE(equation_b);
     EXPECT_TRUE(group_0->IsEquationExist("B"));
     EXPECT_TRUE(equation_b == group_0->GetEquation("B"));
@@ -368,7 +373,7 @@ TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
     EXPECT_EQ(equation_b->type(), Equation::Type::kVariable);
     EXPECT_EQ(equation_b->status(), Equation::Status::kPending);
 
-    const Equation* equation_c = manager_.GetEquation("C");
+    const Equation *equation_c = manager_.GetEquation("C");
     EXPECT_TRUE(equation_c);
     EXPECT_TRUE(group_0->IsEquationExist("C"));
     EXPECT_TRUE(equation_c == group_0->GetEquation("C"));
@@ -386,14 +391,14 @@ TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
     EXPECT_TRUE(manager_.IsEquationExist("D"));
     EXPECT_TRUE(manager_.IsEquationExist("E"));
 
-    const EquationGroup* group_1 = manager_.GetEquationGroup(id_1);
-    const Equation* equation_d = manager_.GetEquation("D");
-    const Equation* equation_e = manager_.GetEquation("E");
+    const EquationGroup *group_1 = manager_.GetEquationGroup(id_1);
+    const Equation *equation_d = manager_.GetEquation("D");
+    const Equation *equation_e = manager_.GetEquation("E");
 
     EXPECT_TRUE(group_1);
     EXPECT_EQ(group_1->id(), id_1);
     EXPECT_THAT(group_1->GetEquationNames(), ::testing::ElementsAre("D", "E"));
-    
+
     EXPECT_TRUE(equation_d);
     EXPECT_TRUE(group_1->IsEquationExist("D"));
     EXPECT_TRUE(equation_d == group_1->GetEquation("D"));
@@ -427,27 +432,77 @@ TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
 TEST_F(EquationManagerTest, EquationException)
 {
     auto id = manager_.AddEquationGroup("A=1;B=2");
+    manager_.AddEquationGroup("C=3");
     try
     {
         auto tmp_id = manager_.AddEquationGroup("A=3");
         FAIL();
     }
-    catch(const EquationException& e)
+    catch (const EquationException &e)
     {
         EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationAlreayExists);
         EXPECT_EQ(e.equation_name(), "A");
     }
+
+    try
+    {
+        manager_.EditEquationGroup(id, "C=2");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationAlreayExists);
+        EXPECT_EQ(e.equation_name(), "C");
+    }
+
+    manager_.RemoveEquationGroup(id);
+
+    try
+    {
+        manager_.EditEquationGroup(id, "C=1");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationGroupNotFound);
+        EXPECT_EQ(e.group_id(), id);
+    }
+
+    try
+    {
+        manager_.RemoveEquationGroup(id);
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationGroupNotFound);
+        EXPECT_EQ(e.group_id(), id);
+    }
+    try
+    {
+        manager_.UpdateEquation("E");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationNotFound);
+        EXPECT_EQ(e.equation_name(), "E");
+    }
+    try
+    {
+        manager_.UpdateEquationGroup(id);
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationGroupNotFound);
+        EXPECT_EQ(e.group_id(), id);
+    }
 }
 
-TEST_F(EquationManagerTest, EquationManagerUpdate)
-{
+TEST_F(EquationManagerTest, EquationManagerUpdate) {}
 
-}
-
-TEST_F(EquationManagerTest, Eval)
-{
-
-}
+TEST_F(EquationManagerTest, Eval) {}
 
 // TEST_F(EquationManagerTest, AddEditRemoveEquationStatement)
 // {
@@ -477,7 +532,7 @@ TEST_F(EquationManagerTest, Eval)
 //     VerifyEdges({{"C=A"}, {"B=C"}, {"B=A"}}, true);
 
 //     EXPECT_THROW(manager_.AddMultipleEquations(multiple_statements), DuplicateEquationNameError);
-    
+
 //     EXPECT_THROW(manager_.RemoveMultipleEquations(multiple_statements), std::runtime_error);
 //     manager_.RemoveMultipleEquations(new_statements);
 //     EXPECT_FALSE(manager_.IsEquationExist("A"));
@@ -486,11 +541,10 @@ TEST_F(EquationManagerTest, Eval)
 //     EXPECT_FALSE(manager_.IsEquationExist("E"));
 // }
 
-
 // TEST_F(EquationManagerTest, CycleDetection)
 // {
 //     std::string statements = "A=B*C;B=D;C=2";
-//     manager_.AddMultipleEquations(statements);    
+//     manager_.AddMultipleEquations(statements);
 
 //     VerifyNode(manager_.graph()->GetNode("A"), {"B=C"}, {});
 //     VerifyNode(manager_.graph()->GetNode("B"), {}, {"A"});
