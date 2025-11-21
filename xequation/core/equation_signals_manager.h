@@ -21,7 +21,7 @@ enum class EquationField
     kValue = 1 << 5,
 };
 
-BITMASK_DEFINE_MAX_ELEMENT(EquationField, kDependencies)
+BITMASK_DEFINE_MAX_ELEMENT(EquationField, kValue)
 
 enum class EquationGroupField
 {
@@ -41,35 +41,106 @@ enum class EquationEvent
     kEquationGroupUpdate,
 };
 
+using EquationAddedCallback = std::function<void(const Equation *)>;
+using EquationRemovingCallback = std::function<void(const Equation *)>;
+using EquationUpdateCallback = std::function<void(const Equation *, bitmask::bitmask<EquationField>)>;
+using EquationGroupAddedCallback = std::function<void(const EquationGroup *)>;
+using EquationGroupRemovingCallback = std::function<void(const EquationGroup *)>;
+using EquationGroupUpdateCallback = std::function<void(const EquationGroup *, bitmask::bitmask<EquationGroupField>)>;
+
+using Connection = boost::signals2::connection;
+using ScopedConnection = boost::signals2::scoped_connection;
+
+using EquationAddedSignal = boost::signals2::signal<void(const Equation *)>;
+using EquationRemovingSignal = boost::signals2::signal<void(const Equation *)>;
+using EquationUpdateSignal = boost::signals2::signal<void(const Equation *, bitmask::bitmask<EquationField>)>;
+using EquationGroupAddedSignal = boost::signals2::signal<void(const EquationGroup *)>;
+using EquationGroupRemovingSignal = boost::signals2::signal<void(const EquationGroup *)>;
+using EquationGroupUpdateSignal =
+    boost::signals2::signal<void(const EquationGroup *, bitmask::bitmask<EquationGroupField>)>;
+
+template <EquationEvent Event>
+struct GetSignalType;
+
+template <EquationEvent Event>
+struct GetCallbackType;
+
+template <>
+struct GetSignalType<EquationEvent::kEquationAdded>
+{
+    using type = EquationAddedSignal;
+};
+
+template <>
+struct GetSignalType<EquationEvent::kEquationRemoving>
+{
+    using type = EquationRemovingSignal;
+};
+
+template <>
+struct GetSignalType<EquationEvent::kEquationUpdate>
+{
+    using type = EquationUpdateSignal;
+};
+
+template <>
+struct GetSignalType<EquationEvent::kEquationGroupAdded>
+{
+    using type = EquationGroupAddedSignal;
+};
+
+template <>
+struct GetSignalType<EquationEvent::kEquationGroupRemoving>
+{
+    using type = EquationGroupRemovingSignal;
+};
+
+template <>
+struct GetSignalType<EquationEvent::kEquationGroupUpdate>
+{
+    using type = EquationGroupUpdateSignal;
+};
+
+template <>
+struct GetCallbackType<EquationEvent::kEquationAdded>
+{
+    using type = EquationAddedCallback;
+};
+
+template <>
+struct GetCallbackType<EquationEvent::kEquationRemoving>
+{
+    using type = EquationRemovingCallback;
+};
+
+template <>
+struct GetCallbackType<EquationEvent::kEquationUpdate>
+{
+    using type = EquationUpdateCallback;
+};
+
+template <>
+struct GetCallbackType<EquationEvent::kEquationGroupAdded>
+{
+    using type = EquationGroupAddedCallback;
+};
+
+template <>
+struct GetCallbackType<EquationEvent::kEquationGroupRemoving>
+{
+    using type = EquationGroupRemovingCallback;
+};
+
+template <>
+struct GetCallbackType<EquationEvent::kEquationGroupUpdate>
+{
+    using type = EquationGroupUpdateCallback;
+};
+
 class EquationSignalsManager
 {
   private:
-    using EquationAddedCallback = std::function<void(const Equation *)>;
-    using EquationRemovingCallback = std::function<void(const Equation *)>;
-    using EquationUpdateCallback = std::function<void(const Equation *, bitmask::bitmask<EquationField>)>;
-    using EquationGroupAddedCallback = std::function<void(const EquationGroup *)>;
-    using EquationGroupRemovingCallback = std::function<void(const EquationGroup *)>;
-    using EquationGroupUpdateCallback =
-        std::function<void(const EquationGroup *, bitmask::bitmask<EquationGroupField>)>;
-
-    using Connection = boost::signals2::connection;
-    using ScopedConnection = boost::signals2::scoped_connection;
-
-    using EquationAddedSignal = boost::signals2::signal<void(const Equation *)>;
-    using EquationRemovingSignal = boost::signals2::signal<void(const Equation *)>;
-    using EquationUpdateSignal = boost::signals2::signal<void(const Equation *, bitmask::bitmask<EquationField>)>;
-    using EquationGroupAddedSignal = boost::signals2::signal<void(const EquationGroup *)>;
-    using EquationGroupRemovingSignal = boost::signals2::signal<void(const EquationGroup *)>;
-    using EquationGroupUpdateSignal =
-        boost::signals2::signal<void(const EquationGroup *, bitmask::bitmask<EquationGroupField>)>;
-
     std::unordered_map<EquationEvent, std::unique_ptr<boost::signals2::signal_base>> signals_;
-
-    template <EquationEvent Event>
-    struct GetSignalType;
-
-    template <EquationEvent Event>
-    struct GetCallbackType;
 
   public:
     EquationSignalsManager()
@@ -93,7 +164,7 @@ class EquationSignalsManager
     EquationSignalsManager &operator=(EquationSignalsManager &&) = delete;
 
     template <EquationEvent Event>
-    Connection connect(typename GetCallbackType<Event>::type callback)
+    Connection Connect(typename GetCallbackType<Event>::type callback)
     {
         auto it = signals_.find(Event);
         if (it == signals_.end())
@@ -107,7 +178,7 @@ class EquationSignalsManager
     }
 
     template <EquationEvent Event>
-    ScopedConnection connect_scoped(typename GetCallbackType<Event>::type callback)
+    ScopedConnection ConnectScoped(typename GetCallbackType<Event>::type callback)
     {
         auto it = signals_.find(Event);
         if (it == signals_.end())
@@ -121,7 +192,7 @@ class EquationSignalsManager
     }
 
     template <EquationEvent Event, typename... Args>
-    void emit(Args &&...args)
+    void Emit(Args &&...args)
     {
         auto it = signals_.find(Event);
         if (it == signals_.end())
@@ -134,13 +205,13 @@ class EquationSignalsManager
         (*signal)(std::forward<Args>(args)...);
     }
 
-    void disconnect(Connection &connection)
+    void Disconnect(Connection &connection)
     {
         connection.disconnect();
     }
 
     template <EquationEvent Event>
-    void disconnect_all()
+    void DisconnectAll()
     {
         auto it = signals_.find(Event);
         if (it == signals_.end())
@@ -153,14 +224,14 @@ class EquationSignalsManager
         return signal->disconnect_all_slots();
     }
 
-    void disconnect_all_event()
+    void DisconnectAllEvent()
     {
-        disconnect_all<EquationEvent::kEquationAdded>();
-        disconnect_all<EquationEvent::kEquationRemoving>();
-        disconnect_all<EquationEvent::kEquationUpdate>();
-        disconnect_all<EquationEvent::kEquationGroupAdded>();
-        disconnect_all<EquationEvent::kEquationGroupRemoving>();
-        disconnect_all<EquationEvent::kEquationGroupUpdate>();
+        DisconnectAll<EquationEvent::kEquationAdded>();
+        DisconnectAll<EquationEvent::kEquationRemoving>();
+        DisconnectAll<EquationEvent::kEquationUpdate>();
+        DisconnectAll<EquationEvent::kEquationGroupAdded>();
+        DisconnectAll<EquationEvent::kEquationGroupRemoving>();
+        DisconnectAll<EquationEvent::kEquationGroupUpdate>();
     }
 
     template <EquationEvent Event>
@@ -192,75 +263,4 @@ class EquationSignalsManager
     }
 };
 
-template <>
-struct EquationSignalsManager::GetSignalType<EquationEvent::kEquationAdded>
-{
-    using type = EquationAddedSignal;
-};
-
-template <>
-struct EquationSignalsManager::GetSignalType<EquationEvent::kEquationRemoving>
-{
-    using type = EquationRemovingSignal;
-};
-
-template <>
-struct EquationSignalsManager::GetSignalType<EquationEvent::kEquationUpdate>
-{
-    using type = EquationUpdateSignal;
-};
-
-template <>
-struct EquationSignalsManager::GetSignalType<EquationEvent::kEquationGroupAdded>
-{
-    using type = EquationGroupAddedSignal;
-};
-
-template <>
-struct EquationSignalsManager::GetSignalType<EquationEvent::kEquationGroupRemoving>
-{
-    using type = EquationGroupRemovingSignal;
-};
-
-template <>
-struct EquationSignalsManager::GetSignalType<EquationEvent::kEquationGroupUpdate>
-{
-    using type = EquationGroupUpdateSignal;
-};
-
-template <>
-struct EquationSignalsManager::GetCallbackType<EquationEvent::kEquationAdded>
-{
-    using type = EquationAddedCallback;
-};
-
-template <>
-struct EquationSignalsManager::GetCallbackType<EquationEvent::kEquationRemoving>
-{
-    using type = EquationRemovingCallback;
-};
-
-template <>
-struct EquationSignalsManager::GetCallbackType<EquationEvent::kEquationUpdate>
-{
-    using type = EquationUpdateCallback;
-};
-
-template <>
-struct EquationSignalsManager::GetCallbackType<EquationEvent::kEquationGroupAdded>
-{
-    using type = EquationGroupAddedCallback;
-};
-
-template <>
-struct EquationSignalsManager::GetCallbackType<EquationEvent::kEquationGroupRemoving>
-{
-    using type = EquationGroupRemovingCallback;
-};
-
-template <>
-struct EquationSignalsManager::GetCallbackType<EquationEvent::kEquationGroupUpdate>
-{
-    using type = EquationGroupUpdateCallback;
-};
 } // namespace xequation

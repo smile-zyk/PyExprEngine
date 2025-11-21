@@ -1,6 +1,7 @@
 import builtins
 import ast
 import importlib
+import hashlib
 
 class PythonParser:
     def __init__(self):
@@ -104,10 +105,6 @@ class PythonParser:
         if name in self.builtin_names:
             raise NameError(f"Name '{name}' is a builtin and cannot be redefined")
 
-    def _check_submodule_import(self, module_name, alias):
-        if '.' in module_name and not alias.asname:
-            raise ValueError(f"Direct import of submodule '{module_name}' is not allowed. Use 'import {module_name} as alias_name' instead.")
-
     def _filter_builtin_dependencies(self, dependencies):
         return [dep for dep in dependencies if dep not in self.builtin_names]
     
@@ -135,7 +132,6 @@ class PythonParser:
         results = []
         
         for alias in node.names:
-            self._check_submodule_import(alias.name, alias)
             if alias.asname:
                 self._check_builtin_name(alias.asname)
             name = alias.asname if alias.asname else alias.name
@@ -204,14 +200,18 @@ class PythonParser:
         dependencies = self._extract_dependencies(node.value)
         filtered_deps = self._filter_builtin_dependencies(dependencies)
         
+        # 提取赋值表达式部分
+        value_code = ast.get_source_segment(code, node.value)
+        
         return {
             'name': target.id,
             'dependencies': filtered_deps,
             'type': 'var',
-            'content': code.strip()
+            'content': value_code.strip() if value_code else code.strip()
         }
     
     def _extract_dependencies(self, node):
+        """提取表达式中的所有依赖，包括完整的属性访问路径"""
         dependencies = []
         
         class DependencyVisitor(ast.NodeVisitor):
@@ -221,10 +221,49 @@ class PythonParser:
             def visit_Name(self, node):
                 if isinstance(node.ctx, ast.Load):
                     self.deps_list.append(node.id)
+            
+            def visit_Attribute(self, node):
+                # 只处理直接的属性访问，不处理调用结果的属性
+                if isinstance(node.ctx, ast.Load):
+                    # 检查左侧是否是Name或Attribute（不是Call）
+                    if isinstance(node.value, (ast.Name, ast.Attribute)):
+                        attr_path = self._get_base_attribute_path(node)
+                        if attr_path:
+                            parts = attr_path.split('.')
+                            for i in range(1, len(parts) + 1):
+                                partial_path = '.'.join(parts[:i])
+                                self.deps_list.append(partial_path)
+                
+                # 继续分析子节点
                 self.generic_visit(node)
+            
+            def _get_base_attribute_path(self, node):
+                """只构建基于变量名的属性路径，不包含函数调用"""
+                if isinstance(node, ast.Attribute):
+                    left_part = self._get_base_attribute_path(node.value)
+                    if left_part and not self._contains_call(node.value):
+                        return f"{left_part}.{node.attr}"
+                    else:
+                        return None
+                elif isinstance(node, ast.Name):
+                    return node.id
+                else:
+                    return None
+            
+            def _contains_call(self, node):
+                """检查节点是否包含函数调用"""
+                if isinstance(node, ast.Call):
+                    return True
+                elif isinstance(node, ast.Attribute):
+                    return self._contains_call(node.value)
+                elif isinstance(node, ast.Name):
+                    return False
+                return False
         
         visitor = DependencyVisitor(dependencies)
         visitor.visit(node)
+        
+        # 去重并返回
         return list(set(dependencies))
 
 
@@ -245,9 +284,9 @@ def test():
         ("导入语句", "from math import pow as print"),
         ("导入语句", "import os.path"),
         ("from导入", "from collections import defaultdict, Counter"),
-        ("变量赋值", "file_path = os.path.join('folder', 'file.txt')"),
+        ("变量赋值", "file_path = os.path.join('folder', 'file.txt') + a"),
         ("变量赋值", "result = calculate(a, b) + len(data)"),
-        ("变量赋值", "c = do_something()"),
+        ("变量赋值", "t = complex(i, j).real"),
         ("类定义", "class MyClass(BaseClass):\n    value = 123")
     ]
     

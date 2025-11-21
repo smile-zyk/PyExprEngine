@@ -18,6 +18,8 @@
 #include "python/python_equation_engine.h"
 #define slots Q_SLOTS
 
+using namespace xequation;
+
 DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent), equation_manager_widget_(nullptr)
 {
     setWindowTitle("Qt Demo Widget - Equation Editor");
@@ -35,11 +37,12 @@ DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent), equation_manager_
     
     statusBar()->showMessage("Application started", 3000);
 
-    equation_manager_->AddEquation("a", "1");
-    equation_manager_->AddEquation("b", "2");
-    equation_manager_->AddEquation("c", "a + b");
-
-    equation_manager_->Update();
+    EquationGroupId id_0 = equation_manager_->AddEquationGroup(
+        R"(a=1
+b=3
+c=5
+d=a+b*c)"
+    );
 }
 
 void DemoWidget::createActions()

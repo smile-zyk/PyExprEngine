@@ -33,7 +33,7 @@ TEST_F(PythonParserTest, ParseSimpleAssignment)
     EXPECT_EQ(item.name, "a");
     EXPECT_THAT(item.dependencies, testing::UnorderedElementsAre("b", "c"));
     EXPECT_EQ(item.type, Equation::Type::kVariable);
-    EXPECT_EQ(item.content, "a = b + c");
+    EXPECT_EQ(item.content, "b + c");
 }
 
 TEST_F(PythonParserTest, ParseImport)
@@ -119,7 +119,7 @@ TEST_F(PythonParserTest, ParseComplexNumeric)
     EXPECT_EQ(result[0].name, "a");
     EXPECT_THAT(result[0].dependencies, testing::IsEmpty());
     EXPECT_EQ(result[0].type, Equation::Type::kVariable);
-    EXPECT_EQ(result[0].content, "a = 3 + 4j + 2 - 1j + 1 + 2j");
+    EXPECT_EQ(result[0].content, "3 + 4j + 2 - 1j + 1 + 2j");
 }
 
 TEST_F(PythonParserTest, ParseComplexListComprehension)
@@ -559,15 +559,6 @@ TEST_F(PythonParserTest, ParseComplexImportScenarios)
     EXPECT_TRUE(has_ospath);
     EXPECT_TRUE(has_np);
 }
-
-TEST_F(PythonParserTest, ParseImportSubmoduleWithoutAliasShouldFail)
-{
-    EXPECT_THROW(
-        parser_->ParseSingleStatement("import os.path"),
-        ParseException
-    );
-}
-
 
 int main(int argc, char **argv)
 {

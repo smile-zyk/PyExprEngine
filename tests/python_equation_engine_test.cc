@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 #include <string>
 
+#include "core/equation.h"
 #include "python/python_equation_context.h"
 #include "python/python_equation_engine.h"
 
@@ -22,45 +23,65 @@ TEST(PythonEquationEngine, TestParse)
     auto item = result[0];
     EXPECT_EQ(item.name, "e");
     EXPECT_THAT(item.dependencies, testing::UnorderedElementsAre("a", "b", "c"));
-    EXPECT_EQ(item.content, "e = a + b + c");
+    EXPECT_EQ(item.content, "a + b + c");
 }
 
-TEST(PythonEquationEngine, EvalTest)
+TEST(PythonEquationEngine, TestEquationManager)
 {
     auto& engine = PythonEquationEngine::GetInstance();
-    auto variable_manager = engine.CreateEquationManager();
+    auto equation_manager = engine.CreateEquationManager();
 
-    variable_manager->AddEquation("a", "1");
-    variable_manager->AddEquation("b", "3");
-    variable_manager->AddEquation("c", "5");
-    variable_manager->AddEquation("d", "a + b * c");
-    variable_manager->Update();
+    EquationGroupId id_0 = equation_manager->AddEquationGroup(
+        R"(
+a=1
+b=3
+c=5
+d=a+b*c
+)"
+    );
+    equation_manager->Update();
 
-    auto v = variable_manager->context()->Get("d");
+    auto v = equation_manager->context().Get("d");
     auto obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 16);
 
-    variable_manager->EditEquation("b", "b", "c");
-    variable_manager->UpdateEquation("b");
-    v = variable_manager->context()->Get("d");
+    equation_manager->EditEquationGroup(id_0,
+        R"(
+a=1
+b=c
+c=5
+d=a+b*c
+        )"
+    );
+    equation_manager->UpdateEquation("b");
+    v = equation_manager->context().Get("d");
     obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 26);
 
-    variable_manager->AddEquation("test", "sum([a,b,c,d])");
-    variable_manager->UpdateEquation("test");
+    EquationGroupId id_1 = equation_manager->AddEquationGroup("test=sum([a,b,c,d])");
+    equation_manager->UpdateEquation("test");
 
-    v = variable_manager->context()->Get("test");
+    v = equation_manager->context().Get("test");
     obj = v.Cast<py::object>();
     EXPECT_EQ(obj.cast<int>(), 37);
 
-    std::string statement = "from math import*;p=pi";
-    variable_manager->AddMultipleEquations(statement);
-    variable_manager->UpdateMultipleEquations(statement);
-    variable_manager->AddEquation("f", "sin(a*p)");
-    variable_manager->UpdateEquation("f");
-    v = variable_manager->context()->Get("f");
+    auto import_id = equation_manager->AddEquationGroup("from math import*;p=pi");
+    equation_manager->UpdateEquationGroup(import_id);
+    equation_manager->AddEquationGroup("f=sin(a*p)");
+    equation_manager->UpdateEquation("f");
+    v = equation_manager->context().Get("f");
     obj = v.Cast<py::object>();
     double t = obj.cast<double>();
+    EXPECT_NEAR(t, 0.0, 1e-15);
+
+    auto import_sub_module_id = equation_manager->AddEquationGroup("import os.path");
+    equation_manager->UpdateEquationGroup(import_sub_module_id);
+    auto path_group_id = equation_manager->AddEquationGroup("path1 = os.path.join('home', 'user', 'documents', 'file.txt')");
+    equation_manager->UpdateEquation("path1");
+    v = equation_manager->context().Get("path1");
+    obj = v.Cast<py::object>();
+    std::string path = obj.cast<std::string>();
+    EXPECT_EQ(path, R"(home\user\documents\file.txt)");
 }
 
 int main(int argc, char **argv) {

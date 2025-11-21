@@ -1,11 +1,10 @@
 #pragma once
 
-
+#include "core/equation_manager.h"
 #include <QWidget>
 #include <QMainWindow>
 #include <memory>
 
-#include "core/equation_manager.h"
 #include "equation_manager_widget.h"
 #include "mock_equation_list_widget.h"
 

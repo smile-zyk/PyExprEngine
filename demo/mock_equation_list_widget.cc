@@ -1,36 +1,67 @@
 #include "mock_equation_list_widget.h"
+#include "core/equation.h"
+#include "core/equation_group.h"
+#include "core/equation_manager.h"
+#include "core/equation_signals_manager.h"
+#include <qlistwidget.h>
+
+using namespace xequation;
 
 MockEquationListWidget::MockEquationListWidget(xequation::EquationManager *manager, QWidget *parent)
     : QListWidget(parent), manager_(manager)
 {
     manager_ = manager;
 
-    manager_->RegisterEquationAddedCallback(
-        [this](const xequation::EquationManager *mgr, const std::string &equation_name) { AddEquation(equation_name); }
-    );
+    SetupUI();
 
-    manager_->RegisterEquationRemovingCallback(
-        [this](const xequation::EquationManager *mgr, const std::string &equation_name) {
-            RemoveEquation(equation_name);
-        }
-    );
+    group_added_connection_ = manager_->signals_manager().ConnectScoped<EquationEvent::kEquationGroupAdded>([this](const EquationGroup *group) {
+        OnEquationGroupAdded(group);
+    });
 
-    for(const auto& name : manager_->GetEquationNames())
+    group_removing_connection_ = manager_->signals_manager().ConnectScoped<EquationEvent::kEquationGroupRemoving>([this](const EquationGroup *group) {
+        OnEquationGroupRemoving(group);
+    });
+}
+
+void MockEquationListWidget::SetupUI()
+{
+    std::vector<EquationGroupId> ids = manager_->GetEquationGroupIds();
+    for(const auto& id : ids)
     {
-        AddEquation(name);
+        const EquationGroup* group = manager_->GetEquationGroup(id);
+        
+        OnEquationGroupAdded(group);
     }
 }
 
-void MockEquationListWidget::AddEquation(const std::string &equation_name)
+void MockEquationListWidget::OnEquationGroupAdded(const xequation::EquationGroup *group)
 {
-    addItem(QString::fromStdString("Eqn: " + equation_name));
+    if (!group)
+        return;
+
+    QString show_text = "Py:\n" + QString::fromStdString(group->statement());
+
+    QListWidgetItem *item = new QListWidgetItem(show_text);
+    addItem(item);
+    item_map_.insert(group->id(), item);
 }
 
-void MockEquationListWidget::RemoveEquation(const std::string &equation_name)
+void MockEquationListWidget::OnEquationGroupRemoving(const xequation::EquationGroup *group)
 {
-    QList<QListWidgetItem *> items = findItems(QString::fromStdString("Eqn: " + equation_name), Qt::MatchExactly);
-    for (QListWidgetItem *item : items)
+    if (!group || !item_map_.contains(group->id()))
     {
-        delete takeItem(row(item));
+        return;
+    }
+
+    QListWidgetItem *item = item_map_.value(group->id());
+    if (item)
+    {
+        int item_row = row(item);
+        if (item_row >= 0)
+        {
+            takeItem(item_row);
+        }
+        delete item;
+        item_map_.remove(group->id());
     }
 }
