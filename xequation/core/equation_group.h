@@ -38,7 +38,7 @@ class EquationGroup
         return statement_;
     }
 
-    const EquationManager *manaegr() const
+    const EquationManager *manager() const
     {
         return manager_;
     }

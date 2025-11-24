@@ -93,16 +93,15 @@ void ContextSelectionWidget::OnFilterTextChanged(const QString &text)
 }
 
 EquationEditor::EquationEditor(const EquationManager *manager, QWidget *parent)
-    : QDialog(parent), manager_(manager), equation_(nullptr), mode_(Mode::kInsert)
+    : QDialog(parent), manager_(manager), group_(nullptr), mode_(Mode::kInsert)
 {
     SetupUI();
     SetupConnections();
 }
 
-EquationEditor::EquationEditor(const Equation *equation, QWidget *parent)
-    : QDialog(parent), equation_(equation), mode_(Mode::kEdit)
+EquationEditor::EquationEditor(const EquationGroup *group, QWidget *parent)
+    : QDialog(parent), group_(group), manager_(group->manager()), mode_(Mode::kEdit)
 {
-    manager_ = equation->manager();
     SetupUI();
     SetupConnections();
 }
@@ -117,10 +116,19 @@ void EquationEditor::SetupUI()
     ok_button_ = new QPushButton("OK", this);
     cancel_button_ = new QPushButton("Cancel", this);
 
-    if (mode_ == Mode::kEdit && equation_ != nullptr && equation_->type() == Equation::Type::kVariable)
+    if (mode_ == Mode::kEdit && group_ != nullptr)
     {
-        equation_name_edit_->setText(QString::fromStdString(equation_->name()));
-        expression_edit_->setText(QString::fromStdString(equation_->content()));
+        const auto &equation_names = group_->GetEquationNames();
+        if (equation_names.size() == 1)
+        {
+            const auto &equation = group_->GetEquation(equation_names[0]);
+            equation_name_edit_->setText(QString::fromStdString(equation->name()));
+            expression_edit_->setText(QString::fromStdString(equation->content()));
+        }
+        else 
+        {
+            mode_ = Mode::kInsert;
+        }
     }
 
     context_button_ = new QPushButton("Context>>", this);
@@ -249,7 +257,7 @@ void EquationEditor::OnOkButtonClicked()
     }
     else
     {
-        emit EditEquationRequest(equation_->group_id(), statement);
+        emit EditEquationRequest(group_->id(), statement);
     }
 }
 

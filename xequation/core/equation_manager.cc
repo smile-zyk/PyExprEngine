@@ -101,7 +101,7 @@ std::vector<std::string> EquationManager::GetEquationNames() const
     return result;
 }
 
-const tsl::ordered_set<std::string>& EquationManager::GetExternalVariableNames() const
+const tsl::ordered_set<std::string> &EquationManager::GetExternalVariableNames() const
 {
     return external_variable_names_;
 }
@@ -117,6 +117,12 @@ EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_st
             throw EquationException::EquationAlreadyExists(item.name);
         }
     }
+
+    std::vector<std::string> dependency_updated_equation;
+    ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
+
+    std::vector<std::string> dependent_updated_equation;
+    ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
 
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
     for (const auto &item : res)
@@ -136,6 +142,17 @@ EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_st
     }
     equation_group_map_.insert({id, std::move(group)});
     NotifyEquationGroupAdded(id);
+
+    for (const auto &equation_name : dependency_updated_equation)
+    {
+        NotifyEquationDependenciesUpdated(equation_name);
+    }
+
+    for (const auto &equation_name : dependent_updated_equation)
+    {
+        NotifyEquationDependentsUpdated(equation_name);
+    }
+
     return id;
 }
 
@@ -196,6 +213,12 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
         }
     }
 
+    std::vector<std::string> dependency_updated_equation;
+    ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
+
+    std::vector<std::string> dependent_updated_equation;
+    ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
+
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
     for (const auto &equation_name : to_remove_equation_names)
     {
@@ -247,6 +270,8 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
         signals_manager_->Emit<EquationEvent::kEquationAdded>(group->GetEquation(add_item.name));
     }
 
+    group->set_statement(equation_statement);
+
     if (to_add_items.size() != 0 || to_remove_equation_names.size() != 0)
     {
         signals_manager_->Emit<EquationEvent::kEquationGroupUpdated>(
@@ -257,6 +282,17 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
     {
         signals_manager_->Emit<EquationEvent::kEquationGroupUpdated>(group, EquationGroupUpdateFlag::kStatement);
     }
+
+    for (const auto &equation_name : dependency_updated_equation)
+    {
+        NotifyEquationDependenciesUpdated(equation_name);
+    }
+
+    for (const auto &equation_name : dependent_updated_equation)
+    {
+        NotifyEquationDependentsUpdated(equation_name);
+    }
+
 }
 
 void EquationManager::RemoveEquationGroup(const EquationGroupId &group_id)
@@ -271,14 +307,36 @@ void EquationManager::RemoveEquationGroup(const EquationGroupId &group_id)
     EquationGroup *group = GetEquationGroupInternal(group_id);
     auto group_equation_names = group->GetEquationNames();
 
-    for (const std::string &equation_name : group_equation_names)
+    std::vector<std::string> dependency_updated_equation;
+    ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
+
+    std::vector<std::string> dependent_updated_equation;
+    ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
+
+    DependencyGraph::BatchUpdateGuard guard(graph_.get());
+    for( const auto &equation_name : group_equation_names)
     {
         RemoveNodeInGraph(equation_name);
+    }
+    guard.commit();
+
+    for (const std::string &equation_name : group_equation_names)
+    {
         graph_->InvalidateNode(equation_name);
         RemoveEquationInGroup(group, equation_name);
         context_->Remove(equation_name);
     }
     equation_group_map_.erase(group_id);
+
+    for (const auto &equation_name : dependency_updated_equation)
+    {
+        NotifyEquationDependenciesUpdated(equation_name);
+    }
+
+    for (const auto &equation_name : dependent_updated_equation)
+    {
+        NotifyEquationDependentsUpdated(equation_name);
+    }
 }
 
 void EquationManager::SetExternalVariable(const std::string &var_name, const Value &value)
@@ -430,7 +488,7 @@ void EquationManager::UpdateEquation(const std::string &equation_name)
 
 void EquationManager::UpdateSingleEquation(const std::string &equation_name)
 {
-    if(IsEquationExist(equation_name) == false)
+    if (IsEquationExist(equation_name) == false)
     {
         throw EquationException::EquationNotFound(equation_name);
     }
@@ -489,24 +547,40 @@ EquationGroup *EquationManager::GetEquationGroupInternal(const EquationGroupId &
     return nullptr;
 }
 
-void EquationManager::ConnectGraphNodeSignals()
+ScopedConnection EquationManager::ConnectGraphDependencyUpdated(std::vector<std::string> &dependency_updated_equation
+) const
 {
-    graph_->ConnectNodeDependencyChangedSignal(
-        [this](const std::string &node_name) { NotifyEquationDependenciesUpdated(node_name); });
-
-    graph_->ConnectNodeDependentChangedSignal(
-        [this](const std::string &node_name) { NotifyEquationDependentsUpdated(node_name); });
+    return graph_->ConnectNodeDependencyChangedSignal([&](const std::string &node_name) {
+        dependency_updated_equation.push_back(node_name);
+    });
 }
 
-void EquationManager::NotifyEquationDependentsUpdated(const std::string& node_name) const
+ScopedConnection EquationManager::ConnectGraphDependentUpdated(std::vector<std::string> &dependent_updated_equation
+) const
 {
-    signals_manager_->Emit<EquationEvent::kEquationUpdated>(GetEquation(node_name), EquationUpdateFlag::kDependents);
+    return graph_->ConnectNodeDependentChangedSignal([&](const std::string &node_name) {
+        dependent_updated_equation.push_back(node_name);
+    });
 }
 
-void EquationManager::NotifyEquationDependenciesUpdated(const std::string& node_name) const
+void EquationManager::NotifyEquationDependentsUpdated(const std::string &equation_name) const
 {
-    signals_manager_->Emit<EquationEvent::kEquationUpdated>(GetEquation(node_name), EquationUpdateFlag::kDependencies);
+    if (IsEquationExist(equation_name))
+    {
+        signals_manager_->Emit<EquationEvent::kEquationUpdated>(
+            GetEquation(equation_name), EquationUpdateFlag::kDependents
+        );
+    }
 }
 
+void EquationManager::NotifyEquationDependenciesUpdated(const std::string &equation_name) const
+{
+    if (IsEquationExist(equation_name))
+    {
+        signals_manager_->Emit<EquationEvent::kEquationUpdated>(
+            GetEquation(equation_name), EquationUpdateFlag::kDependencies
+        );
+    }
+}
 
 } // namespace xequation

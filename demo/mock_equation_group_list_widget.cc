@@ -10,7 +10,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <qvariant.h>
 
-
 using namespace xequation;
 
 MockEquationGroupListWidget::MockEquationGroupListWidget(xequation::EquationManager *manager, QWidget *parent)
@@ -50,7 +49,9 @@ void MockEquationGroupListWidget::SetupConnections()
     );
 
     group_updated_connection_ = manager_->signals_manager().ConnectScoped<EquationEvent::kEquationGroupUpdated>(
-        [this](const EquationGroup *group, bitmask::bitmask<EquationGroupUpdateFlag> change_type) {}
+        [this](const EquationGroup *group, bitmask::bitmask<EquationGroupUpdateFlag> change_type) {
+            OnEquationGroupUpdated(group, change_type);
+        }
     );
 }
 
@@ -131,17 +132,20 @@ void MockEquationGroupListWidget::OnCustomContextMenuRequested(const QPoint &pos
         copy_action = menu->addAction("Copy");
 
         connect(edit_action, &QAction::triggered, [this]() {
-            QListWidgetItem *item = reinterpret_cast<QListWidgetItem *>(menu->property("CurrentItem").value<quintptr>());
+            QListWidgetItem *item =
+                reinterpret_cast<QListWidgetItem *>(menu->property("CurrentItem").value<quintptr>());
             qDebug() << "Edit action triggered for item:" << item->text();
             emit OnEditEquationGroup(item_to_id_map_.value(item));
         });
         connect(delete_action, &QAction::triggered, [this]() {
-            QListWidgetItem *item = reinterpret_cast<QListWidgetItem *>(menu->property("CurrentItem").value<quintptr>());
+            QListWidgetItem *item =
+                reinterpret_cast<QListWidgetItem *>(menu->property("CurrentItem").value<quintptr>());
             qDebug() << "Delete action triggered for item:" << item->text();
             emit OnRemoveEquationGroup(item_to_id_map_.value(item));
         });
         connect(copy_action, &QAction::triggered, [this]() {
-            QListWidgetItem *item = reinterpret_cast<QListWidgetItem *>(menu->property("CurrentItem").value<quintptr>());
+            QListWidgetItem *item =
+                reinterpret_cast<QListWidgetItem *>(menu->property("CurrentItem").value<quintptr>());
             qDebug() << "Copy action triggered for item:" << item->text();
             emit OnCopyEquationGroup(item_to_id_map_.value(item));
         });

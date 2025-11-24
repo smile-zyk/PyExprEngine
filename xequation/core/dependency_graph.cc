@@ -627,14 +627,14 @@ void DependencyGraph::RollBack() noexcept
     }
 }
 
-void DependencyGraph::ConnectNodeDependencyChangedSignal(
+boost::signals2::scoped_connection DependencyGraph::ConnectNodeDependencyChangedSignal(
     const boost::signals2::signal<void(const std::string &)> ::slot_type &slot)
 {
-    node_dependency_changed_signal_.connect(slot);
+    return node_dependency_changed_signal_.connect(slot);
 }
 
-void DependencyGraph::ConnectNodeDependentChangedSignal(
+boost::signals2::scoped_connection DependencyGraph::ConnectNodeDependentChangedSignal(
     const boost::signals2::signal<void(const std::string &)> ::slot_type &slot)
 {
-    node_dependent_changed_signal_.connect(slot);
+    return node_dependent_changed_signal_.connect(slot);
 }

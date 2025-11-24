@@ -152,13 +152,7 @@ void DemoWidget::OnEditEquationGroupRequest(const xequation::EquationGroupId &id
     if (single_equation_set_.count(id) != 0)
     {
         auto group = equation_manager_->GetEquationGroup(id);
-        auto equation_names = group->GetEquationNames();
-        if (equation_names.size() != 1)
-        {
-            return;
-        }
-        auto equation = group->GetEquation(equation_names[0]);
-        xequation::gui::EquationEditor *editor = new xequation::gui::EquationEditor(equation, this);
+        xequation::gui::EquationEditor *editor = new xequation::gui::EquationEditor(group, this);
 
         connect(
             editor, &xequation::gui::EquationEditor::EditEquationRequest,
@@ -204,7 +198,6 @@ bool DemoWidget::AddEquationGroup(const std::string &statement, xequation::Equat
         return false;
     }
 }
-
 bool DemoWidget::EditEquationGroup(const xequation::EquationGroupId &id, const std::string &statement)
 {
     try

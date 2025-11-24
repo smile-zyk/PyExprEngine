@@ -136,7 +136,7 @@ class EquationManager
 
     std::vector<std::string> GetEquationNames() const;
 
-    const tsl::ordered_set<std::string>& GetExternalVariableNames() const;
+    const tsl::ordered_set<std::string> &GetExternalVariableNames() const;
 
     bool IsEquationGroupExist(const EquationGroupId &group_id) const;
 
@@ -166,17 +166,17 @@ class EquationManager
 
     void UpdateEquationGroup(const EquationGroupId &group_id);
 
-    const DependencyGraph& graph()
+    const DependencyGraph &graph()
     {
         return *graph_;
     }
 
-    const EquationContext& context()
+    const EquationContext &context()
     {
         return *context_;
     }
 
-    const EquationSignalsManager& signals_manager() const
+    const EquationSignalsManager &signals_manager() const
     {
         return *signals_manager_;
     }
@@ -195,15 +195,17 @@ class EquationManager
     void AddNodeToGraph(const std::string &node_name, const std::vector<std::string> &dependencies);
     void RemoveNodeInGraph(const std::string &node_name);
 
-    void AddEquationToGroup(EquationGroup* group, EquationPtr equation);
-    void RemoveEquationInGroup(EquationGroup* group, const std::string& equation_name);
+    void AddEquationToGroup(EquationGroup *group, EquationPtr equation);
+    void RemoveEquationInGroup(EquationGroup *group, const std::string &equation_name);
 
-    void NotifyEquationGroupAdded(const EquationGroupId& group_id) const;
-    void NotifyEquationGroupRemoving(const EquationGroupId& group_id) const;
+    void NotifyEquationGroupAdded(const EquationGroupId &group_id) const;
+    void NotifyEquationGroupRemoving(const EquationGroupId &group_id) const;
 
-    void ConnectGraphNodeSignals();
-    void NotifyEquationDependentsUpdated(const std::string& equation_name) const;
-    void NotifyEquationDependenciesUpdated(const std::string& equation_name) const;
+    ScopedConnection ConnectGraphDependencyUpdated(std::vector<std::string> &dependency_updated_equation) const;
+    ScopedConnection ConnectGraphDependentUpdated(std::vector<std::string> &dependent_updated_equation) const;
+    
+    void NotifyEquationDependentsUpdated(const std::string &equation_name) const;
+    void NotifyEquationDependenciesUpdated(const std::string &equation_name) const;
 
   private:
     std::unique_ptr<DependencyGraph> graph_;

@@ -222,9 +222,9 @@ class DependencyGraph
     std::vector<std::string> TopologicalSort(const std::string& node) const;
     std::vector<std::string> TopologicalSort(const std::vector<std::string>& nodes) const;
 
-    void ConnectNodeDependencyChangedSignal(
+    boost::signals2::scoped_connection ConnectNodeDependencyChangedSignal(
         const boost::signals2::signal<void(const std::string &)> ::slot_type &slot);
-    void ConnectNodeDependentChangedSignal(
+    boost::signals2::scoped_connection ConnectNodeDependentChangedSignal(
         const boost::signals2::signal<void(const std::string &)> ::slot_type &slot);
 
   private:

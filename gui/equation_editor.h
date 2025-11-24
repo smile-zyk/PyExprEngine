@@ -47,7 +47,7 @@ class EquationEditor : public QDialog
       kEdit
     };
     EquationEditor(const EquationManager *manager, QWidget *parent = nullptr);
-    EquationEditor(const Equation* equation, QWidget* parent = nullptr);
+    EquationEditor(const EquationGroup* group, QWidget* parent = nullptr);
     ~EquationEditor() {}
     void OnSuccess();
 
@@ -65,7 +65,7 @@ class EquationEditor : public QDialog
 
   private:
     const EquationManager *manager_{};
-    const Equation* equation_{};
+    const EquationGroup* group_{};
     Mode mode_ = Mode::kInsert;
     QLabel *equation_name_label_{};
     QLineEdit *equation_name_edit_{};

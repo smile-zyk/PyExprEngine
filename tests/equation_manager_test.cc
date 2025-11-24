@@ -316,7 +316,7 @@ TEST_F(EquationManagerTest, EquationGroupAddRemoveEditGet)
     EXPECT_TRUE(group_0);
     EXPECT_EQ(group_0->id(), id_0);
     EXPECT_EQ(group_0->GetEquationNames(), std::vector<std::string>{"A"});
-    EXPECT_EQ(group_0->manaegr(), &manager_);
+    EXPECT_EQ(group_0->manager(), &manager_);
     EXPECT_EQ(group_0->statement(), "A=1");
 
     EXPECT_TRUE(equation_a);
