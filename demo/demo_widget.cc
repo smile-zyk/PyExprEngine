@@ -14,11 +14,7 @@
 #include <QWidget>
 #include <algorithm>
 
-#ifdef slots
-#undef slots
-#endif
-#include "python/python_equation_engine.h"
-#define slots Q_SLOTS
+#include "python_qt_wrapper.h"
 
 using namespace xequation;
 
@@ -292,12 +288,15 @@ void DemoWidget::OnShowEquationManager()
 
 void DemoWidget::OnShowEquationInspector()
 {
-    statusBar()->showMessage("Opening equation inspector", 2000);
-
-    QMessageBox::information(
-        this, "Equation Inspector",
-        "Equation Inspector Feature\n\n"
-        "This will display detailed equation properties and information.\n"
-        "To be implemented: Inspect equation variables, types, complexity, etc."
-    );
+    if (variable_inspect_widget_ == nullptr)
+    {
+        variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(this);
+        variable_inspect_widget_->show();
+    }
+    else
+    {
+        variable_inspect_widget_->show();
+        variable_inspect_widget_->raise();
+        variable_inspect_widget_->activateWindow();
+    }
 }

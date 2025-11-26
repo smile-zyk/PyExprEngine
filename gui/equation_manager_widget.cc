@@ -249,7 +249,7 @@ void EquationManagerWidget::SetupUI()
     main_layout->addWidget(property_browser_);
     setLayout(main_layout);
 
-    property_browser_->setHeaderVisible(true);
+    property_browser_->setHeaderVisible(false);
 
     for (const EquationGroupId &group_id : manager_->GetEquationGroupIds())
     {
@@ -263,7 +263,7 @@ void EquationManagerWidget::SetupUI()
             }
         }
     }
-    setMinimumSize(600, 400);
+    setMinimumSize(800, 600);
 }
 
 } // namespace gui

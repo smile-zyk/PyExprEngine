@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "equation_manager_widget.h"
+#include "variable_inspect_widget.h"
 #include "mock_equation_group_list_widget.h"
 
 class QMenu;
@@ -59,6 +60,7 @@ private:
     std::unordered_set<xequation::EquationGroupId> single_equation_set_;
     std::unordered_set<xequation::EquationGroupId> equation_group_set_;
     xequation::gui::EquationManagerWidget* equation_manager_widget_;
+    xequation::gui::VariableInspectWidget* variable_inspect_widget_;
     MockEquationGroupListWidget* mock_equation_list_widget_;
     std::unique_ptr<xequation::EquationManager> equation_manager_;
 };

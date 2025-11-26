@@ -1,4 +1,5 @@
-#include "equation_debugger_browser.h"
+#include "variable_property_browser.h"
+#include "variable_property_manager.h"
 #include <QtCore/QSet>
 #include <QtGui/QFocusEvent>
 #include <QtGui/QIcon>
@@ -11,19 +12,18 @@
 #include <QtWidgets/QStyle>
 #include <QtWidgets/QTreeWidget>
 
-
 namespace xequation
 {
 namespace gui
 {
-class EquationDebuggerBrowserView;
-class EquationDebuggerBrowserPrivate
+class VariablePropertyBrowserView;
+class VariablePropertyBrowserPrivate
 {
-    EquationDebuggerBrowser *q_ptr;
-    Q_DECLARE_PUBLIC(EquationDebuggerBrowser)
+    VariablePropertyBrowser *q_ptr;
+    Q_DECLARE_PUBLIC(VariablePropertyBrowser)
 
   public:
-    EquationDebuggerBrowserPrivate();
+    VariablePropertyBrowserPrivate();
     void init(QWidget *parent);
 
     void propertyInserted(QtBrowserItem *index, QtBrowserItem *afterIndex);
@@ -46,7 +46,9 @@ class EquationDebuggerBrowserPrivate
 
     QColor calculatedBackgroundColor(QtBrowserItem *item) const;
 
-    EquationDebuggerBrowserView *treeWidget() const
+    void resizeHeaderSections();
+
+    VariablePropertyBrowserView *treeWidget() const
     {
         return m_treeWidget;
     }
@@ -70,25 +72,26 @@ class EquationDebuggerBrowserPrivate
     QMap<QtBrowserItem *, QTreeWidgetItem *> m_indexToItem;
     QMap<QTreeWidgetItem *, QtBrowserItem *> m_itemToIndex;
 
+    QMap<int, double> m_sectionResizeRatios;
+
     QMap<QtBrowserItem *, QColor> m_indexToBackgroundColor;
 
-    EquationDebuggerBrowserView *m_treeWidget;
+    VariablePropertyBrowserView *m_treeWidget;
 
     bool m_headerVisible;
-    EquationDebuggerBrowser::ResizeMode m_resizeMode;
-    class EquationDebuggerBrowserDelegate *m_delegate;
+    class VariablePropertyBrowserDelegate *m_delegate;
     bool m_markPropertiesWithoutValue;
     bool m_browserChangedBlocked;
     QIcon m_expandIcon;
 };
 
-// ------------ EquationDebuggerBrowserView
-class EquationDebuggerBrowserView : public QTreeWidget
+// ------------ VariablePropertyBrowserView
+class VariablePropertyBrowserView : public QTreeWidget
 {
     Q_OBJECT
   public:
-    EquationDebuggerBrowserView(QWidget *parent = 0);
-    void setEditorPrivate(EquationDebuggerBrowserPrivate *editorPrivate)
+    VariablePropertyBrowserView(QWidget *parent = 0);
+    void setEditorPrivate(VariablePropertyBrowserPrivate *editorPrivate)
     {
         m_editorPrivate = editorPrivate;
     }
@@ -104,16 +107,17 @@ class EquationDebuggerBrowserView : public QTreeWidget
     void drawRow(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
 
   private:
-    EquationDebuggerBrowserPrivate *m_editorPrivate;
+    VariablePropertyBrowserPrivate *m_editorPrivate;
 };
 
-EquationDebuggerBrowserView::EquationDebuggerBrowserView(QWidget *parent) : QTreeWidget(parent), m_editorPrivate(0)
+VariablePropertyBrowserView::VariablePropertyBrowserView(QWidget *parent) : QTreeWidget(parent), m_editorPrivate(0)
 {
     connect(header(), SIGNAL(sectionDoubleClicked(int)), this, SLOT(resizeColumnToContents(int)));
 }
 
-void EquationDebuggerBrowserView::drawRow(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index)
-    const
+void VariablePropertyBrowserView::drawRow(
+    QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index
+) const
 {
     QStyleOptionViewItem opt = option;
     bool hasValue = true;
@@ -146,7 +150,7 @@ void EquationDebuggerBrowserView::drawRow(QPainter *painter, const QStyleOptionV
     painter->restore();
 }
 
-void EquationDebuggerBrowserView::keyPressEvent(QKeyEvent *event)
+void VariablePropertyBrowserView::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key())
     {
@@ -176,7 +180,7 @@ void EquationDebuggerBrowserView::keyPressEvent(QKeyEvent *event)
     QTreeWidget::keyPressEvent(event);
 }
 
-void EquationDebuggerBrowserView::mousePressEvent(QMouseEvent *event)
+void VariablePropertyBrowserView::mousePressEvent(QMouseEvent *event)
 {
     QTreeWidget::mousePressEvent(event);
     QTreeWidgetItem *item = itemAt(event->pos());
@@ -189,7 +193,8 @@ void EquationDebuggerBrowserView::mousePressEvent(QMouseEvent *event)
         {
             editItem(item, 1);
         }
-        else if (!m_editorPrivate->hasValue(item) && m_editorPrivate->markPropertiesWithoutValue() && !rootIsDecorated())
+        else if (!m_editorPrivate->hasValue(item) && m_editorPrivate->markPropertiesWithoutValue() &&
+                 !rootIsDecorated())
         {
             if (event->pos().x() + header()->offset() < 20)
                 item->setExpanded(!item->isExpanded());
@@ -197,17 +202,17 @@ void EquationDebuggerBrowserView::mousePressEvent(QMouseEvent *event)
     }
 }
 
-// ------------ EquationDebuggerBrowserDelegate
-class EquationDebuggerBrowserDelegate : public QItemDelegate
+// ------------ VariablePropertyBrowserDelegate
+class VariablePropertyBrowserDelegate : public QItemDelegate
 {
     Q_OBJECT
   public:
-    EquationDebuggerBrowserDelegate(QObject *parent = 0)
+    VariablePropertyBrowserDelegate(QObject *parent = 0)
         : QItemDelegate(parent), m_editorPrivate(0), m_editedItem(0), m_editedWidget(0)
     {
     }
 
-    void setEditorPrivate(EquationDebuggerBrowserPrivate *editorPrivate)
+    void setEditorPrivate(VariablePropertyBrowserPrivate *editorPrivate)
     {
         m_editorPrivate = editorPrivate;
     }
@@ -243,12 +248,12 @@ class EquationDebuggerBrowserDelegate : public QItemDelegate
 
     typedef QMap<QtProperty *, QWidget *> PropertyToEditorMap;
     mutable PropertyToEditorMap m_propertyToEditor;
-    EquationDebuggerBrowserPrivate *m_editorPrivate;
+    VariablePropertyBrowserPrivate *m_editorPrivate;
     mutable QTreeWidgetItem *m_editedItem;
     mutable QWidget *m_editedWidget;
 };
 
-int EquationDebuggerBrowserDelegate::indentation(const QModelIndex &index) const
+int VariablePropertyBrowserDelegate::indentation(const QModelIndex &index) const
 {
     if (!m_editorPrivate)
         return 0;
@@ -265,7 +270,7 @@ int EquationDebuggerBrowserDelegate::indentation(const QModelIndex &index) const
     return indent * m_editorPrivate->treeWidget()->indentation();
 }
 
-void EquationDebuggerBrowserDelegate::slotEditorDestroyed(QObject *object)
+void VariablePropertyBrowserDelegate::slotEditorDestroyed(QObject *object)
 {
     if (QWidget *w = qobject_cast<QWidget *>(object))
     {
@@ -283,14 +288,15 @@ void EquationDebuggerBrowserDelegate::slotEditorDestroyed(QObject *object)
     }
 }
 
-void EquationDebuggerBrowserDelegate::closeEditor(QtProperty *property)
+void VariablePropertyBrowserDelegate::closeEditor(QtProperty *property)
 {
     if (QWidget *w = m_propertyToEditor.value(property, 0))
         w->deleteLater();
 }
 
-QWidget *
-EquationDebuggerBrowserDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &index) const
+QWidget *VariablePropertyBrowserDelegate::createEditor(
+    QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &index
+) const
 {
     if (index.column() == 1 && m_editorPrivate)
     {
@@ -302,7 +308,7 @@ EquationDebuggerBrowserDelegate::createEditor(QWidget *parent, const QStyleOptio
             if (editor)
             {
                 editor->setAutoFillBackground(true);
-                editor->installEventFilter(const_cast<EquationDebuggerBrowserDelegate *>(this));
+                editor->installEventFilter(const_cast<VariablePropertyBrowserDelegate *>(this));
                 connect(editor, SIGNAL(destroyed(QObject *)), this, SLOT(slotEditorDestroyed(QObject *)));
                 m_propertyToEditor[property] = editor;
                 m_editorToProperty[editor] = property;
@@ -315,7 +321,7 @@ EquationDebuggerBrowserDelegate::createEditor(QWidget *parent, const QStyleOptio
     return 0;
 }
 
-void EquationDebuggerBrowserDelegate::updateEditorGeometry(
+void VariablePropertyBrowserDelegate::updateEditorGeometry(
     QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index
 ) const
 {
@@ -323,8 +329,9 @@ void EquationDebuggerBrowserDelegate::updateEditorGeometry(
     editor->setGeometry(option.rect.adjusted(0, 0, 0, -1));
 }
 
-void EquationDebuggerBrowserDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index)
-    const
+void VariablePropertyBrowserDelegate::paint(
+    QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index
+) const
 {
     bool hasValue = true;
     if (m_editorPrivate)
@@ -372,12 +379,12 @@ void EquationDebuggerBrowserDelegate::paint(QPainter *painter, const QStyleOptio
     painter->restore();
 }
 
-QSize EquationDebuggerBrowserDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+QSize VariablePropertyBrowserDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     return QItemDelegate::sizeHint(option, index) + QSize(3, 4);
 }
 
-bool EquationDebuggerBrowserDelegate::eventFilter(QObject *object, QEvent *event)
+bool VariablePropertyBrowserDelegate::eventFilter(QObject *object, QEvent *event)
 {
     if (event->type() == QEvent::FocusOut)
     {
@@ -388,11 +395,10 @@ bool EquationDebuggerBrowserDelegate::eventFilter(QObject *object, QEvent *event
     return QItemDelegate::eventFilter(object, event);
 }
 
-//  -------- EquationDebuggerBrowserPrivate implementation
-EquationDebuggerBrowserPrivate::EquationDebuggerBrowserPrivate()
+//  -------- VariablePropertyBrowserPrivate implementation
+VariablePropertyBrowserPrivate::VariablePropertyBrowserPrivate()
     : m_treeWidget(0),
       m_headerVisible(true),
-      m_resizeMode(EquationDebuggerBrowser::Stretch),
       m_delegate(0),
       m_markPropertiesWithoutValue(false),
       m_browserChangedBlocked(false)
@@ -428,28 +434,28 @@ static QIcon drawIndicatorIcon(const QPalette &palette, QStyle *style)
     return rc;
 }
 
-void EquationDebuggerBrowserPrivate::init(QWidget *parent)
+void VariablePropertyBrowserPrivate::init(QWidget *parent)
 {
     QHBoxLayout *layout = new QHBoxLayout(parent);
     layout->setContentsMargins(QMargins());
-    m_treeWidget = new EquationDebuggerBrowserView(parent);
+    m_treeWidget = new VariablePropertyBrowserView(parent);
     m_treeWidget->setEditorPrivate(this);
     m_treeWidget->setIconSize(QSize(18, 18));
     layout->addWidget(m_treeWidget);
 
-    m_treeWidget->setColumnCount(2);
+    m_treeWidget->setColumnCount(3);
     QStringList labels;
-    labels.append(QCoreApplication::translate("EquationDebuggerBrowser", "Property"));
-    labels.append(QCoreApplication::translate("EquationDebuggerBrowser", "Value"));
+    labels.append(QCoreApplication::translate("VariablePropertyBrowser", "Name"));
+    labels.append(QCoreApplication::translate("VariablePropertyBrowser", "Value"));
+    labels.append(QCoreApplication::translate("VariablePropertyBrowser", "Type"));
     m_treeWidget->setHeaderLabels(labels);
     m_treeWidget->setAlternatingRowColors(true);
     m_treeWidget->setEditTriggers(QAbstractItemView::EditKeyPressed);
-    m_delegate = new EquationDebuggerBrowserDelegate(parent);
+    m_delegate = new VariablePropertyBrowserDelegate(parent);
     m_delegate->setEditorPrivate(this);
     m_treeWidget->setItemDelegate(m_delegate);
     m_treeWidget->header()->setSectionsMovable(false);
-    m_treeWidget->header()->setSectionResizeMode(QHeaderView::Stretch);
-
+    m_treeWidget->header()->setSectionResizeMode(QHeaderView::Fixed);
     m_expandIcon = drawIndicatorIcon(q_ptr->palette(), q_ptr->style());
 
     QObject::connect(m_treeWidget, SIGNAL(collapsed(QModelIndex)), q_ptr, SLOT(slotCollapsed(QModelIndex)));
@@ -460,14 +466,14 @@ void EquationDebuggerBrowserPrivate::init(QWidget *parent)
     );
 }
 
-QtBrowserItem *EquationDebuggerBrowserPrivate::currentItem() const
+QtBrowserItem *VariablePropertyBrowserPrivate::currentItem() const
 {
     if (QTreeWidgetItem *treeItem = m_treeWidget->currentItem())
         return m_itemToIndex.value(treeItem);
     return 0;
 }
 
-void EquationDebuggerBrowserPrivate::setCurrentItem(QtBrowserItem *browserItem, bool block)
+void VariablePropertyBrowserPrivate::setCurrentItem(QtBrowserItem *browserItem, bool block)
 {
     const bool blocked = block ? m_treeWidget->blockSignals(true) : false;
     if (browserItem == 0)
@@ -478,7 +484,7 @@ void EquationDebuggerBrowserPrivate::setCurrentItem(QtBrowserItem *browserItem, 
         m_treeWidget->blockSignals(blocked);
 }
 
-QtProperty *EquationDebuggerBrowserPrivate::indexToProperty(const QModelIndex &index) const
+QtProperty *VariablePropertyBrowserPrivate::indexToProperty(const QModelIndex &index) const
 {
     QTreeWidgetItem *item = m_treeWidget->indexToItem(index);
     QtBrowserItem *idx = m_itemToIndex.value(item);
@@ -487,23 +493,23 @@ QtProperty *EquationDebuggerBrowserPrivate::indexToProperty(const QModelIndex &i
     return 0;
 }
 
-QtBrowserItem *EquationDebuggerBrowserPrivate::indexToBrowserItem(const QModelIndex &index) const
+QtBrowserItem *VariablePropertyBrowserPrivate::indexToBrowserItem(const QModelIndex &index) const
 {
     QTreeWidgetItem *item = m_treeWidget->indexToItem(index);
     return m_itemToIndex.value(item);
 }
 
-QTreeWidgetItem *EquationDebuggerBrowserPrivate::indexToItem(const QModelIndex &index) const
+QTreeWidgetItem *VariablePropertyBrowserPrivate::indexToItem(const QModelIndex &index) const
 {
     return m_treeWidget->indexToItem(index);
 }
 
-bool EquationDebuggerBrowserPrivate::lastColumn(int column) const
+bool VariablePropertyBrowserPrivate::lastColumn(int column) const
 {
     return m_treeWidget->header()->visualIndex(column) == m_treeWidget->columnCount() - 1;
 }
 
-void EquationDebuggerBrowserPrivate::disableItem(QTreeWidgetItem *item) const
+void VariablePropertyBrowserPrivate::disableItem(QTreeWidgetItem *item) const
 {
     Qt::ItemFlags flags = item->flags();
     if (flags & Qt::ItemIsEnabled)
@@ -520,7 +526,7 @@ void EquationDebuggerBrowserPrivate::disableItem(QTreeWidgetItem *item) const
     }
 }
 
-void EquationDebuggerBrowserPrivate::enableItem(QTreeWidgetItem *item) const
+void VariablePropertyBrowserPrivate::enableItem(QTreeWidgetItem *item) const
 {
     Qt::ItemFlags flags = item->flags();
     flags |= Qt::ItemIsEnabled;
@@ -537,7 +543,7 @@ void EquationDebuggerBrowserPrivate::enableItem(QTreeWidgetItem *item) const
     }
 }
 
-bool EquationDebuggerBrowserPrivate::hasValue(QTreeWidgetItem *item) const
+bool VariablePropertyBrowserPrivate::hasValue(QTreeWidgetItem *item) const
 {
     QtBrowserItem *browserItem = m_itemToIndex.value(item);
     if (browserItem)
@@ -545,7 +551,7 @@ bool EquationDebuggerBrowserPrivate::hasValue(QTreeWidgetItem *item) const
     return false;
 }
 
-void EquationDebuggerBrowserPrivate::propertyInserted(QtBrowserItem *index, QtBrowserItem *afterIndex)
+void VariablePropertyBrowserPrivate::propertyInserted(QtBrowserItem *index, QtBrowserItem *afterIndex)
 {
     QTreeWidgetItem *afterItem = m_indexToItem.value(afterIndex);
     QTreeWidgetItem *parentItem = m_indexToItem.value(index->parent());
@@ -568,7 +574,7 @@ void EquationDebuggerBrowserPrivate::propertyInserted(QtBrowserItem *index, QtBr
     updateItem(newItem);
 }
 
-void EquationDebuggerBrowserPrivate::propertyRemoved(QtBrowserItem *index)
+void VariablePropertyBrowserPrivate::propertyRemoved(QtBrowserItem *index)
 {
     QTreeWidgetItem *item = m_indexToItem.value(index);
 
@@ -584,14 +590,14 @@ void EquationDebuggerBrowserPrivate::propertyRemoved(QtBrowserItem *index)
     m_indexToBackgroundColor.remove(index);
 }
 
-void EquationDebuggerBrowserPrivate::propertyChanged(QtBrowserItem *index)
+void VariablePropertyBrowserPrivate::propertyChanged(QtBrowserItem *index)
 {
     QTreeWidgetItem *item = m_indexToItem.value(index);
 
     updateItem(item);
 }
 
-void EquationDebuggerBrowserPrivate::updateItem(QTreeWidgetItem *item)
+void VariablePropertyBrowserPrivate::updateItem(QTreeWidgetItem *item)
 {
     QtProperty *property = m_itemToIndex[item]->property();
     QIcon expandIcon;
@@ -606,6 +612,13 @@ void EquationDebuggerBrowserPrivate::updateItem(QTreeWidgetItem *item)
     else if (markPropertiesWithoutValue() && !m_treeWidget->rootIsDecorated())
     {
         expandIcon = m_expandIcon;
+    }
+    if (dynamic_cast<VariablePropertyManager*>(property->propertyManager()))
+    {
+        VariablePropertyManager *manager = static_cast<VariablePropertyManager*>(property->propertyManager());
+        QString type = manager->type(property);
+        item->setToolTip(2, type);
+        item->setText(2, type);
     }
     item->setIcon(0, expandIcon);
     item->setFirstColumnSpanned(!property->hasValue());
@@ -662,7 +675,7 @@ void EquationDebuggerBrowserPrivate::updateItem(QTreeWidgetItem *item)
     m_treeWidget->viewport()->update();
 }
 
-QColor EquationDebuggerBrowserPrivate::calculatedBackgroundColor(QtBrowserItem *item) const
+QColor VariablePropertyBrowserPrivate::calculatedBackgroundColor(QtBrowserItem *item) const
 {
     QtBrowserItem *i = item;
     const QMap<QtBrowserItem *, QColor>::const_iterator itEnd = m_indexToBackgroundColor.constEnd();
@@ -676,7 +689,24 @@ QColor EquationDebuggerBrowserPrivate::calculatedBackgroundColor(QtBrowserItem *
     return QColor();
 }
 
-void EquationDebuggerBrowserPrivate::slotCollapsed(const QModelIndex &index)
+void VariablePropertyBrowserPrivate::resizeHeaderSections()
+{
+    int totalWidth = m_treeWidget->viewport()->width();
+
+    QMap<int, double> ratios;
+    double totalRatio = 0.0;
+    for(int i = 0; i < m_treeWidget->columnCount(); ++i)
+    {
+        ratios[i] = m_sectionResizeRatios.value(i, 1.0);
+        totalRatio += ratios[i];
+    }
+
+    for (int i = 0; i < ratios.size(); ++i) {
+        m_treeWidget->setColumnWidth(i, totalWidth * ratios[i] / totalRatio);
+    }
+}
+
+void VariablePropertyBrowserPrivate::slotCollapsed(const QModelIndex &index)
 {
     QTreeWidgetItem *item = indexToItem(index);
     QtBrowserItem *idx = m_itemToIndex.value(item);
@@ -684,7 +714,7 @@ void EquationDebuggerBrowserPrivate::slotCollapsed(const QModelIndex &index)
         emit q_ptr->collapsed(idx);
 }
 
-void EquationDebuggerBrowserPrivate::slotExpanded(const QModelIndex &index)
+void VariablePropertyBrowserPrivate::slotExpanded(const QModelIndex &index)
 {
     QTreeWidgetItem *item = indexToItem(index);
     QtBrowserItem *idx = m_itemToIndex.value(item);
@@ -692,13 +722,13 @@ void EquationDebuggerBrowserPrivate::slotExpanded(const QModelIndex &index)
         emit q_ptr->expanded(idx);
 }
 
-void EquationDebuggerBrowserPrivate::slotCurrentBrowserItemChanged(QtBrowserItem *item)
+void VariablePropertyBrowserPrivate::slotCurrentBrowserItemChanged(QtBrowserItem *item)
 {
     if (!m_browserChangedBlocked && item != currentItem())
         setCurrentItem(item, true);
 }
 
-void EquationDebuggerBrowserPrivate::slotCurrentTreeItemChanged(QTreeWidgetItem *newItem, QTreeWidgetItem *)
+void VariablePropertyBrowserPrivate::slotCurrentTreeItemChanged(QTreeWidgetItem *newItem, QTreeWidgetItem *)
 {
     QtBrowserItem *browserItem = newItem ? m_itemToIndex.value(newItem) : 0;
     m_browserChangedBlocked = true;
@@ -706,12 +736,12 @@ void EquationDebuggerBrowserPrivate::slotCurrentTreeItemChanged(QTreeWidgetItem 
     m_browserChangedBlocked = false;
 }
 
-QTreeWidgetItem *EquationDebuggerBrowserPrivate::editedItem() const
+QTreeWidgetItem *VariablePropertyBrowserPrivate::editedItem() const
 {
     return m_delegate->editedItem();
 }
 
-void EquationDebuggerBrowserPrivate::editItem(QtBrowserItem *browserItem)
+void VariablePropertyBrowserPrivate::editItem(QtBrowserItem *browserItem)
 {
     if (QTreeWidgetItem *treeItem = m_indexToItem.value(browserItem, 0))
     {
@@ -721,12 +751,12 @@ void EquationDebuggerBrowserPrivate::editItem(QtBrowserItem *browserItem)
 }
 
 /*!
-    \class EquationDebuggerBrowser
+    \class VariablePropertyBrowser
     \internal
     \inmodule QtDesigner
     \since 4.4
 
-    \brief The EquationDebuggerBrowser class provides QTreeWidget based
+    \brief The VariablePropertyBrowser class provides QTreeWidget based
     property browser.
 
     A property browser is a widget that enables the user to edit a
@@ -735,15 +765,15 @@ void EquationDebuggerBrowserPrivate::editItem(QtBrowserItem *browserItem)
     edit or a combobox) holding its value. A property can have zero or
     more subproperties.
 
-    EquationDebuggerBrowser provides a tree based view for all nested
+    VariablePropertyBrowser provides a tree based view for all nested
     properties, i.e. properties that have subproperties can be in an
     expanded (subproperties are visible) or collapsed (subproperties
     are hidden) state. For example:
 
-    \image EquationDebuggerBrowser.png
+    \image VariablePropertyBrowser.png
 
     Use the QtAbstractPropertyBrowser API to add, insert and remove
-    properties from an instance of the EquationDebuggerBrowser class.
+    properties from an instance of the VariablePropertyBrowser class.
     The properties themselves are created and managed by
     implementations of the QtAbstractPropertyManager class.
 
@@ -751,7 +781,7 @@ void EquationDebuggerBrowserPrivate::editItem(QtBrowserItem *browserItem)
 */
 
 /*!
-    \fn void EquationDebuggerBrowser::collapsed(QtBrowserItem *item)
+    \fn void VariablePropertyBrowser::collapsed(QtBrowserItem *item)
 
     This signal is emitted when the \a item is collapsed.
 
@@ -759,7 +789,7 @@ void EquationDebuggerBrowserPrivate::editItem(QtBrowserItem *browserItem)
 */
 
 /*!
-    \fn void EquationDebuggerBrowser::expanded(QtBrowserItem *item)
+    \fn void VariablePropertyBrowser::expanded(QtBrowserItem *item)
 
     This signal is emitted when the \a item is expanded.
 
@@ -769,8 +799,8 @@ void EquationDebuggerBrowserPrivate::editItem(QtBrowserItem *browserItem)
 /*!
     Creates a property browser with the given \a parent.
 */
-EquationDebuggerBrowser::EquationDebuggerBrowser(QWidget *parent)
-    : QtAbstractPropertyBrowser(parent), d_ptr(new EquationDebuggerBrowserPrivate)
+VariablePropertyBrowser::VariablePropertyBrowser(QWidget *parent)
+    : QtAbstractPropertyBrowser(parent), d_ptr(new VariablePropertyBrowserPrivate)
 {
     d_ptr->q_ptr = this;
 
@@ -790,32 +820,32 @@ EquationDebuggerBrowser::EquationDebuggerBrowser(QWidget *parent)
 
     \sa QtProperty, QtAbstractPropertyManager
 */
-EquationDebuggerBrowser::~EquationDebuggerBrowser() {}
+VariablePropertyBrowser::~VariablePropertyBrowser() {}
 
 /*!
-    \property EquationDebuggerBrowser::indentation
+    \property VariablePropertyBrowser::indentation
     \brief indentation of the items in the tree view.
 */
-int EquationDebuggerBrowser::indentation() const
+int VariablePropertyBrowser::indentation() const
 {
     return d_ptr->m_treeWidget->indentation();
 }
 
-void EquationDebuggerBrowser::setIndentation(int i)
+void VariablePropertyBrowser::setIndentation(int i)
 {
     d_ptr->m_treeWidget->setIndentation(i);
 }
 
 /*!
-  \property EquationDebuggerBrowser::rootIsDecorated
+  \property VariablePropertyBrowser::rootIsDecorated
   \brief whether to show controls for expanding and collapsing root items.
 */
-bool EquationDebuggerBrowser::rootIsDecorated() const
+bool VariablePropertyBrowser::rootIsDecorated() const
 {
     return d_ptr->m_treeWidget->rootIsDecorated();
 }
 
-void EquationDebuggerBrowser::setRootIsDecorated(bool show)
+void VariablePropertyBrowser::setRootIsDecorated(bool show)
 {
     d_ptr->m_treeWidget->setRootIsDecorated(show);
     for (auto it = d_ptr->m_itemToIndex.cbegin(), end = d_ptr->m_itemToIndex.cend(); it != end; ++it)
@@ -827,30 +857,30 @@ void EquationDebuggerBrowser::setRootIsDecorated(bool show)
 }
 
 /*!
-  \property EquationDebuggerBrowser::alternatingRowColors
+  \property VariablePropertyBrowser::alternatingRowColors
   \brief whether to draw the background using alternating colors.
   By default this property is set to true.
 */
-bool EquationDebuggerBrowser::alternatingRowColors() const
+bool VariablePropertyBrowser::alternatingRowColors() const
 {
     return d_ptr->m_treeWidget->alternatingRowColors();
 }
 
-void EquationDebuggerBrowser::setAlternatingRowColors(bool enable)
+void VariablePropertyBrowser::setAlternatingRowColors(bool enable)
 {
     d_ptr->m_treeWidget->setAlternatingRowColors(enable);
 }
 
 /*!
-  \property EquationDebuggerBrowser::headerVisible
+  \property VariablePropertyBrowser::headerVisible
   \brief whether to show the header.
 */
-bool EquationDebuggerBrowser::isHeaderVisible() const
+bool VariablePropertyBrowser::isHeaderVisible() const
 {
     return d_ptr->m_headerVisible;
 }
 
-void EquationDebuggerBrowser::setHeaderVisible(bool visible)
+void VariablePropertyBrowser::setHeaderVisible(bool visible)
 {
     if (d_ptr->m_headerVisible == visible)
         return;
@@ -859,77 +889,40 @@ void EquationDebuggerBrowser::setHeaderVisible(bool visible)
     d_ptr->m_treeWidget->header()->setVisible(visible);
 }
 
-/*!
-  \enum EquationDebuggerBrowser::ResizeMode
-
-  The resize mode specifies the behavior of the header sections.
-
-  \value Interactive The user can resize the sections.
-  The sections can also be resized programmatically using setSplitterPosition().
-
-  \value Fixed The user cannot resize the section.
-  The section can only be resized programmatically using setSplitterPosition().
-
-  \value Stretch QHeaderView will automatically resize the section to fill the available space.
-  The size cannot be changed by the user or programmatically.
-
-  \value ResizeToContents QHeaderView will automatically resize the section to its optimal
-  size based on the contents of the entire column.
-  The size cannot be changed by the user or programmatically.
-
-  \sa setResizeMode()
-*/
-
-/*!
-    \property EquationDebuggerBrowser::resizeMode
-    \brief the resize mode of setions in the header.
-*/
-
-EquationDebuggerBrowser::ResizeMode EquationDebuggerBrowser::resizeMode() const
+QMap<int, double> VariablePropertyBrowser::headerSectionResizeRatios() const
 {
-    return d_ptr->m_resizeMode;
+    return d_ptr->m_sectionResizeRatios;
 }
 
-void EquationDebuggerBrowser::setResizeMode(EquationDebuggerBrowser::ResizeMode mode)
+void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QMap<int, double> &ratios)
 {
-    if (d_ptr->m_resizeMode == mode)
-        return;
-
-    d_ptr->m_resizeMode = mode;
-    QHeaderView::ResizeMode m = QHeaderView::Stretch;
-    switch (mode)
+    for(int i = 0; i < ratios.keys().size(); ++i)
     {
-    case EquationDebuggerBrowser::Interactive:
-        m = QHeaderView::Interactive;
-        break;
-    case EquationDebuggerBrowser::Fixed:
-        m = QHeaderView::Fixed;
-        break;
-    case EquationDebuggerBrowser::ResizeToContents:
-        m = QHeaderView::ResizeToContents;
-        break;
-    case EquationDebuggerBrowser::Stretch:
-    default:
-        m = QHeaderView::Stretch;
-        break;
+        d_ptr->m_sectionResizeRatios[ratios.keys().at(i)] = ratios.values().at(i);
     }
-    d_ptr->m_treeWidget->header()->setSectionResizeMode(m);
 }
 
-/*!
-    \property EquationDebuggerBrowser::splitterPosition
-    \brief the position of the splitter between the colunms.
-*/
-
-int EquationDebuggerBrowser::splitterPosition() const
+void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QVector<double> &ratios)
 {
-    return d_ptr->m_treeWidget->header()->sectionSize(0);
+    for(int i = 0; i < ratios.size(); ++i)
+    {
+        d_ptr->m_sectionResizeRatios[i] = ratios.at(i);
+    }
 }
 
-void EquationDebuggerBrowser::setSplitterPosition(int position)
+void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QList<double> &ratios)
 {
-    d_ptr->m_treeWidget->header()->resizeSection(0, position);
+    for(int i = 0; i < ratios.size(); ++i)
+    {
+        d_ptr->m_sectionResizeRatios[i] = ratios.at(i);
+    }
 }
+
+void VariablePropertyBrowser::setHeaderSectionResizeRatio(int section, double ratio)
+{
+    d_ptr->m_sectionResizeRatios[section] = ratio;
+}
+
 
 /*!
     Sets the \a item to either collapse or expanded, depending on the value of \a expanded.
@@ -937,7 +930,7 @@ void EquationDebuggerBrowser::setSplitterPosition(int position)
     \sa isExpanded(), expanded(), collapsed()
 */
 
-void EquationDebuggerBrowser::setExpanded(QtBrowserItem *item, bool expanded)
+void VariablePropertyBrowser::setExpanded(QtBrowserItem *item, bool expanded)
 {
     QTreeWidgetItem *treeItem = d_ptr->m_indexToItem.value(item);
     if (treeItem)
@@ -950,7 +943,7 @@ void EquationDebuggerBrowser::setExpanded(QtBrowserItem *item, bool expanded)
     \sa setExpanded()
 */
 
-bool EquationDebuggerBrowser::isExpanded(QtBrowserItem *item) const
+bool VariablePropertyBrowser::isExpanded(QtBrowserItem *item) const
 {
     QTreeWidgetItem *treeItem = d_ptr->m_indexToItem.value(item);
     if (treeItem)
@@ -965,7 +958,7 @@ bool EquationDebuggerBrowser::isExpanded(QtBrowserItem *item) const
     \since 4.5
 */
 
-bool EquationDebuggerBrowser::isItemVisible(QtBrowserItem *item) const
+bool VariablePropertyBrowser::isItemVisible(QtBrowserItem *item) const
 {
     if (const QTreeWidgetItem *treeItem = d_ptr->m_indexToItem.value(item))
         return !treeItem->isHidden();
@@ -979,7 +972,7 @@ bool EquationDebuggerBrowser::isItemVisible(QtBrowserItem *item) const
    \since 4.5
 */
 
-void EquationDebuggerBrowser::setItemVisible(QtBrowserItem *item, bool visible)
+void VariablePropertyBrowser::setItemVisible(QtBrowserItem *item, bool visible)
 {
     if (QTreeWidgetItem *treeItem = d_ptr->m_indexToItem.value(item))
         treeItem->setHidden(!visible);
@@ -992,7 +985,7 @@ void EquationDebuggerBrowser::setItemVisible(QtBrowserItem *item, bool visible)
     \sa backgroundColor(), calculatedBackgroundColor()
 */
 
-void EquationDebuggerBrowser::setBackgroundColor(QtBrowserItem *item, const QColor &color)
+void VariablePropertyBrowser::setBackgroundColor(QtBrowserItem *item, const QColor &color)
 {
     if (!d_ptr->m_indexToItem.contains(item))
         return;
@@ -1009,7 +1002,7 @@ void EquationDebuggerBrowser::setBackgroundColor(QtBrowserItem *item, const QCol
     \sa calculatedBackgroundColor(), setBackgroundColor()
 */
 
-QColor EquationDebuggerBrowser::backgroundColor(QtBrowserItem *item) const
+QColor VariablePropertyBrowser::backgroundColor(QtBrowserItem *item) const
 {
     return d_ptr->m_indexToBackgroundColor.value(item);
 }
@@ -1022,13 +1015,13 @@ QColor EquationDebuggerBrowser::backgroundColor(QtBrowserItem *item) const
     \sa backgroundColor(), setBackgroundColor()
 */
 
-QColor EquationDebuggerBrowser::calculatedBackgroundColor(QtBrowserItem *item) const
+QColor VariablePropertyBrowser::calculatedBackgroundColor(QtBrowserItem *item) const
 {
     return d_ptr->calculatedBackgroundColor(item);
 }
 
 /*!
-    \property EquationDebuggerBrowser::propertiesWithoutValueMarked
+    \property VariablePropertyBrowser::propertiesWithoutValueMarked
     \brief whether to enable or disable marking properties without value.
 
     When marking is enabled the item's background is rendered in dark color and item's
@@ -1036,7 +1029,7 @@ QColor EquationDebuggerBrowser::calculatedBackgroundColor(QtBrowserItem *item) c
 
     \sa propertiesWithoutValueMarked()
 */
-void EquationDebuggerBrowser::setPropertiesWithoutValueMarked(bool mark)
+void VariablePropertyBrowser::setPropertiesWithoutValueMarked(bool mark)
 {
     if (d_ptr->m_markPropertiesWithoutValue == mark)
         return;
@@ -1051,7 +1044,7 @@ void EquationDebuggerBrowser::setPropertiesWithoutValueMarked(bool mark)
     d_ptr->m_treeWidget->viewport()->update();
 }
 
-bool EquationDebuggerBrowser::propertiesWithoutValueMarked() const
+bool VariablePropertyBrowser::propertiesWithoutValueMarked() const
 {
     return d_ptr->m_markPropertiesWithoutValue;
 }
@@ -1059,7 +1052,7 @@ bool EquationDebuggerBrowser::propertiesWithoutValueMarked() const
 /*!
     \reimp
 */
-void EquationDebuggerBrowser::itemInserted(QtBrowserItem *item, QtBrowserItem *afterItem)
+void VariablePropertyBrowser::itemInserted(QtBrowserItem *item, QtBrowserItem *afterItem)
 {
     d_ptr->propertyInserted(item, afterItem);
 }
@@ -1067,7 +1060,7 @@ void EquationDebuggerBrowser::itemInserted(QtBrowserItem *item, QtBrowserItem *a
 /*!
     \reimp
 */
-void EquationDebuggerBrowser::itemRemoved(QtBrowserItem *item)
+void VariablePropertyBrowser::itemRemoved(QtBrowserItem *item)
 {
     d_ptr->propertyRemoved(item);
 }
@@ -1075,20 +1068,38 @@ void EquationDebuggerBrowser::itemRemoved(QtBrowserItem *item)
 /*!
     \reimp
 */
-void EquationDebuggerBrowser::itemChanged(QtBrowserItem *item)
+void VariablePropertyBrowser::itemChanged(QtBrowserItem *item)
 {
     d_ptr->propertyChanged(item);
 }
 
 /*!
+    \reimp
+*/
+void VariablePropertyBrowser::resizeEvent(QResizeEvent* event)
+{
+    QtAbstractPropertyBrowser::resizeEvent(event);
+    d_ptr->resizeHeaderSections();
+}
+
+/*!
+    \reimp
+*/
+void VariablePropertyBrowser::showEvent(QShowEvent* event)
+{
+    QtAbstractPropertyBrowser::showEvent(event);
+    d_ptr->resizeHeaderSections();
+}
+
+/*!
     Sets the current item to \a item and opens the relevant editor for it.
 */
-void EquationDebuggerBrowser::editItem(QtBrowserItem *item)
+void VariablePropertyBrowser::editItem(QtBrowserItem *item)
 {
     d_ptr->editItem(item);
 }
 } // namespace gui
 } // namespace xequation
 
-#include "equation_debugger_browser.moc"
-#include "moc_equation_debugger_browser.cpp"
+#include "moc_variable_property_browser.cpp"
+#include "variable_property_browser.moc"

@@ -3,8 +3,9 @@
 
 // Modified from QtPropertyBrowser
 // Support three columns: Name, Value, Type
+// Type is from QtProperty Type property
 // Enable Name column editing
-// Allow header section resizing by user
+// Allow user customization of header section resize ratios
 
 class QTreeWidgetItem;
 
@@ -12,31 +13,20 @@ namespace xequation
 {
 namespace gui
 {
-class EquationDebuggerBrowserPrivate;
+class VariablePropertyBrowserPrivate;
 
-class EquationDebuggerBrowser : public QtAbstractPropertyBrowser
+class VariablePropertyBrowser : public QtAbstractPropertyBrowser
 {
     Q_OBJECT
     Q_PROPERTY(int indentation READ indentation WRITE setIndentation)
     Q_PROPERTY(bool rootIsDecorated READ rootIsDecorated WRITE setRootIsDecorated)
     Q_PROPERTY(bool alternatingRowColors READ alternatingRowColors WRITE setAlternatingRowColors)
     Q_PROPERTY(bool headerVisible READ isHeaderVisible WRITE setHeaderVisible)
-    Q_PROPERTY(ResizeMode resizeMode READ resizeMode WRITE setResizeMode)
-    Q_PROPERTY(int splitterPosition READ splitterPosition WRITE setSplitterPosition)
     Q_PROPERTY(bool propertiesWithoutValueMarked READ propertiesWithoutValueMarked WRITE setPropertiesWithoutValueMarked
     )
   public:
-    enum ResizeMode
-    {
-        Interactive,
-        Stretch,
-        Fixed,
-        ResizeToContents
-    };
-    Q_ENUM(ResizeMode)
-
-    EquationDebuggerBrowser(QWidget *parent = 0);
-    ~EquationDebuggerBrowser();
+    VariablePropertyBrowser(QWidget *parent = 0);
+    ~VariablePropertyBrowser();
 
     int indentation() const;
     void setIndentation(int i);
@@ -50,11 +40,11 @@ class EquationDebuggerBrowser : public QtAbstractPropertyBrowser
     bool isHeaderVisible() const;
     void setHeaderVisible(bool visible);
 
-    ResizeMode resizeMode() const;
-    void setResizeMode(ResizeMode mode);
-
-    int splitterPosition() const;
-    void setSplitterPosition(int position);
+    QMap<int, double> headerSectionResizeRatios() const;
+    void setHeaderSectionResizeRatios(const QMap<int, double> &ratios);
+    void setHeaderSectionResizeRatios(const QVector<double> &ratios);
+    void setHeaderSectionResizeRatios(const QList<double> &ratios);
+    void setHeaderSectionResizeRatio(int section, double ratio);
 
     void setExpanded(QtBrowserItem *item, bool expanded);
     bool isExpanded(QtBrowserItem *item) const;
@@ -81,10 +71,12 @@ class EquationDebuggerBrowser : public QtAbstractPropertyBrowser
     virtual void itemRemoved(QtBrowserItem *item);
     virtual void itemChanged(QtBrowserItem *item);
 
+    virtual void resizeEvent(QResizeEvent* event);
+    virtual void showEvent(QShowEvent* event);
   private:
-    QScopedPointer<EquationDebuggerBrowserPrivate> d_ptr;
-    Q_DECLARE_PRIVATE(EquationDebuggerBrowser)
-    Q_DISABLE_COPY_MOVE(EquationDebuggerBrowser)
+    QScopedPointer<VariablePropertyBrowserPrivate> d_ptr;
+    Q_DECLARE_PRIVATE(VariablePropertyBrowser)
+    Q_DISABLE_COPY_MOVE(VariablePropertyBrowser)
 
     Q_PRIVATE_SLOT(d_func(), void slotCollapsed(const QModelIndex &))
     Q_PRIVATE_SLOT(d_func(), void slotExpanded(const QModelIndex &))
