@@ -21,8 +21,6 @@ bool BasicPythonPropertyConverter::CanConvert(pybind11::object obj) const
            pybind11::isinstance(obj, complex_type) || pybind11::isinstance<pybind11::bool_>(obj) || obj.is_none();
 }
 
-REGISTER_PYTHON_PROPERTY_CONVERTER(BasicPythonPropertyConverter, -100);
-REGISTER_PYTHON_PROPERTY_CONVERTER(DefaultPythonPropertyConverter, 100);
 } // namespace python
 } // namespace gui
 } // namespace xequation

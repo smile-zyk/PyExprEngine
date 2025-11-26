@@ -9,6 +9,8 @@ namespace xequation
 {
 namespace gui
 {
+using VariableProperty = QtProperty;
+
 class VariablePropertyManagerPrivate;
 
 class VariablePropertyManager : public QtAbstractPropertyManager
@@ -18,19 +20,19 @@ public:
     VariablePropertyManager(QObject *parent = 0);
     ~VariablePropertyManager();
 
-    QString value(const QtProperty *property) const;
-    QString type(const QtProperty *property) const;
+    QString value(const VariableProperty *property) const;
+    QString type(const VariableProperty *property) const;
 
 public Q_SLOTS:
-    void setValue(QtProperty *property, const QString &val);
-    void setType(QtProperty *property, const QString &type);
+    void setValue(VariableProperty *property, const QString &val);
+    void setType(VariableProperty *property, const QString &type);
 Q_SIGNALS:
-    void valueChanged(QtProperty *property, const QString &val);
-    void typeChanged(QtProperty *property, const QString &type);
+    void valueChanged(VariableProperty *property, const QString &val);
+    void typeChanged(VariableProperty *property, const QString &type);
 protected:
-    QString valueText(const QtProperty *property) const;
-    virtual void initializeProperty(QtProperty *property);
-    virtual void uninitializeProperty(QtProperty *property);
+    QString valueText(const VariableProperty *property) const;
+    virtual void initializeProperty(VariableProperty *property);
+    virtual void uninitializeProperty(VariableProperty *property);
 private:
     QScopedPointer<VariablePropertyManagerPrivate> d_ptr;
     Q_DECLARE_PRIVATE(VariablePropertyManager)

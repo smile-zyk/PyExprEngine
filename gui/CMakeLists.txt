@@ -13,6 +13,10 @@ variable_inspect_widget.h
 variable_inspect_widget.cc
 variable_property_manager.h
 variable_property_manager.cc
+python/converters/python_property_converter.h
+python/converters/python_property_converter.cc
+python/converters/basic_python_converter.h
+python/converters/basic_python_converter.cc
 )
 
 add_library(xequation_gui STATIC ${xequation_gui_SRC})

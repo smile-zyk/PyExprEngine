@@ -1,5 +1,6 @@
 #include "variable_property_browser.h"
 #include "variable_property_manager.h"
+#include <QDebug>
 #include <QtCore/QSet>
 #include <QtGui/QFocusEvent>
 #include <QtGui/QIcon>
@@ -29,11 +30,11 @@ class VariablePropertyBrowserPrivate
     void propertyInserted(QtBrowserItem *index, QtBrowserItem *afterIndex);
     void propertyRemoved(QtBrowserItem *index);
     void propertyChanged(QtBrowserItem *index);
-    QWidget *createEditor(QtProperty *property, QWidget *parent) const
+    QWidget *createEditor(VariableProperty *property, QWidget *parent) const
     {
         return q_ptr->createEditor(property, parent);
     }
-    QtProperty *indexToProperty(const QModelIndex &index) const;
+    VariableProperty *indexToProperty(const QModelIndex &index) const;
     QTreeWidgetItem *indexToItem(const QModelIndex &index) const;
     QtBrowserItem *indexToBrowserItem(const QModelIndex &index) const;
     bool lastColumn(int column) const;
@@ -47,6 +48,8 @@ class VariablePropertyBrowserPrivate
     QColor calculatedBackgroundColor(QtBrowserItem *item) const;
 
     void resizeHeaderSections();
+
+    void slotHeaderResized(int logicalIndex, int oldSize, int newSize);
 
     VariablePropertyBrowserView *treeWidget() const
     {
@@ -79,6 +82,7 @@ class VariablePropertyBrowserPrivate
     VariablePropertyBrowserView *m_treeWidget;
 
     bool m_headerVisible;
+    bool m_headerInteractiveDragging = false;
     class VariablePropertyBrowserDelegate *m_delegate;
     bool m_markPropertiesWithoutValue;
     bool m_browserChangedBlocked;
@@ -123,7 +127,7 @@ void VariablePropertyBrowserView::drawRow(
     bool hasValue = true;
     if (m_editorPrivate)
     {
-        QtProperty *property = m_editorPrivate->indexToProperty(index);
+        VariableProperty *property = m_editorPrivate->indexToProperty(index);
         if (property)
             hasValue = property->hasValue();
     }
@@ -193,8 +197,7 @@ void VariablePropertyBrowserView::mousePressEvent(QMouseEvent *event)
         {
             editItem(item, 1);
         }
-        else if (!m_editorPrivate->hasValue(item) && m_editorPrivate->markPropertiesWithoutValue() &&
-                 !rootIsDecorated())
+        else if (!m_editorPrivate->hasValue(item) && m_editorPrivate->markPropertiesWithoutValue() && !rootIsDecorated())
         {
             if (event->pos().x() + header()->offset() < 20)
                 item->setExpanded(!item->isExpanded());
@@ -230,7 +233,7 @@ class VariablePropertyBrowserDelegate : public QItemDelegate
     void setEditorData(QWidget *, const QModelIndex &) const {}
 
     bool eventFilter(QObject *object, QEvent *event);
-    void closeEditor(QtProperty *property);
+    void closeEditor(VariableProperty *property);
 
     QTreeWidgetItem *editedItem() const
     {
@@ -243,10 +246,10 @@ class VariablePropertyBrowserDelegate : public QItemDelegate
   private:
     int indentation(const QModelIndex &index) const;
 
-    typedef QMap<QWidget *, QtProperty *> EditorToPropertyMap;
+    typedef QMap<QWidget *, VariableProperty *> EditorToPropertyMap;
     mutable EditorToPropertyMap m_editorToProperty;
 
-    typedef QMap<QtProperty *, QWidget *> PropertyToEditorMap;
+    typedef QMap<VariableProperty *, QWidget *> PropertyToEditorMap;
     mutable PropertyToEditorMap m_propertyToEditor;
     VariablePropertyBrowserPrivate *m_editorPrivate;
     mutable QTreeWidgetItem *m_editedItem;
@@ -288,7 +291,7 @@ void VariablePropertyBrowserDelegate::slotEditorDestroyed(QObject *object)
     }
 }
 
-void VariablePropertyBrowserDelegate::closeEditor(QtProperty *property)
+void VariablePropertyBrowserDelegate::closeEditor(VariableProperty *property)
 {
     if (QWidget *w = m_propertyToEditor.value(property, 0))
         w->deleteLater();
@@ -300,7 +303,7 @@ QWidget *VariablePropertyBrowserDelegate::createEditor(
 {
     if (index.column() == 1 && m_editorPrivate)
     {
-        QtProperty *property = m_editorPrivate->indexToProperty(index);
+        VariableProperty *property = m_editorPrivate->indexToProperty(index);
         QTreeWidgetItem *item = m_editorPrivate->indexToItem(index);
         if (property && item && (item->flags() & Qt::ItemIsEnabled))
         {
@@ -336,14 +339,14 @@ void VariablePropertyBrowserDelegate::paint(
     bool hasValue = true;
     if (m_editorPrivate)
     {
-        QtProperty *property = m_editorPrivate->indexToProperty(index);
+        VariableProperty *property = m_editorPrivate->indexToProperty(index);
         if (property)
             hasValue = property->hasValue();
     }
     QStyleOptionViewItem opt = option;
     if ((m_editorPrivate && index.column() == 0) || !hasValue)
     {
-        QtProperty *property = m_editorPrivate->indexToProperty(index);
+        VariableProperty *property = m_editorPrivate->indexToProperty(index);
         if (property && property->isModified())
         {
             opt.font.setBold(true);
@@ -455,7 +458,7 @@ void VariablePropertyBrowserPrivate::init(QWidget *parent)
     m_delegate->setEditorPrivate(this);
     m_treeWidget->setItemDelegate(m_delegate);
     m_treeWidget->header()->setSectionsMovable(false);
-    m_treeWidget->header()->setSectionResizeMode(QHeaderView::Fixed);
+    m_treeWidget->header()->setSectionResizeMode(QHeaderView::Interactive);
     m_expandIcon = drawIndicatorIcon(q_ptr->palette(), q_ptr->style());
 
     QObject::connect(m_treeWidget, SIGNAL(collapsed(QModelIndex)), q_ptr, SLOT(slotCollapsed(QModelIndex)));
@@ -463,6 +466,9 @@ void VariablePropertyBrowserPrivate::init(QWidget *parent)
     QObject::connect(
         m_treeWidget, SIGNAL(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)), q_ptr,
         SLOT(slotCurrentTreeItemChanged(QTreeWidgetItem *, QTreeWidgetItem *))
+    );
+    QObject::connect(
+        m_treeWidget->header(), SIGNAL(sectionResized(int, int, int)), q_ptr, SLOT(slotHeaderResized(int, int, int))
     );
 }
 
@@ -484,7 +490,7 @@ void VariablePropertyBrowserPrivate::setCurrentItem(QtBrowserItem *browserItem, 
         m_treeWidget->blockSignals(blocked);
 }
 
-QtProperty *VariablePropertyBrowserPrivate::indexToProperty(const QModelIndex &index) const
+VariableProperty *VariablePropertyBrowserPrivate::indexToProperty(const QModelIndex &index) const
 {
     QTreeWidgetItem *item = m_treeWidget->indexToItem(index);
     QtBrowserItem *idx = m_itemToIndex.value(item);
@@ -535,7 +541,7 @@ void VariablePropertyBrowserPrivate::enableItem(QTreeWidgetItem *item) const
     for (int i = 0; i < childCount; i++)
     {
         QTreeWidgetItem *child = item->child(i);
-        QtProperty *property = m_itemToIndex[child]->property();
+        VariableProperty *property = m_itemToIndex[child]->property();
         if (property->isEnabled())
         {
             enableItem(child);
@@ -599,7 +605,7 @@ void VariablePropertyBrowserPrivate::propertyChanged(QtBrowserItem *index)
 
 void VariablePropertyBrowserPrivate::updateItem(QTreeWidgetItem *item)
 {
-    QtProperty *property = m_itemToIndex[item]->property();
+    VariableProperty *property = m_itemToIndex[item]->property();
     QIcon expandIcon;
     if (property->hasValue())
     {
@@ -613,9 +619,9 @@ void VariablePropertyBrowserPrivate::updateItem(QTreeWidgetItem *item)
     {
         expandIcon = m_expandIcon;
     }
-    if (dynamic_cast<VariablePropertyManager*>(property->propertyManager()))
+    if (dynamic_cast<VariablePropertyManager *>(property->propertyManager()))
     {
-        VariablePropertyManager *manager = static_cast<VariablePropertyManager*>(property->propertyManager());
+        VariablePropertyManager *manager = static_cast<VariablePropertyManager *>(property->propertyManager());
         QString type = manager->type(property);
         item->setToolTip(2, type);
         item->setText(2, type);
@@ -695,14 +701,57 @@ void VariablePropertyBrowserPrivate::resizeHeaderSections()
 
     QMap<int, double> ratios;
     double totalRatio = 0.0;
-    for(int i = 0; i < m_treeWidget->columnCount(); ++i)
+    for (int i = 0; i < m_treeWidget->columnCount(); ++i)
     {
         ratios[i] = m_sectionResizeRatios.value(i, 1.0);
         totalRatio += ratios[i];
     }
 
-    for (int i = 0; i < ratios.size(); ++i) {
+    for (int i = 0; i < ratios.size(); ++i)
+    {
         m_treeWidget->setColumnWidth(i, totalWidth * ratios[i] / totalRatio);
+    }
+}
+
+void VariablePropertyBrowserPrivate::slotHeaderResized(int logicalIndex, int oldSize, int newSize)
+{
+    if (m_headerInteractiveDragging == false)
+        return;
+    int sizeDiff = newSize - oldSize;
+    if (logicalIndex + 1 < m_treeWidget->header()->count())
+    {
+        m_treeWidget->header()->blockSignals(true);
+        int nextSectionSize = m_treeWidget->header()->sectionSize(logicalIndex + 1);
+        int minSize = m_treeWidget->header()->minimumSectionSize();
+        if (nextSectionSize - sizeDiff > minSize)
+        {
+            m_treeWidget->header()->resizeSection(logicalIndex + 1, nextSectionSize - sizeDiff);
+        }
+        else
+        {
+            m_treeWidget->header()->resizeSection(logicalIndex + 1, minSize);
+            m_treeWidget->header()->resizeSection(logicalIndex, oldSize + nextSectionSize - minSize);
+        }
+        m_treeWidget->header()->blockSignals(false);
+    }
+
+    double minSize = std::numeric_limits<double>::max();
+    QMap<int, double> sizes;
+
+    for (int i = 0; i < m_treeWidget->columnCount(); ++i)
+    {
+        double sectionSize = m_treeWidget->header()->sectionSize(i);
+        sizes[i] = sectionSize;
+        if (sectionSize < minSize)
+            minSize = sectionSize;
+    }
+
+    if (minSize > 0)
+    {
+        for (int i = 0; i < m_treeWidget->columnCount(); ++i)
+        {
+            m_sectionResizeRatios[i] = sizes[i] / minSize;
+        }
     }
 }
 
@@ -808,6 +857,7 @@ VariablePropertyBrowser::VariablePropertyBrowser(QWidget *parent)
     connect(
         this, SIGNAL(currentItemChanged(QtBrowserItem *)), this, SLOT(slotCurrentBrowserItemChanged(QtBrowserItem *))
     );
+    d_ptr->m_treeWidget->header()->viewport()->installEventFilter(this);
 }
 
 /*!
@@ -818,7 +868,7 @@ VariablePropertyBrowser::VariablePropertyBrowser(QWidget *parent)
     browsers. The properties are owned by the manager that created
     them.
 
-    \sa QtProperty, QtAbstractPropertyManager
+    \sa VariableProperty, QtAbstractPropertyManager
 */
 VariablePropertyBrowser::~VariablePropertyBrowser() {}
 
@@ -850,7 +900,7 @@ void VariablePropertyBrowser::setRootIsDecorated(bool show)
     d_ptr->m_treeWidget->setRootIsDecorated(show);
     for (auto it = d_ptr->m_itemToIndex.cbegin(), end = d_ptr->m_itemToIndex.cend(); it != end; ++it)
     {
-        QtProperty *property = it.value()->property();
+        VariableProperty *property = it.value()->property();
         if (!property->hasValue())
             d_ptr->updateItem(it.key());
     }
@@ -896,7 +946,7 @@ QMap<int, double> VariablePropertyBrowser::headerSectionResizeRatios() const
 
 void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QMap<int, double> &ratios)
 {
-    for(int i = 0; i < ratios.keys().size(); ++i)
+    for (int i = 0; i < ratios.keys().size(); ++i)
     {
         d_ptr->m_sectionResizeRatios[ratios.keys().at(i)] = ratios.values().at(i);
     }
@@ -904,7 +954,7 @@ void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QMap<int, doubl
 
 void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QVector<double> &ratios)
 {
-    for(int i = 0; i < ratios.size(); ++i)
+    for (int i = 0; i < ratios.size(); ++i)
     {
         d_ptr->m_sectionResizeRatios[i] = ratios.at(i);
     }
@@ -912,7 +962,7 @@ void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QVector<double>
 
 void VariablePropertyBrowser::setHeaderSectionResizeRatios(const QList<double> &ratios)
 {
-    for(int i = 0; i < ratios.size(); ++i)
+    for (int i = 0; i < ratios.size(); ++i)
     {
         d_ptr->m_sectionResizeRatios[i] = ratios.at(i);
     }
@@ -922,7 +972,6 @@ void VariablePropertyBrowser::setHeaderSectionResizeRatio(int section, double ra
 {
     d_ptr->m_sectionResizeRatios[section] = ratio;
 }
-
 
 /*!
     Sets the \a item to either collapse or expanded, depending on the value of \a expanded.
@@ -1037,7 +1086,7 @@ void VariablePropertyBrowser::setPropertiesWithoutValueMarked(bool mark)
     d_ptr->m_markPropertiesWithoutValue = mark;
     for (auto it = d_ptr->m_itemToIndex.cbegin(), end = d_ptr->m_itemToIndex.cend(); it != end; ++it)
     {
-        QtProperty *property = it.value()->property();
+        VariableProperty *property = it.value()->property();
         if (!property->hasValue())
             d_ptr->updateItem(it.key());
     }
@@ -1076,7 +1125,7 @@ void VariablePropertyBrowser::itemChanged(QtBrowserItem *item)
 /*!
     \reimp
 */
-void VariablePropertyBrowser::resizeEvent(QResizeEvent* event)
+void VariablePropertyBrowser::resizeEvent(QResizeEvent *event)
 {
     QtAbstractPropertyBrowser::resizeEvent(event);
     d_ptr->resizeHeaderSections();
@@ -1085,10 +1134,30 @@ void VariablePropertyBrowser::resizeEvent(QResizeEvent* event)
 /*!
     \reimp
 */
-void VariablePropertyBrowser::showEvent(QShowEvent* event)
+void VariablePropertyBrowser::showEvent(QShowEvent *event)
 {
     QtAbstractPropertyBrowser::showEvent(event);
     d_ptr->resizeHeaderSections();
+}
+
+bool VariablePropertyBrowser::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == d_ptr->m_treeWidget->header()->viewport())
+    {
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            d_ptr->m_headerInteractiveDragging = true;
+        }
+        else if (event->type() == QEvent::MouseButtonRelease)
+        {
+            d_ptr->m_headerInteractiveDragging = false;
+        }
+        else if (event->type() == QEvent::MouseButtonDblClick)
+        {
+            return true;
+        }
+    }
+    return QObject::eventFilter(obj, event);
 }
 
 /*!

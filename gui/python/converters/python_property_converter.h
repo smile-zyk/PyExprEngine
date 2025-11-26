@@ -4,16 +4,15 @@
 
 #include "python_qt_wrapper.h"
 
-class QtVariantProperty;
-class QtVariantPropertyManager;
-
+class QtProperty;
 namespace xequation
 {
 namespace gui
 {
+using VariableProperty = QtProperty;
+class VariablePropertyManager;
 namespace python
 {
-
 class PythonPropertyConverter
 {
   public:
@@ -21,8 +20,8 @@ class PythonPropertyConverter
 
     virtual bool CanConvert(pybind11::object obj) const = 0;
 
-    virtual QtVariantProperty *
-    CreateProperty(QtVariantPropertyManager *manager, const QString &name, pybind11::object obj);
+    virtual VariableProperty *
+    CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj);
 
     static QString GetTypeName(pybind11::object obj, bool qualified = false);
     static QString GetObjectStr(pybind11::object obj);
@@ -47,7 +46,7 @@ class PythonPropertyConverterRegistry
 
     PythonPropertyConverter *FindConverter(pybind11::object obj);
 
-    QtVariantProperty *CreateProperty(QtVariantPropertyManager *manager, const QString &name, pybind11::object obj);
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj);
 
     void Clear();
 
@@ -85,8 +84,8 @@ inline void UnRegisterPythonPropertyConverter(PythonPropertyConverter *converter
     PythonPropertyConverterRegistry::GetInstance().UnRegisterConverter(converter);
 }
 
-inline QtVariantProperty *
-CreatePythonProperty(QtVariantPropertyManager *manager, const QString &name, pybind11::object obj)
+inline VariableProperty *
+CreatePythonProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj)
 {
     return PythonPropertyConverterRegistry::GetInstance().CreateProperty(manager, name, obj);
 }
@@ -108,7 +107,7 @@ class PythonPropertyConverterAutoRegister
 
 #define REGISTER_PYTHON_PROPERTY_CONVERTER(ConverterClass, priority)                                                   \
     static xequation::gui::python::PythonPropertyConverterAutoRegister<ConverterClass>                                 \
-    s_autoRegister_##ConverterClass(priority)
+        s_autoRegister_##ConverterClass(priority)
 
 } // namespace python
 } // namespace gui

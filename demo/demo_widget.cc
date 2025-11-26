@@ -18,7 +18,7 @@
 
 using namespace xequation;
 
-DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent), equation_manager_widget_(nullptr)
+DemoWidget::DemoWidget(QWidget *parent) : QMainWindow(parent), equation_manager_widget_(nullptr), variable_inspect_widget_(nullptr)
 {
     SetupUI();
     SetupConnections();

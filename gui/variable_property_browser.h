@@ -3,7 +3,6 @@
 
 // Modified from QtPropertyBrowser
 // Support three columns: Name, Value, Type
-// Type is from QtProperty Type property
 // Enable Name column editing
 // Allow user customization of header section resize ratios
 
@@ -73,6 +72,8 @@ class VariablePropertyBrowser : public QtAbstractPropertyBrowser
 
     virtual void resizeEvent(QResizeEvent* event);
     virtual void showEvent(QShowEvent* event);
+
+    virtual bool eventFilter(QObject *obj, QEvent *event);
   private:
     QScopedPointer<VariablePropertyBrowserPrivate> d_ptr;
     Q_DECLARE_PRIVATE(VariablePropertyBrowser)
@@ -82,6 +83,7 @@ class VariablePropertyBrowser : public QtAbstractPropertyBrowser
     Q_PRIVATE_SLOT(d_func(), void slotExpanded(const QModelIndex &))
     Q_PRIVATE_SLOT(d_func(), void slotCurrentBrowserItemChanged(QtBrowserItem *))
     Q_PRIVATE_SLOT(d_func(), void slotCurrentTreeItemChanged(QTreeWidgetItem *, QTreeWidgetItem *))
+    Q_PRIVATE_SLOT(d_func(), void slotHeaderResized(int, int, int))
 };
 } // namespace gui
 } // namespace xequation

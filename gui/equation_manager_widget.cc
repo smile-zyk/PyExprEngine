@@ -94,7 +94,6 @@ void EquationManagerWidget::OnEquationUpdated(
             QtVariantProperty *dep_property = static_cast<QtVariantProperty *>(
                 property_manager_->addProperty(QVariant::String, QString::fromStdString(dep))
             );
-            dep_property->setVisible(true);
             if (equation->manager()->IsEquationExist(dep))
             {
                 std::string content = equation->manager()->GetEquation(dep)->content();
@@ -121,7 +120,6 @@ void EquationManagerWidget::OnEquationUpdated(
             QtVariantProperty *dep_property = static_cast<QtVariantProperty *>(
                 property_manager_->addProperty(QVariant::String, QString::fromStdString(dep))
             );
-            dep_property->setVisible(true);
             if (equation->manager()->IsEquationExist(dep))
             {
                 std::string content = equation->manager()->GetEquation(dep)->content();
@@ -156,14 +154,6 @@ EquationManagerWidget::EquationPropertyItem EquationManagerWidget::CreatePropert
         property_manager_->addProperty(QVariant::String, "Dependents")
     );
 
-    item.name_property->setVisible(true);
-    item.content_property->setVisible(true);
-    item.type_property->setVisible(true);
-    item.status_property->setVisible(true);
-    item.message_property->setVisible(true);
-    item.dependencies_group_property->setVisible(true);
-    item.dependents_group_property->setVisible(true);
-
     item.content_property->setValue(QString::fromStdString(equation->content()));
     item.type_property->setValue(QString::fromStdString(Equation::TypeToString(equation->type())));
     item.status_property->setValue(QString::fromStdString(Equation::StatusToString(equation->status())));
@@ -179,7 +169,6 @@ EquationManagerWidget::EquationPropertyItem EquationManagerWidget::CreatePropert
         QtVariantProperty *dep_property = static_cast<QtVariantProperty *>(
             property_manager_->addProperty(QVariant::String, QString::fromStdString(dep))
         );
-        dep_property->setVisible(true);
         if (equation->manager()->IsEquationExist(dep))
         {
             std::string content = equation->manager()->GetEquation(dep)->content();
@@ -202,7 +191,6 @@ EquationManagerWidget::EquationPropertyItem EquationManagerWidget::CreatePropert
         QtVariantProperty *dep_property = static_cast<QtVariantProperty *>(
             property_manager_->addProperty(QVariant::String, QString::fromStdString(dep))
         );
-        dep_property->setVisible(true);
         if (equation->manager()->IsEquationExist(dep))
         {
             std::string content = equation->manager()->GetEquation(dep)->content();

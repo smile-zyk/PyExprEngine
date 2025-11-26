@@ -17,8 +17,8 @@ public:
         QString type;
     };
 
-    typedef QMap<const QtProperty *, Data> PropertyValueMap;
-    QMap<const QtProperty *, Data> m_values;
+    typedef QMap<const VariableProperty *, Data> PropertyValueMap;
+    QMap<const VariableProperty *, Data> m_values;
 };
 
 VariablePropertyManager::VariablePropertyManager(QObject *parent)
@@ -32,7 +32,7 @@ VariablePropertyManager::~VariablePropertyManager()
     clear();
 }
 
-QString VariablePropertyManager::value(const QtProperty *property) const
+QString VariablePropertyManager::value(const VariableProperty *property) const
 {
     const auto it = d_ptr->m_values.constFind(property);
     if (it == d_ptr->m_values.constEnd())
@@ -40,7 +40,7 @@ QString VariablePropertyManager::value(const QtProperty *property) const
     return it.value().val;
 }
 
-QString VariablePropertyManager::type(const QtProperty *property) const
+QString VariablePropertyManager::type(const VariableProperty *property) const
 {
     const auto it = d_ptr->m_values.constFind(property);
     if (it == d_ptr->m_values.constEnd())
@@ -48,12 +48,12 @@ QString VariablePropertyManager::type(const QtProperty *property) const
     return it.value().type;
 }
 
-QString VariablePropertyManager::valueText(const QtProperty *property) const
+QString VariablePropertyManager::valueText(const VariableProperty *property) const
 {
     return value(property);
 }
 
-void VariablePropertyManager::setValue(QtProperty *property, const QString &val)
+void VariablePropertyManager::setValue(VariableProperty *property, const QString &val)
 {
     const VariablePropertyManagerPrivate::PropertyValueMap::iterator it = d_ptr->m_values.find(property);
     if (it == d_ptr->m_values.end())
@@ -72,7 +72,7 @@ void VariablePropertyManager::setValue(QtProperty *property, const QString &val)
     emit valueChanged(property, data.val);
 }
 
-void VariablePropertyManager::setType(QtProperty *property, const QString &type)
+void VariablePropertyManager::setType(VariableProperty *property, const QString &type)
 {
     const VariablePropertyManagerPrivate::PropertyValueMap::iterator it = d_ptr->m_values.find(property);
     if (it == d_ptr->m_values.end())
@@ -91,12 +91,12 @@ void VariablePropertyManager::setType(QtProperty *property, const QString &type)
     emit typeChanged(property, data.type);
 }
 
-void VariablePropertyManager::initializeProperty(QtProperty *property)
+void VariablePropertyManager::initializeProperty(VariableProperty *property)
 {
     d_ptr->m_values[property] = VariablePropertyManagerPrivate::Data();
 }
 
-void VariablePropertyManager::uninitializeProperty(QtProperty *property)
+void VariablePropertyManager::uninitializeProperty(VariableProperty *property)
 {
     d_ptr->m_values.remove(property);
 }

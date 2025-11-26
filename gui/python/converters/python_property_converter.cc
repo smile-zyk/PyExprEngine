@@ -1,7 +1,7 @@
 #include "python_property_converter.h"
+#include "variable_property_manager.h"
 
 #include <algorithm>
-#include <QtVariantPropertyManager>
 
 namespace xequation
 {
@@ -10,14 +10,15 @@ namespace gui
 namespace python
 {
 
-QtVariantProperty *
-PythonPropertyConverter::CreateProperty(QtVariantPropertyManager *manager, const QString &name, pybind11::object obj)
+VariableProperty *
+PythonPropertyConverter::CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj)
 {
     QString type_name = PythonPropertyConverter::GetTypeName(obj);
     QString object_str = PythonPropertyConverter::GetObjectStr(obj);
 
-    QtVariantProperty *property = manager->addProperty(QVariant::String, name);
-    property->setValue(type_name + ": " + object_str);
+    VariableProperty *property = manager->addProperty(name);
+    manager->setValue(property, object_str);
+    manager->setType(property, type_name);
     return property;
 }
 
@@ -27,7 +28,7 @@ QString PythonPropertyConverter::GetTypeName(pybind11::object obj, bool qualifie
 
     try
     {
-        pybind11::handle type_obj = obj.get_type();
+        pybind11::handle type_obj = pybind11::type::of(obj);
         pybind11::object type_name_attr = type_obj.attr("__name__");
         std::string type_name_str = type_name_attr.cast<std::string>();
 
@@ -126,8 +127,8 @@ PythonPropertyConverter *PythonPropertyConverterRegistry::FindConverter(pybind11
     return nullptr;
 }
 
-QtVariantProperty *PythonPropertyConverterRegistry::CreateProperty(
-    QtVariantPropertyManager *manager, const QString &name, pybind11::object obj
+VariableProperty *PythonPropertyConverterRegistry::CreateProperty(
+    VariablePropertyManager *manager, const QString &name, pybind11::object obj
 )
 {
     for (const auto &entry : converters_)
