@@ -7,23 +7,44 @@ namespace gui
 {
 namespace python
 {
-class DefaultPythonPropertyConverter : public PythonPropertyConverter
+class DefaultPropertyConverter : public PythonPropertyConverter
 {
   public:
-    bool CanConvert(pybind11::object obj) const override;
+    bool CanConvert(pybind11::handle obj) const override;
 };
 
-class BasicPythonPropertyConverter : public PythonPropertyConverter
+class BasicPropertyConverter : public PythonPropertyConverter
 {
   public:
-    bool CanConvert(pybind11::object obj) const override;
+    bool CanConvert(pybind11::handle obj) const override;
 };
 
 class ListPropertyConverter : public PythonPropertyConverter
 {
   public:
-    bool CanConvert(pybind11::object obj) const override;
-    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj) override;
+    bool CanConvert(pybind11::handle obj) const override;
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
+};
+
+class TuplePropertyConverter : public PythonPropertyConverter
+{
+  public:
+    bool CanConvert(pybind11::handle obj) const override;
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
+};
+
+class SetPropertyConverter : public PythonPropertyConverter
+{
+  public:
+    bool CanConvert(pybind11::handle obj) const override;
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
+};
+
+class DictPropertyConverter : public PythonPropertyConverter
+{
+  public:
+    bool CanConvert(pybind11::handle obj) const override;
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
 };
 } // namespace python
 } // namespace gui

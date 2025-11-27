@@ -11,7 +11,7 @@ namespace python
 {
 
 VariableProperty *
-PythonPropertyConverter::CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj)
+PythonPropertyConverter::CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj)
 {
     QString type_name = PythonPropertyConverter::GetTypeName(obj);
     QString object_str = PythonPropertyConverter::GetObjectStr(obj);
@@ -22,19 +22,19 @@ PythonPropertyConverter::CreateProperty(VariablePropertyManager *manager, const 
     return property;
 }
 
-QString PythonPropertyConverter::GetTypeName(pybind11::object obj, bool qualified)
+QString PythonPropertyConverter::GetTypeName(pybind11::handle obj, bool qualified)
 {
     pybind11::gil_scoped_acquire acquire;
 
     try
     {
         pybind11::handle type_obj = pybind11::type::of(obj);
-        pybind11::object type_name_attr = type_obj.attr("__name__");
+        pybind11::handle type_name_attr = type_obj.attr("__name__");
         std::string type_name_str = type_name_attr.cast<std::string>();
 
         if (qualified && pybind11::hasattr(type_obj, "__module__"))
         {
-            pybind11::object module_attr = type_obj.attr("__module__");
+            pybind11::handle module_attr = type_obj.attr("__module__");
             std::string module_str = module_attr.cast<std::string>();
 
             if (!module_str.empty() && module_str != "builtins" && module_str != "__main__" && module_str != "builtin")
@@ -57,24 +57,23 @@ QString PythonPropertyConverter::GetTypeName(pybind11::object obj, bool qualifie
     }
 }
 
-QString PythonPropertyConverter::GetObjectStr(pybind11::object obj)
+QString PythonPropertyConverter::GetObjectStr(pybind11::handle obj)
 {
     pybind11::gil_scoped_acquire acquire;
 
     try
     {
-        pybind11::object str_obj = pybind11::str(obj);
-        std::string str_result = str_obj.cast<std::string>();
-
-        return QString::fromStdString(str_result);
+        pybind11::handle repr_obj = pybind11::repr(obj);
+        std::string repr_result = repr_obj.cast<std::string>();
+        return QString::fromStdString(repr_result);
     }
     catch (const std::exception &e)
     {
         try
         {
-            pybind11::object repr_obj = pybind11::repr(obj);
-            std::string repr_result = repr_obj.cast<std::string>();
-            return QString::fromStdString(repr_result);
+            pybind11::handle str_obj = pybind11::str(obj);
+            std::string str_result = str_obj.cast<std::string>();
+            return QString::fromStdString(str_result);
         }
         catch (const std::exception &e2)
         {
@@ -115,7 +114,7 @@ void PythonPropertyConverterRegistry::UnRegisterConverter(PythonPropertyConverte
     }
 }
 
-PythonPropertyConverter *PythonPropertyConverterRegistry::FindConverter(pybind11::object obj)
+PythonPropertyConverter *PythonPropertyConverterRegistry::FindConverter(pybind11::handle obj)
 {
     for (const auto &entry : converters_)
     {
@@ -128,7 +127,7 @@ PythonPropertyConverter *PythonPropertyConverterRegistry::FindConverter(pybind11
 }
 
 VariableProperty *PythonPropertyConverterRegistry::CreateProperty(
-    VariablePropertyManager *manager, const QString &name, pybind11::object obj
+    VariablePropertyManager *manager, const QString &name, pybind11::handle obj
 )
 {
     for (const auto &entry : converters_)

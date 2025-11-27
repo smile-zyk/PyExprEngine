@@ -10,9 +10,12 @@ namespace gui
 {
 namespace python
 {
-REGISTER_PYTHON_PROPERTY_CONVERTER(BasicPythonPropertyConverter,  0);
-REGISTER_PYTHON_PROPERTY_CONVERTER(ListPropertyConverter, 1);
-REGISTER_PYTHON_PROPERTY_CONVERTER(DefaultPythonPropertyConverter, 100);
+REGISTER_PYTHON_PROPERTY_CONVERTER(BasicPropertyConverter);
+REGISTER_PYTHON_PROPERTY_CONVERTER(ListPropertyConverter);
+REGISTER_PYTHON_PROPERTY_CONVERTER(TuplePropertyConverter);
+REGISTER_PYTHON_PROPERTY_CONVERTER(SetPropertyConverter);
+REGISTER_PYTHON_PROPERTY_CONVERTER(DictPropertyConverter);
+REGISTER_PYTHON_PROPERTY_CONVERTER_WITH_PRIORITY(DefaultPropertyConverter, 100);
 } // namespace python
 
 VariableInspectWidget::VariableInspectWidget(QWidget *parent)

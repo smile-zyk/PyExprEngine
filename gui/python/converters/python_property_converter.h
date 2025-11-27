@@ -18,13 +18,13 @@ class PythonPropertyConverter
   public:
     virtual ~PythonPropertyConverter() = default;
 
-    virtual bool CanConvert(pybind11::object obj) const = 0;
+    virtual bool CanConvert(pybind11::handle obj) const = 0;
 
     virtual VariableProperty *
-    CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj);
+    CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj);
 
-    static QString GetTypeName(pybind11::object obj, bool qualified = false);
-    static QString GetObjectStr(pybind11::object obj);
+    static QString GetTypeName(pybind11::handle obj, bool qualified = false);
+    static QString GetObjectStr(pybind11::handle obj);
 
     PythonPropertyConverter(const PythonPropertyConverter &) = delete;
     PythonPropertyConverter &operator=(const PythonPropertyConverter &) = delete;
@@ -44,9 +44,9 @@ class PythonPropertyConverterRegistry
 
     void UnRegisterConverter(PythonPropertyConverter *converter);
 
-    PythonPropertyConverter *FindConverter(pybind11::object obj);
+    PythonPropertyConverter *FindConverter(pybind11::handle obj);
 
-    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj);
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj);
 
     void Clear();
 
@@ -85,12 +85,12 @@ inline void UnRegisterPythonPropertyConverter(PythonPropertyConverter *converter
 }
 
 inline VariableProperty *
-CreatePythonProperty(VariablePropertyManager *manager, const QString &name, pybind11::object obj)
+CreatePythonProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj)
 {
-    return PythonPropertyConverterRegistry::GetInstance().CreateProperty(manager, name, obj);
+  return PythonPropertyConverterRegistry::GetInstance().CreateProperty(manager, name, obj);
 }
 
-inline PythonPropertyConverter *FindPythonPropertyConverter(pybind11::object obj)
+inline PythonPropertyConverter *FindPythonPropertyConverter(pybind11::handle obj)
 {
     return PythonPropertyConverterRegistry::GetInstance().FindConverter(obj);
 }
@@ -105,9 +105,13 @@ class PythonPropertyConverterAutoRegister
     }
 };
 
-#define REGISTER_PYTHON_PROPERTY_CONVERTER(ConverterClass, priority)                                                   \
+#define REGISTER_PYTHON_PROPERTY_CONVERTER_WITH_PRIORITY(ConverterClass, priority)                                                   \
     static xequation::gui::python::PythonPropertyConverterAutoRegister<ConverterClass>                                 \
         s_autoRegister_##ConverterClass(priority)
+
+#define REGISTER_PYTHON_PROPERTY_CONVERTER(ConverterClass)                                                   \
+    static xequation::gui::python::PythonPropertyConverterAutoRegister<ConverterClass>                                 \
+        s_autoRegister_##ConverterClass;
 
 } // namespace python
 } // namespace gui
