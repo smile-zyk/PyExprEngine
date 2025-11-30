@@ -6,6 +6,8 @@
 #include "core/equation_signals_manager.h"
 #include "variable_property_browser.h"
 #include "variable_property_manager.h"
+#include "debugger/variable_view.h"
+#include "debugger/variable_data_manager.h"
 
 namespace xequation
 {
@@ -31,10 +33,10 @@ private:
     void SetupConnections();
 
 private:
-    VariablePropertyBrowser *m_variable_property_browser;
-    VariablePropertyManager *m_variable_property_manager;
     VariableProperty *m_variable_property{nullptr};
     const Equation* current_equation_{nullptr};
+    VariableModelDataManager* variable_manager_;
+    VariableView* variable_view_;
 };
 }
 }

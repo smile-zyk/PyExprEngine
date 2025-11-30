@@ -17,6 +17,12 @@ python/converters/python_property_converter.h
 python/converters/python_property_converter.cc
 python/converters/basic_python_converter.h
 python/converters/basic_python_converter.cc
+debugger/variable_view.h
+debugger/variable_view.cc
+debugger/variable_model.h
+debugger/variable_model.cc
+debugger/variable_data_manager.h
+debugger/variable_data_manager.cc
 )
 
 add_library(xequation_gui STATIC ${xequation_gui_SRC})
