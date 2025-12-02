@@ -8,8 +8,8 @@ namespace xequation
 {
 namespace gui
 {
-class VariableModelData;
-class VariableModelDataManager;
+class Variable;
+class VariableManager;
 class VariableModel : public QAbstractItemModel
 {
     Q_OBJECT
@@ -24,19 +24,29 @@ class VariableModel : public QAbstractItemModel
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
-    void SetRootData(const QVector<VariableModelData *> &root_data);
-    void AddRootData(VariableModelData *data);
-    void RemoveRootData(VariableModelData *data);
+    void SetRootData(const QList<Variable *> &root_data);
+    void AddRootData(Variable *data);
+    void RemoveRootData(Variable *data);
     void ClearRootData();
-    VariableModelData *GetRootData() const;
+    Variable *GetRootData() const;
+
+  protected:
+    void OnVariableChanged(Variable* variable);
+    void OnVariablesChanged(const QList<Variable*>& variables);
+    void OnVariableChildInserted(Variable* parent, Variable* child);
+    void OnVariableChildRemoved(Variable* parent, Variable* child);
+    void OnVariableChildrenInserted(Variable* parent, const QList<Variable*>& children);
+    void OnVariableChildrenRemoved(Variable* parent, const QList<Variable*>& children);
 
   private:
-    QModelIndex CreateIndexFromData(VariableModelData *data, int row, int column) const;
-    VariableModelData *GetDataFromIndex(const QModelIndex &index) const;
-    int RowOfChildInParent(VariableModelData *parent, VariableModelData *child) const;
+    Variable *GetVariableFromIndex(const QModelIndex &index) const;
+    QModelIndex GetIndexFromVariable(Variable *data) const;
+    int RowOfChildInParent(Variable *parent, Variable *child) const;
 
   private:
-    QVector<VariableModelData *> root_data_;
+    QList<Variable *> root_data_;
+    QHash<Variable*, QPair<int, Variable*>> data_index_cache_; // variable -> (row, parent)
+    QHash<Variable*, VariableManager*> variable_manager_cache_;
 };
 
 } // namespace gui

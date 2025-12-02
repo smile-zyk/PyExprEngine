@@ -1,5 +1,5 @@
 #pragma once
-#include "python_property_converter.h"
+#include "python_variable_converter.h"
 
 namespace xequation
 {
@@ -7,40 +7,40 @@ namespace gui
 {
 namespace python
 {
-class DefaultPropertyConverter : public PythonPropertyConverter
+class DefaultVariableConverter : public PythonVariableConverter
 {
   public:
     bool CanConvert(pybind11::handle obj) const override;
 };
 
-class BasicPropertyConverter : public PythonPropertyConverter
+class BasicVariableConverter : public PythonVariableConverter
 {
   public:
     bool CanConvert(pybind11::handle obj) const override;
 };
 
-class ListPropertyConverter : public PythonPropertyConverter
-{
-  public:
-    bool CanConvert(pybind11::handle obj) const override;
-    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
-};
-
-class TuplePropertyConverter : public PythonPropertyConverter
+class ListVariableConverter : public PythonVariableConverter
 {
   public:
     bool CanConvert(pybind11::handle obj) const override;
     VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
 };
 
-class SetPropertyConverter : public PythonPropertyConverter
+class TupleVariableConverter : public PythonVariableConverter
 {
   public:
     bool CanConvert(pybind11::handle obj) const override;
     VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
 };
 
-class DictPropertyConverter : public PythonPropertyConverter
+class SetVariableConverter : public PythonVariableConverter
+{
+  public:
+    bool CanConvert(pybind11::handle obj) const override;
+    VariableProperty *CreateProperty(VariablePropertyManager *manager, const QString &name, pybind11::handle obj) override;
+};
+
+class DictVariableConverter : public PythonVariableConverter
 {
   public:
     bool CanConvert(pybind11::handle obj) const override;

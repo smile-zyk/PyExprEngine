@@ -1,5 +1,5 @@
 #include "variable_model.h"
-#include "variable_data_manager.h"
+#include "variable_manager.h"
 
 namespace xequation
 {
@@ -15,14 +15,14 @@ VariableModel::~VariableModel()
 {
 }
 
-void VariableModel::SetRootData(const QVector<VariableModelData *> &root_data)
+void VariableModel::SetRootData(const QList<Variable *> &root_data)
 {
     beginResetModel();
     root_data_ = root_data;
     endResetModel();
 }
 
-void VariableModel::AddRootData(VariableModelData *data)
+void VariableModel::AddRootData(Variable *data)
 {
     if (!data) return;
     int row = root_data_.size();
@@ -31,7 +31,7 @@ void VariableModel::AddRootData(VariableModelData *data)
     endInsertRows();
 }
 
-void VariableModel::RemoveRootData(VariableModelData *data)
+void VariableModel::RemoveRootData(Variable *data)
 {
     if (!data) return;
     int row = root_data_.indexOf(data);
@@ -51,7 +51,7 @@ void VariableModel::ClearRootData()
     endResetModel();
 }
 
-VariableModelData *VariableModel::GetRootData() const
+Variable *VariableModel::GetRootData() const
 {
     return root_data_.isEmpty() ? nullptr : root_data_.first();
 }
@@ -67,7 +67,7 @@ int VariableModel::rowCount(const QModelIndex &parent) const
     if (!parent.isValid())
         return root_data_.size();
 
-    auto *parent_data = GetDataFromIndex(parent);
+    auto *parent_data = GetVariableFromIndex(parent);
     if (!parent_data) return 0;
     return parent_data->ChildCount();
 }
@@ -82,7 +82,7 @@ QModelIndex VariableModel::index(int row, int column, const QModelIndex &parent)
         return createIndex(row, column, root_data_[row]);
     }
 
-    auto *parent_data = GetDataFromIndex(parent);
+    auto *parent_data = GetVariableFromIndex(parent);
     if (!parent_data) return QModelIndex();
 
     auto *child = parent_data->GetChildAt(row);
@@ -95,7 +95,7 @@ QModelIndex VariableModel::parent(const QModelIndex &child) const
 {
     if (!child.isValid()) return QModelIndex();
 
-    auto *child_data = GetDataFromIndex(child);
+    auto *child_data = GetVariableFromIndex(child);
     if (!child_data) return QModelIndex();
 
     auto *parent_data = child_data->parent();
@@ -121,7 +121,7 @@ QVariant VariableModel::data(const QModelIndex &index, int role) const
     if (!index.isValid()) return QVariant();
     if (role != Qt::DisplayRole && role != Qt::EditRole) return QVariant();
 
-    auto *d = GetDataFromIndex(index);
+    auto *d = GetVariableFromIndex(index);
     if (!d) return QVariant();
 
     switch (index.column())
@@ -148,28 +148,36 @@ QVariant VariableModel::headerData(int section, Qt::Orientation orientation, int
     return QVariant();
 }
 
-QModelIndex VariableModel::CreateIndexFromData(VariableModelData *data, int row, int column) const
+Variable *VariableModel::GetVariableFromIndex(const QModelIndex &index) const
+{
+    return index.isValid() ? static_cast<Variable *>(index.internalPointer()) : nullptr;
+}
+
+QModelIndex VariableModel::GetIndexFromVariable(Variable *data) const
 {
     if (!data) return QModelIndex();
-    return createIndex(row, column, data);
+
+    int idx = root_data_.indexOf(data);
+    if (idx >= 0)
+        return createIndex(idx, 0, data);
+
+    auto *parent_data = data->parent();
+    if (!parent_data) return QModelIndex();
+
+    int row = RowOfChildInParent(parent_data, data);
+    if (row < 0) return QModelIndex();
+
+    QModelIndex parent_index = GetIndexFromVariable(parent_data);
+    if (!parent_index.isValid()) return QModelIndex();
+
+    return createIndex(row, 0, data);
 }
 
-VariableModelData *VariableModel::GetDataFromIndex(const QModelIndex &index) const
-{
-    return index.isValid() ? static_cast<VariableModelData *>(index.internalPointer()) : nullptr;
-}
-
-int VariableModel::RowOfChildInParent(VariableModelData *parent, VariableModelData *child) const
+int VariableModel::RowOfChildInParent(Variable *parent, Variable *child) const
 {
     if (!parent || !child) return -1;
-    int i = 0;
     const auto children = parent->children();
-    for (auto *c : children)
-    {
-        if (c == child) return i;
-        ++i;
-    }
-    return -1;
+    return children.indexOf(child);
 }
 
 } // namespace gui
