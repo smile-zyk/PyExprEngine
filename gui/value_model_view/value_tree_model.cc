@@ -3,6 +3,8 @@
 #include "python_item_builder.h"
 #include <QVariant>
 
+#define LOAD_BATCH_SIZE 50
+
 namespace xequation
 {
 namespace gui
@@ -40,7 +42,7 @@ QModelIndex ValueTreeModel::index(int row, int column, const QModelIndex &parent
     if (!parentItem)
         return QModelIndex();
 
-    if (!parentItem->is_loaded())
+    if (row >= parentItem->loaded_child_count())
         return QModelIndex();
 
     ValueItem* child = parentItem->GetChildAt(row);
@@ -89,12 +91,7 @@ int ValueTreeModel::rowCount(const QModelIndex &parent) const
     if (!item)
         return 0;
 
-    if (!item->is_loaded())
-    {
-        return item->has_children() ? 1 : 0;
-    }
-
-    return static_cast<int>(item->ChildCount());
+    return static_cast<int>(item->loaded_child_count());
 }
 
 int ValueTreeModel::columnCount(const QModelIndex & /*parent*/) const
@@ -127,9 +124,9 @@ QVariant ValueTreeModel::headerData(int section, Qt::Orientation orientation, in
 
     switch (section)
     {
-    case 0: return QStringLiteral("Name");
-    case 1: return QStringLiteral("Value");
-    case 2: return QStringLiteral("Type");
+    case 0: return "Name";
+    case 1: return "Value";
+    case 2: return "Type";
     default: return QVariant();
     }
 }
@@ -155,21 +152,23 @@ bool ValueTreeModel::canFetchMore(const QModelIndex& parent) const
     if (!item)
         return false;
 
-    return item->has_children() && !item->is_loaded();
+    return item->HasChildren() && !item->IsLoaded();
 }
 
 void ValueTreeModel::fetchMore(const QModelIndex& parent)
 {
     ValueItem* item = GetValueItemFromIndex(parent);
-    if (!item || item->is_loaded())
+    if (!item || item->IsLoaded())
         return;
 
-    size_t expected_count = item->about_to_load_child_count();
-    if (expected_count == 0)
-        return;
+    size_t loaded_count = item->loaded_child_count();
+    size_t expected_count = item->expected_child_count();
 
-    beginInsertRows(parent, 0, static_cast<int>(expected_count) - 1);
-    item->LoadChildren();
+    int begin = loaded_count;
+    int end = loaded_count + LOAD_BATCH_SIZE - 1 > expected_count - 1 ? expected_count - 1 : loaded_count + LOAD_BATCH_SIZE - 1;
+    
+    beginInsertRows(parent, begin, end);
+    item->LoadChildren(begin, end);
     endInsertRows();
 }
 

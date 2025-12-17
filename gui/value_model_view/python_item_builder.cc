@@ -118,13 +118,13 @@ ValueItem::UniquePtr PythonListItemBuilder::CreateValueItem(const QString &name,
     QString value_str = QString("{size = %1}").arg(length);
     item->set_display_value(value_str);
     item->set_type(GetTypeName(obj));
-    item->set_about_to_load_child_count(length);
+    item->set_expected_count(length);
     return item;
 }
 
-void PythonListItemBuilder::LoadChildren(ValueItem *item)
+void PythonListItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 {
-    if (!item || item->is_loaded())
+    if (!item || item->IsLoaded())
     {
         return;
     }
@@ -132,7 +132,7 @@ void PythonListItemBuilder::LoadChildren(ValueItem *item)
     auto obj = py::cast(item->value());
     auto list = py::cast<py::list>(obj);
 
-    for (size_t i = 0; i < list.size(); ++i)
+    for (size_t i = begin; i <= end; ++i)
     {
         QString key = QString("[%1]").arg(i);
         Value child_value(py::cast<py::object>(list[i]));
@@ -168,20 +168,20 @@ ValueItem::UniquePtr PythonTupleItemBuilder::CreateValueItem(const QString &name
     QString value_str = QString("{size = %1}").arg(length);
     item->set_display_value(value_str);
     item->set_type(GetTypeName(obj));
-    item->set_about_to_load_child_count(length);
+    item->set_expected_count(length);
     return item;
 }
 
-void PythonTupleItemBuilder::LoadChildren(ValueItem *item)
+void PythonTupleItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 {
-    if (!item || item->is_loaded())
+    if (!item || item->IsLoaded())
     {
         return;
     }
 
     auto obj = py::cast(item->value());
     auto tuple = py::cast<py::tuple>(obj);
-    for (size_t i = 0; i < tuple.size(); ++i)
+    for (size_t i = begin; i <= end; ++i)
     {
         QString key = QString("[%1]").arg(i);
         Value child_value(py::cast<py::object>(tuple[i]));
@@ -217,24 +217,26 @@ ValueItem::UniquePtr PythonSetItemBuilder::CreateValueItem(const QString &name, 
     QString value_str = QString("{size = %1}").arg(length);
     item->set_display_value(value_str);
     item->set_type(GetTypeName(obj));
-    item->set_about_to_load_child_count(length);
+    item->set_expected_count(length);
     return item;
 }
 
-void PythonSetItemBuilder::LoadChildren(ValueItem *item)
+void PythonSetItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 {
-    if (!item || item->is_loaded())
+    if (!item || item->IsLoaded())
     {
         return;
     }
 
     auto obj = py::cast(item->value());
     auto set = py::cast<py::set>(obj);
-    py::size_t index = 0;
-    for (auto set_item : set)
+    for(int i = begin; i <= end; i++)
     {
-        QString item_name = QString("[%1]").arg(index++);
-        ValueItem::UniquePtr child_item = BuilderUtils::CreateValueItem(item_name, set_item, item);
+        auto it = set.begin();
+        std::advance(it, i);
+        Value child_value = *it;
+        QString item_name = QString("[%1]").arg(i);
+        ValueItem::UniquePtr child_item = BuilderUtils::CreateValueItem(item_name, child_value, item);
         item->AddChild(std::move(child_item));
     }
 }
@@ -263,27 +265,26 @@ ValueItem::UniquePtr PythonDictItemBuilder::CreateValueItem(const QString &name,
     QString value_str = QString("{size = %1}").arg(length);
     item->set_display_value(value_str);
     item->set_type(GetTypeName(obj));
-    item->set_about_to_load_child_count(length);
+    item->set_expected_count(length);
     return item;
 }
 
-void PythonDictItemBuilder::LoadChildren(ValueItem *item)
+void PythonDictItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 {
-    if (!item || item->is_loaded())
+    if (!item || item->IsLoaded())
     {
         return;
     }
 
     auto obj = py::cast(item->value());
     auto dict = py::cast<py::dict>(obj);
-    py::size_t index = 0;
-    for (auto dict_item : dict)
+    for(int i = begin; i <= end; i++)
     {
-        py::handle key = dict_item.first;
-        py::handle value = dict_item.second;
-
+        auto it = dict.begin();
+        std::advance(it, i);
+        py::handle key = it->first;
+        py::handle value = it->first;
         QString key_str = PythonDefaultItemBuilder::GetObjectRepr(key);
-        QString value_str = PythonDefaultItemBuilder::GetObjectRepr(value);
         ValueItem::UniquePtr child_item = BuilderUtils::CreateValueItem(key_str, value, item);
         item->AddChild(std::move(child_item));
     }

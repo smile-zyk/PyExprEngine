@@ -12,7 +12,7 @@ class ValueItemBuilder
     virtual bool CanBuild(const Value &value) = 0;
     virtual ValueItem::UniquePtr
     CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) = 0;
-    virtual void LoadChildren(ValueItem *item) = 0;
+    virtual void LoadChildren(ValueItem *item, int begin, int end) = 0;
 
   protected:
     ValueItemBuilder() = default;
@@ -31,7 +31,7 @@ class ValueItemBuilderRegistry
 
     ValueItem::UniquePtr CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) const;
 
-    void LoadChildren(ValueItem *item) const;
+    void LoadChildren(ValueItem *item, int begin, int end) const;
 
     void Clear();
 
@@ -76,9 +76,9 @@ CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nul
     return ValueItemBuilderRegistry::GetInstance().CreateValueItem(name, value, parent);
 }
 
-inline ValueItemBuilder *FindValueItemBuilder(const Value &value)
+inline void LoadChildren(ValueItem *item, int begin, int end)
 {
-    return ValueItemBuilderRegistry::GetInstance().FindBuilder(value);
+    return ValueItemBuilderRegistry::GetInstance().LoadChildren(item, begin, end);
 }
 } // namespace BuilderUtils
 

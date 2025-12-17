@@ -16,7 +16,7 @@ class PythonDefaultItemBuilder : public ValueItemBuilder
 
     virtual ValueItem::UniquePtr CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) override;
 
-    virtual void LoadChildren(ValueItem *item) override {}
+    virtual void LoadChildren(ValueItem *item, int begin, int end) override {}
   protected:
     static QString GetTypeName(pybind11::handle obj, bool qualified = false);
     static QString GetObjectRepr(pybind11::handle obj);
@@ -27,7 +27,7 @@ class PythonListItemBuilder : public PythonDefaultItemBuilder
   public:
     virtual bool CanBuild(const Value &value) override;
     virtual ValueItem::UniquePtr CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) override;
-    virtual void LoadChildren(ValueItem *item) override;
+    virtual void LoadChildren(ValueItem *item, int begin, int end) override;
 };
 
 class PythonTupleItemBuilder : public PythonDefaultItemBuilder
@@ -35,7 +35,7 @@ class PythonTupleItemBuilder : public PythonDefaultItemBuilder
   public:
     virtual bool CanBuild(const Value &value) override;
     virtual ValueItem::UniquePtr CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) override;
-    virtual void LoadChildren(ValueItem *item) override;
+    virtual void LoadChildren(ValueItem *item, int begin, int end) override;
 };
 
 class PythonSetItemBuilder : public PythonDefaultItemBuilder
@@ -43,7 +43,7 @@ class PythonSetItemBuilder : public PythonDefaultItemBuilder
   public:
     virtual bool CanBuild(const Value &value) override;
     virtual ValueItem::UniquePtr CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) override;
-    virtual void LoadChildren(ValueItem *item) override;
+    virtual void LoadChildren(ValueItem *item, int begin, int end) override;
 };
 
 class PythonDictItemBuilder : public PythonDefaultItemBuilder
@@ -51,7 +51,7 @@ class PythonDictItemBuilder : public PythonDefaultItemBuilder
   public:
     virtual bool CanBuild(const Value &value) override;
     virtual ValueItem::UniquePtr CreateValueItem(const QString &name, const Value &value, ValueItem *parent = nullptr) override;
-    virtual void LoadChildren(ValueItem *item) override;
+    virtual void LoadChildren(ValueItem *item, int begin, int end) override;
 };
 } // namespace gui
 } // namespace xequation

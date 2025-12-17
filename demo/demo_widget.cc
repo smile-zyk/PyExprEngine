@@ -252,6 +252,11 @@ bool DemoWidget::EditEquationGroup(const xequation::EquationGroupId &id, const s
         QMessageBox::warning(this, "Warning", e.what(), QMessageBox::Ok);
         return false;
     }
+    catch (const ParseException &e)
+    {
+        QMessageBox::warning(this, "Warning", e.what(), QMessageBox::Ok);
+        return false;
+    }
     catch (const DependencyCycleException &e)
     {
         QMessageBox::warning(this, "Warning", e.what(), QMessageBox::Ok);

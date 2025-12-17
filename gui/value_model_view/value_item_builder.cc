@@ -18,14 +18,10 @@ void ValueItemBuilderRegistry::RegisterBuilder(std::unique_ptr<ValueItemBuilder>
     {
         return;
     }
-    
+
     BuilderEntry entry{std::move(builder), priority};
-    
-    // Insert in sorted order by priority (highest priority first)
-    auto it = std::lower_bound(builders_.begin(), builders_.end(), entry,
-                              [](const BuilderEntry &a, const BuilderEntry &b) {
-                                  return a.priority < b.priority; // Descending order
-                              });
+
+    auto it = std::lower_bound(builders_.begin(), builders_.end(), entry);
     builders_.insert(it, std::move(entry));
 }
 
@@ -35,12 +31,14 @@ void ValueItemBuilderRegistry::UnRegisterBuilder(ValueItemBuilder *builder)
     {
         return;
     }
-    
-    builders_.erase(std::remove_if(builders_.begin(), builders_.end(),
-                                  [builder](const BuilderEntry &entry) {
-                                      return entry.builder.get() == builder;
-                                  }),
-                   builders_.end());
+
+    builders_.erase(
+        std::remove_if(
+            builders_.begin(), builders_.end(),
+            [builder](const BuilderEntry &entry) { return entry.builder.get() == builder; }
+        ),
+        builders_.end()
+    );
 }
 
 ValueItemBuilder *ValueItemBuilderRegistry::FindBuilder(const Value &value) const
@@ -55,7 +53,8 @@ ValueItemBuilder *ValueItemBuilderRegistry::FindBuilder(const Value &value) cons
     return nullptr;
 }
 
-ValueItem::UniquePtr ValueItemBuilderRegistry::CreateValueItem(const QString &name, const Value &value, ValueItem *parent) const
+ValueItem::UniquePtr
+ValueItemBuilderRegistry::CreateValueItem(const QString &name, const Value &value, ValueItem *parent) const
 {
     auto builder = FindBuilder(value);
     if (builder)
@@ -65,17 +64,17 @@ ValueItem::UniquePtr ValueItemBuilderRegistry::CreateValueItem(const QString &na
     return nullptr;
 }
 
-void ValueItemBuilderRegistry::LoadChildren(ValueItem *item) const
+void ValueItemBuilderRegistry::LoadChildren(ValueItem *item, int begin, int end) const
 {
     if (!item)
     {
         return;
     }
-    
+
     auto builder = FindBuilder(item->value());
     if (builder)
     {
-        builder->LoadChildren(item);
+        builder->LoadChildren(item, begin, end);
     }
 }
 
@@ -84,5 +83,5 @@ void ValueItemBuilderRegistry::Clear()
     builders_.clear();
 }
 
-}
-}
+} // namespace gui
+} // namespace xequation

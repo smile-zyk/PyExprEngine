@@ -26,28 +26,17 @@ ValueItem::UniquePtr ValueItem::Create(const QString &name, const QString &displ
     return std::unique_ptr<ValueItem>(new ValueItem(name, display_value, type, parent));
 }
 
-bool ValueItem::HasChildren() const
+void ValueItem::LoadChildren(int begin, int end)
 {
-    return about_to_load_child_count_ > 0 || !children_.empty();
-}
-
-void ValueItem::LoadChildren()
-{
-    if (is_loaded_)
+    if (IsLoaded())
         return;
 
-    auto *builder = BuilderUtils::FindValueItemBuilder(this->value());
-    if (builder)
-    {
-        builder->LoadChildren(this);
-        is_loaded_ = true;
-    }
+    BuilderUtils::LoadChildren(this, begin, end);
 }
 
 void ValueItem::UnLoadChildren()
 {
     children_.clear();
-    is_loaded_ = false;
 }
 
 void ValueItem::AddChild(ValueItem::UniquePtr child)
@@ -74,7 +63,7 @@ void ValueItem::RemoveChild(ValueItem *child)
     }
 }
 
-ValueItem *ValueItem::GetChildAt(int index)
+ValueItem *ValueItem::GetChildAt(int index) const
 {
     if (index < 0 || index >= children_.size())
         return nullptr;
@@ -93,11 +82,5 @@ int ValueItem::GetIndexOfChild(ValueItem *child) const
     }
     return -1;
 }
-
-size_t ValueItem::ChildCount() const
-{
-    return static_cast<size_t>(children_.size());
-}
-
 } // namespace gui
 } // namespace xequation
