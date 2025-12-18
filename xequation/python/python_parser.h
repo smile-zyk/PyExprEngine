@@ -20,15 +20,15 @@ class PythonParser
     PythonParser(const PythonParser &) = delete;
     PythonParser &operator=(const PythonParser &) = delete;
 
-    std::vector<std::string> SplitStatements(const std::string &code);
-    ParseResult ParseSingleStatement(const std::string &code);
-    ParseResult ParseMultipleStatements(const std::string &code);
-    ParseExprResult ParseExpression(const std::string &code);
+    ParseResult ParseStatements(const std::string &code);
+    ParseResult ParseExpression(const std::string &code);
     void ClearCache();
     void SetMaxCacheSize(size_t max_size);
     size_t GetCacheSize();
 
   private:
+    std::vector<std::string> SplitStatements(const std::string &code);
+    ParseResult ParseSingleStatement(const std::string &code);
     void EvictLRU();
 
   private:

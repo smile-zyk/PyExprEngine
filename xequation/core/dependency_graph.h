@@ -41,7 +41,6 @@ class DependencyCycleException : public std::runtime_error
 class DependencyGraph
 {
   public:
-    using NodeNameSet = tsl::ordered_set<std::string>;
     class Node
     {
       public:
@@ -53,12 +52,12 @@ class DependencyGraph
         Node(Node &&) = default;
         Node &operator=(Node &&) = default;
 
-        const NodeNameSet &dependencies() const
+        const tsl::ordered_set<std::string> &dependencies() const
         {
             return dependencies_;
         }
 
-        const NodeNameSet &dependents() const
+        const tsl::ordered_set<std::string> &dependents() const
         {
             return dependents_;
         }
@@ -74,8 +73,8 @@ class DependencyGraph
         }
 
       private:
-        NodeNameSet dependencies_;
-        NodeNameSet dependents_;
+        tsl::ordered_set<std::string> dependencies_;
+        tsl::ordered_set<std::string> dependents_;
         bool dirty_flag_;
         
         friend class DependencyGraph;

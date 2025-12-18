@@ -323,7 +323,7 @@ std::vector<std::string> PythonParser::SplitStatements(const std::string &code)
     }
 }
 
-ParseResult PythonParser::ParseMultipleStatements(const std::string &code)
+ParseResult PythonParser::ParseStatements(const std::string &code)
 {
     pybind11::gil_scoped_acquire acquire;
     try
@@ -333,7 +333,7 @@ ParseResult PythonParser::ParseMultipleStatements(const std::string &code)
         for (const auto& stmt_code : statements)
         {
             ParseResult stmt_results = ParseSingleStatement(stmt_code);
-            results.insert(results.end(), stmt_results.begin(), stmt_results.end());
+            results.items.insert(results.items.end(), stmt_results.items.begin(), stmt_results.items.end());
         }
         return results;
     }
@@ -375,7 +375,7 @@ ParseResult PythonParser::ParseSingleStatement(const std::string &code)
             parse_item.dependencies = dependencies;
             parse_item.type = type;
             parse_item.content = content;
-            res.push_back(parse_item);
+            res.items.push_back(parse_item);
         }
 
         cache_list_.emplace_front(code_hash, res);
@@ -393,20 +393,24 @@ ParseResult PythonParser::ParseSingleStatement(const std::string &code)
     }
 }
 
-ParseExprResult PythonParser::ParseExpression(const std::string &code) 
+ParseResult PythonParser::ParseExpression(const std::string &code) 
 {
     pybind11::gil_scoped_acquire acquire;
     try
     {
-        pybind11::list result = parser_.attr("parse_expression_dependencies")(code);
+        pybind11::list py_parse_result = parser_.attr("parse_expression_dependencies")(code);
 
-        ParseExprResult dependencies;
-        for (const auto& item : result)
+        ParseResult parse_result;
+        ParseResultItem parse_item;
+        parse_item.name = "__expression__";
+        parse_item.code = code;
+        parse_item.type = ParseResultItem::Type::kExpression;
+        for (const auto& item : py_parse_result)
         {
-            dependencies.push_back(item.cast<std::string>());
+            parse_item.dependencies.push_back(item.cast<std::string>());
         }
-
-        return dependencies;
+        parse_result.items.push_back(parse_item);
+        return parse_result;
     }
     catch (const pybind11::error_already_set &e)
     {

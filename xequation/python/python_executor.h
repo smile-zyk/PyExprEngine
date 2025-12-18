@@ -20,10 +20,10 @@ class PythonExecutor {
   PythonExecutor& operator=(const PythonExecutor&) = delete;
   
   // Executes Python code string in the given local dictionary.
-  ExecResult Exec(const std::string& code_string, const pybind11::dict& local_dict = pybind11::dict());
+  InterpretResult Exec(const std::string& code_string, const pybind11::dict& local_dict = pybind11::dict());
   
   // Evaluates Python expression in the given local dictionary.
-  EvalResult Eval(const std::string& expression, const pybind11::dict& local_dict = pybind11::dict());
+  InterpretResult Eval(const std::string& expression, const pybind11::dict& local_dict = pybind11::dict());
  private:
   pybind11::object executor_;
   

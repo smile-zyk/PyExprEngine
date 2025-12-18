@@ -132,9 +132,7 @@ class EquationManager
 {
   public:
     EquationManager(
-        std::unique_ptr<EquationContext> context, ExecHandler exec_handler, ParseHandler parse_callback,
-        EvalHandler eval_callback = nullptr
-    ) noexcept;
+        std::unique_ptr<EquationContext> context, InterpretHandler interpret_handler, ParseHandler parse_handler) noexcept;
 
     virtual ~EquationManager() noexcept = default;
 
@@ -164,7 +162,7 @@ class EquationManager
 
     void RemoveExternalVariable(const std::string &var_name);
 
-    EvalResult Eval(const std::string &expression) const;
+    InterpretResult Eval(const std::string &expression) const;
 
     void Reset();
 
@@ -226,8 +224,7 @@ class EquationManager
     std::unordered_map<std::string, boost::uuids::uuid> equation_name_to_group_id_map_;
     tsl::ordered_set<std::string> external_variable_names_;
 
-    ExecHandler exec_handler_ = nullptr;
+    InterpretHandler interpret_handler_ = nullptr;
     ParseHandler parse_handler_ = nullptr;
-    EvalHandler eval_handler_ = nullptr;
 };
 } // namespace xequation

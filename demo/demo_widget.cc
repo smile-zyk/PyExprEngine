@@ -117,13 +117,13 @@ void DemoWidget::CreateActions()
     show_dependency_graph_action_->setStatusTip("Show equation dependency graph");
 
     show_equation_manager_action_ = new QAction("Equation Browser", this);
-    show_equation_manager_action_->setStatusTip("browser equations");
+    show_equation_manager_action_->setStatusTip("Browser equations");
 
-    show_variable_inspector_action_ = new QAction("Variable &Inspector", this);
-    show_variable_inspector_action_->setStatusTip("Inspect variable");
+    show_variable_inspector_action_ = new QAction("Variable Inspector", this);
+    show_variable_inspector_action_->setStatusTip("Inspect variables");
 
-    show_expression_watch_action_ = new QAction("Variable Monitor", this);
-    show_expression_watch_action_->setStatusTip("Monitor variable");
+    show_expression_watch_action_ = new QAction("Expression Watch", this);
+    show_expression_watch_action_->setStatusTip("Watch expressions");
 }
 
 void DemoWidget::OnOpen() {}

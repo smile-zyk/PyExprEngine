@@ -20,9 +20,8 @@ class PythonEquationEngine : public EquationEngine<PythonEquationEngine>
         std::vector<std::string> lib_path_list;
     };
     static void SetPyEnvConfig(const PyEnvConfig &config);
-    ExecResult Exec(const std::string &expr, const EquationContext *context = nullptr) override;
-    ParseResult Parse(const std::string &expr) override;
-    EvalResult Eval(const std::string &expr, const EquationContext *context = nullptr) override;
+    InterpretResult Interpret(const std::string &expr, const EquationContext *context = nullptr, InterpretMode mode = InterpretMode::kExec) override;
+    ParseResult Parse(const std::string &expr, ParseMode mode = ParseMode::kExpression) override;
     std::unique_ptr<EquationContext> CreateContext() override;
 
   private:

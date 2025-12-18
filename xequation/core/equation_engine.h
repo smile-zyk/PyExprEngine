@@ -18,25 +18,21 @@ class EquationEngine
         return instance;
     }
 
-    virtual ExecResult Exec(const std::string& code, const EquationContext *context = nullptr) = 0;
-    virtual ParseResult Parse(const std::string & code) = 0;
-    virtual EvalResult Eval(const std::string &code, const EquationContext *context = nullptr) = 0;
+    virtual InterpretResult Interpret(const std::string& code, const EquationContext *context = nullptr, InterpretMode mode = InterpretMode::kExec) = 0;
+    virtual ParseResult Parse(const std::string & code, ParseMode mode = ParseMode::kExpression) = 0;
 
     virtual std::unique_ptr<EquationManager> CreateEquationManager()
     {
-        ExecHandler exec_handler = [this](const std::string &code, EquationContext *context) -> ExecResult {
-            return Exec(code, context);
+
+        InterpretHandler interpret_handler = [this](const std::string &code, EquationContext *context, InterpretMode mode) -> InterpretResult {
+            return Interpret(code, context, mode);
         };
 
-        EvalHandler eval_callback = [this](const std::string &code, EquationContext *context) -> EvalResult {
-            return Eval(code, context);
+        ParseHandler parse_callback = [this](const std::string &code, ParseMode mode) -> ParseResult {
+            return Parse(code, mode);
         };
-
-        ParseHandler parse_callback = [this](const std::string &code) -> ParseResult {
-            return Parse(code);
-        };
-
-        return std::unique_ptr<EquationManager>(new EquationManager(CreateContext(), exec_handler, parse_callback, eval_callback));
+        
+        return std::unique_ptr<EquationManager>(new EquationManager(CreateContext(), interpret_handler, parse_callback));
     }
 
     virtual std::unique_ptr<EquationContext> CreateContext() = 0;

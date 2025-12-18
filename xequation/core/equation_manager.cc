@@ -4,15 +4,13 @@
 namespace xequation
 {
 EquationManager::EquationManager(
-    std::unique_ptr<EquationContext> context, ExecHandler eval_callback, ParseHandler parse_callback,
-    EvalHandler exec_handler
+    std::unique_ptr<EquationContext> context, InterpretHandler interpret_handler, ParseHandler parse_handler
 ) noexcept
     : graph_(std::unique_ptr<DependencyGraph>(new DependencyGraph())),
       signals_manager_(std::unique_ptr<EquationSignalsManager>(new EquationSignalsManager())),
       context_(std::move(context)),
-      exec_handler_(eval_callback),
-      parse_handler_(parse_callback),
-      eval_handler_(exec_handler)
+      interpret_handler_(interpret_handler),
+      parse_handler_(parse_handler)
 {
 }
 
@@ -45,8 +43,8 @@ bool EquationManager::IsStatementSingleEquation(const std::string &equation_stat
 {
     try
     {
-        auto res = parse_handler_(equation_statement);
-        return res.size() == 1;
+        auto res = parse_handler_(equation_statement, ParseMode::kStatement);
+        return res.items.size() == 1;
     }
     catch (const ParseException &e)
     {
@@ -116,9 +114,9 @@ const tsl::ordered_set<std::string> &EquationManager::GetExternalVariableNames()
 
 EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_statement)
 {
-    auto res = parse_handler_(equation_statement);
+    auto res = parse_handler_(equation_statement, ParseMode::kStatement);
 
-    for (const auto &item : res)
+    for (const auto &item : res.items)
     {
         if (IsEquationExist(item.name))
         {
@@ -133,7 +131,7 @@ EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_st
     ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
 
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
-    for (const auto &item : res)
+    for (const auto &item : res.items)
     {
         AddNodeToGraph(item.name, item.dependencies);
     }
@@ -142,7 +140,7 @@ EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_st
     EquationGroupPtr group = EquationGroup::Create(this);
     group->set_statement(equation_statement);
     const EquationGroupId &id = group->id();
-    for (const auto &item : res)
+    for (const auto &item : res.items)
     {
         graph_->InvalidateNode(item.name);
         EquationPtr equation = Equation::Create(item, id, this);
@@ -180,14 +178,14 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
 
     const EquationPtrOrderedMap &old_name_equation_map = group->equation_map();
 
-    ParseResult new_items = parse_handler_(equation_statement);
+    ParseResult new_result = parse_handler_(equation_statement, ParseMode::kStatement);
     std::unordered_map<std::string, ParseResultItem> new_name_item_map;
-    for (const auto &item : new_items)
+    for (const auto &item : new_result.items)
     {
         new_name_item_map.insert({item.name, item});
     }
 
-    for (const auto &new_item : new_items)
+    for (const auto &new_item : new_result.items)
     {
         if (group->IsEquationExist(new_item.name) == false && IsEquationExist(new_item.name))
         {
@@ -207,13 +205,13 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
         {
             to_remove_equation_names.push_back(old_eqn_name);
         }
-        else if (group->GetEquation(old_eqn_name)->content() != new_item_it->second.content)
+        else if (group->GetEquation(old_eqn_name)->content() != new_item_it->second.code)
         {
             to_update_items.push_back(new_item_it->second);
         }
     }
 
-    for (const auto &new_item : new_items)
+    for (const auto &new_item : new_result.items)
     {
         if (group->IsEquationExist(new_item.name) == false)
         {
@@ -262,7 +260,7 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
     {
         graph_->InvalidateNode(update_item.name);
         Equation *update_eqn = group->GetEquation(update_item.name);
-        update_eqn->set_content(update_item.content);
+        update_eqn->set_content(update_item.code);
         update_eqn->set_type(update_item.type);
         context_->Remove(update_item.name);
         signals_manager_->Emit<EquationEvent::kEquationUpdated>(
@@ -300,7 +298,6 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
     {
         NotifyEquationDependentsUpdated(equation_name);
     }
-
 }
 
 void EquationManager::RemoveEquationGroup(const EquationGroupId &group_id)
@@ -322,7 +319,7 @@ void EquationManager::RemoveEquationGroup(const EquationGroupId &group_id)
     ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
 
     DependencyGraph::BatchUpdateGuard guard(graph_.get());
-    for( const auto &equation_name : group_equation_names)
+    for (const auto &equation_name : group_equation_names)
     {
         RemoveNodeInGraph(equation_name);
     }
@@ -359,9 +356,9 @@ void EquationManager::RemoveExternalVariable(const std::string &var_name)
     external_variable_names_.erase(var_name);
 }
 
-EvalResult EquationManager::Eval(const std::string &expression) const
+InterpretResult EquationManager::Eval(const std::string &expression) const
 {
-    return eval_handler_(expression, context_.get());
+    return interpret_handler_(expression, context_.get(), InterpretMode::kEval);
 }
 
 void EquationManager::Reset()
@@ -393,13 +390,13 @@ void EquationManager::UpdateEquationInternal(const std::string &equation_name)
         return;
     }
 
-    const std::string &equation_statement = equation->type() == Equation::Type::kVariable
+    const std::string &equation_statement = equation->type() == ParseResultItem::Type::kVariable
                                                 ? equation->name() + " = " + equation->content()
                                                 : equation->content();
-    ExecResult result = exec_handler_(equation_statement, context_.get());
+    InterpretResult result = interpret_handler_(equation_statement, context_.get(), InterpretMode::kExec);
     equation->set_status(result.status);
     equation->set_message(result.message);
-    if (equation->status() != Equation::Status::kSuccess)
+    if (equation->status() != ResultStatus::kSuccess)
     {
         context_->Remove(equation_name);
     }

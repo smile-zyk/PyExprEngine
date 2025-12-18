@@ -146,10 +146,13 @@ void ExpressionWatchModel::OnExpressionValueItemReplaced(ValueItem *old_item, Va
     if (index < 0)
         return;
 
-    root_items_[index] = new_item;
-    QModelIndex begin_index = createIndex(index, 0, new_item);
-    QModelIndex end_index = createIndex(index, columnCount() - 1, new_item);
-    emit dataChanged(begin_index, end_index);
+    beginRemoveRows(QModelIndex(), index, index);
+    root_items_.removeAt(index);
+    endRemoveRows();
+
+    beginInsertRows(QModelIndex(), index, index);
+    root_items_.insert(index, new_item);
+    endInsertRows();
 }
 
 ExpressionWatchWidget::ExpressionWatchWidget(QWidget *parent) : QWidget(parent)
