@@ -2,6 +2,8 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+find_package(Boost REQUIRED COMPONENTS bimap)
+
 set(xequation_gui_SRC
 equation_browser_widget.h
 equation_browser_widget.cc
@@ -26,6 +28,7 @@ value_model_view/python_item_builder.cc
 add_library(xequation_gui STATIC ${xequation_gui_SRC})
 
 target_link_libraries(xequation_gui PUBLIC qt_config)
+target_link_libraries(xequation_gui PUBLIC Boost::bimap)
 target_link_libraries(xequation_gui PUBLIC xequation)
 target_link_libraries(xequation_gui PUBLIC qtpropertybrowser)
 

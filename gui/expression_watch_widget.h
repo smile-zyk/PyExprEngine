@@ -6,8 +6,10 @@
 #include "value_model_view/value_item.h"
 #include "value_model_view/value_tree_model.h"
 #include "value_model_view/value_tree_view.h"
+
 #include <functional>
-#include <qchar.h>
+#include <map>
+#include <boost/bimap.hpp>
 
 namespace xequation
 {
@@ -26,11 +28,13 @@ public:
     bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
     bool IsPlaceHolderIndex(const QModelIndex& index) const;
-    void OnExpressionValueItemAdded(ValueItem* item);
-    void OnExpressionValueItemReplaced(ValueItem* old_item, ValueItem* new_item);
+    void AddWatchItem(ValueItem* item);
+    void RemoveWatchItem(ValueItem* item);
+    void ReplaceWatchItem(ValueItem* old_item, ValueItem* new_item);
 signals:
-    void RequestAddWatchExpression(const QString& expression);
-    void RequestReplaceWatchExpression(const QString& old_expression, const QString& new_expression);
+    void RequestAddWatchItem(const QString& expression);
+    void RequestRemoveWatchItem(ValueItem* item);
+    void RequestReplaceWatchItem(ValueItem* old_item, const QString& new_expression);
 private:
     void* placeholder_flag_ = nullptr;
 };
@@ -42,24 +46,28 @@ public:
     using ParseExprHandler = std::function<ParseResult(const std::string&)>;
     ExpressionWatchWidget(EvalExprHandler eval_handler, ParseExprHandler parse_handler, QWidget* parent = nullptr);
     ~ExpressionWatchWidget() = default;
-
     void OnEquationAdded(const Equation* equation);
     void OnEquationRemoving(const Equation* equation);
     void OnEquationUpdated(const Equation* equation, bitmask::bitmask<EquationUpdateFlag> change_type);
-    void OnCurrentEquationChanged(const Equation* equation);
-
 protected:
     void SetupUI();
     void SetupConnections();
-    void OnRequestAddWatchExpression(const QString& expression);
-    void OnRequestReplaceWatchExpression(const QString& old_expression, const QString& new_expression);
-
+    ValueItem* CreateWatchItem(const QString& expression);
+    void DeleteWatchItem(ValueItem* item);
+    void OnRequestAddWatchItem(const QString& expression);
+    void OnRequestRemoveWatchItem(ValueItem* item);
+    void OnRequestReplaceWatchItem(ValueItem* old_item, const QString& new_expression);
 private:
+    typedef boost::bimaps::bimap<
+        boost::bimaps::set_of<ValueItem*>,
+        boost::bimaps::set_of<std::string>
+    > ExpressionItemEquationNameBimap;
     ExpressionWatchModel* model_;
     ValueTreeView* view_;
-    std::set<ValueItem::UniquePtr> watch_items_set_;
     EvalExprHandler eval_handler_ = nullptr;
     ParseExprHandler parse_handler_ = nullptr;
+    ExpressionItemEquationNameBimap expression_item_equation_name_bimap_;
+    std::multimap<std::string, ValueItem::UniquePtr> expression_item_map_;
 };
 } // namespace gui
 } // namespace xequation

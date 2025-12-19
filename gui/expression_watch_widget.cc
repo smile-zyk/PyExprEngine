@@ -1,6 +1,8 @@
 #include "expression_watch_widget.h"
+
 #include "core/equation_common.h"
 #include "value_model_view/value_item.h"
+#include "value_model_view/value_item_builder.h"
 #include <QVBoxLayout>
 
 namespace xequation
@@ -14,7 +16,7 @@ ExpressionWatchModel::ExpressionWatchModel(QObject *parent) : ValueTreeModel(par
 
 QModelIndex ExpressionWatchModel::index(int row, int column, const QModelIndex &parent) const
 {
-    if (!parent.isValid() && row == GetRootItemCount())
+    if (!parent.isValid() && row == root_items_.size())
     {
         return createIndex(row, column, placeholder_flag_);
     }
@@ -34,7 +36,7 @@ int ExpressionWatchModel::rowCount(const QModelIndex &parent) const
 {
     if (!parent.isValid())
     {
-        return GetRootItemCount() + 1;
+        return root_items_.size() + 1;
     }
     return ValueTreeModel::rowCount(parent);
 }
@@ -94,7 +96,7 @@ bool ExpressionWatchModel::setData(const QModelIndex &index, const QVariant &val
 
     if (IsPlaceHolderIndex(index))
     {
-        emit RequestAddWatchExpression(new_expression);
+        emit RequestAddWatchItem(new_expression);
         return true;
     }
 
@@ -109,7 +111,7 @@ bool ExpressionWatchModel::setData(const QModelIndex &index, const QVariant &val
     {
         return false;
     }
-    emit RequestReplaceWatchExpression(current_expression, new_expression);
+    emit RequestReplaceWatchItem(root_items_[row], new_expression);
     return true;
 }
 
@@ -124,10 +126,10 @@ Qt::ItemFlags ExpressionWatchModel::flags(const QModelIndex &index) const
 
 bool ExpressionWatchModel::IsPlaceHolderIndex(const QModelIndex &index) const
 {
-    return index.row() == GetRootItemCount() && index.isValid() && index.internalPointer() == placeholder_flag_;
+    return index.row() == root_items_.size() && index.isValid() && index.internalPointer() == placeholder_flag_;
 }
 
-void ExpressionWatchModel::OnExpressionValueItemAdded(ValueItem *item)
+void ExpressionWatchModel::AddWatchItem(ValueItem *item)
 {
     if (!item)
         return;
@@ -138,7 +140,21 @@ void ExpressionWatchModel::OnExpressionValueItemAdded(ValueItem *item)
     endInsertRows();
 }
 
-void ExpressionWatchModel::OnExpressionValueItemReplaced(ValueItem *old_item, ValueItem *new_item)
+void ExpressionWatchModel::RemoveWatchItem(ValueItem *item)
+{
+    if (!item)
+        return;
+
+    int index = root_items_.indexOf(item);
+    if (index < 0)
+        return;
+
+    beginRemoveRows(QModelIndex(), index, index);
+    root_items_.removeAt(index);
+    endRemoveRows();
+}
+
+void ExpressionWatchModel::ReplaceWatchItem(ValueItem *old_item, ValueItem *new_item)
 {
     if (!old_item || !new_item)
         return;
@@ -156,10 +172,55 @@ void ExpressionWatchModel::OnExpressionValueItemReplaced(ValueItem *old_item, Va
     endInsertRows();
 }
 
-ExpressionWatchWidget::ExpressionWatchWidget(QWidget *parent) : QWidget(parent)
+ExpressionWatchWidget::ExpressionWatchWidget(
+    EvalExprHandler eval_handler, ParseExprHandler parse_handler, QWidget *parent
+)
+    : eval_handler_(eval_handler), parse_handler_(parse_handler), QWidget(parent)
 {
     SetupUI();
     SetupConnections();
+}
+
+void ExpressionWatchWidget::OnEquationAdded(const Equation *equation)
+{
+    // find all watch items depending on this equation
+    auto range = expression_item_equation_name_bimap_.right.equal_range(equation->name());
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        ValueItem *item = it->get_left();
+        auto expression = item->name();
+        ;
+        // recreate the watch item
+        auto new_item = CreateWatchItem(expression);
+        if (new_item)
+        {
+            model_->ReplaceWatchItem(item, new_item);
+            DeleteWatchItem(item);
+        }
+    }
+}
+
+void ExpressionWatchWidget::OnEquationRemoving(const Equation *equation) {}
+
+void ExpressionWatchWidget::OnEquationUpdated(
+    const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type
+)
+{
+    // find all watch items depending on this equation
+    auto range = expression_item_equation_name_bimap_.right.equal_range(equation->name());
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        ValueItem *item = it->get_left();
+        auto expression = item->name();
+        ;
+        // recreate the watch item
+        auto new_item = CreateWatchItem(expression);
+        if (new_item)
+        {
+            model_->ReplaceWatchItem(item, new_item);
+            DeleteWatchItem(item);
+        }
+    }
 }
 
 void ExpressionWatchWidget::SetupUI()
@@ -186,31 +247,31 @@ void ExpressionWatchWidget::SetupUI()
 
 void ExpressionWatchWidget::SetupConnections()
 {
+    connect(model_, &ExpressionWatchModel::RequestAddWatchItem, this, &ExpressionWatchWidget::OnRequestAddWatchItem);
+
     connect(
-        model_, &ExpressionWatchModel::RequestAddWatchExpression, this,
-        &ExpressionWatchWidget::OnRequestAddWatchExpression
+        model_, &ExpressionWatchModel::RequestRemoveWatchItem, this, &ExpressionWatchWidget::OnRequestRemoveWatchItem
     );
 
     connect(
-        model_, &ExpressionWatchModel::RequestReplaceWatchExpression, this,
-        &ExpressionWatchWidget::OnRequestReplaceWatchExpression
+        model_, &ExpressionWatchModel::RequestReplaceWatchItem, this, &ExpressionWatchWidget::OnRequestReplaceWatchItem
     );
 }
 
-void ExpressionWatchWidget::OnRequestAddWatchExpression(const QString &expression)
+ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
 {
-    ValueItem::UniquePtr item;
     if (eval_handler_ == nullptr || parse_handler_ == nullptr)
     {
-        return;
+        return nullptr;
     }
 
-    // first parse the expression to check for errors
     ParseResult parse_result = parse_handler_(expression.toStdString());
     if (parse_result.items.size() != 1)
     {
-        return;
+        return nullptr;
     }
+
+    ValueItem::UniquePtr item;
     const ParseResultItem &parse_item = parse_result.items[0];
     if (parse_item.status != ResultStatus::kSuccess)
     {
@@ -219,14 +280,8 @@ void ExpressionWatchWidget::OnRequestAddWatchExpression(const QString &expressio
             QString::fromStdString(ResultStatusConverter::ToString(parse_item.status))
         );
     }
-    else 
+    else
     {
-        const auto& dependencies = parse_item.dependencies;
-        for(const auto& dep : dependencies)
-        {
-            equation_to_watch_expressions_map_[QString::fromStdString(dep)].insert(expression);
-        }
-        // then evaluate the expression
         InterpretResult interpret_result = eval_handler_(expression.toStdString());
         if (interpret_result.status != ResultStatus::kSuccess)
         {
@@ -238,28 +293,63 @@ void ExpressionWatchWidget::OnRequestAddWatchExpression(const QString &expressio
         else
         {
             Value value = interpret_result.value;
-
+            item = BuilderUtils::CreateValueItem(expression, value);
+        }
+        const auto &dependencies = parse_item.dependencies;
+        for (const auto &dependency : dependencies)
+        {
+            expression_item_equation_name_bimap_.insert({item.get(), dependency});
         }
     }
-
-    ValueItem::UniquePtr item = ValueItem::Create(variable_name, "test", "type");
-    model_->OnExpressionValueItemAdded(item.get());
-    watch_items_map_[variable_name] = std::move(item);
+    auto item_ptr = item.get();
+    expression_item_map_.insert({expression.toStdString(), std::move(item)});
+    return item_ptr;
 }
 
-void ExpressionWatchWidget::OnRequestReplaceWatchExpression(
-    const QString &old_variable_name, const QString &new_variable_name
-)
+void ExpressionWatchWidget::DeleteWatchItem(ValueItem *item)
 {
-    ValueItem::UniquePtr item = ValueItem::Create(new_variable_name, "test", "type");
-    ValueItem *old_item = nullptr;
-    if (watch_items_map_.find(old_variable_name) != watch_items_map_.end())
+    if (!item)
+        return;
+
+    auto it = expression_item_equation_name_bimap_.left.find(item);
+    if (it != expression_item_equation_name_bimap_.left.end())
     {
-        old_item = watch_items_map_[old_variable_name].get();
+        expression_item_equation_name_bimap_.left.erase(it);
     }
-    watch_items_map_[new_variable_name] = std::move(item);
-    model_->OnExpressionValueItemReplaced(old_item, watch_items_map_[new_variable_name].get());
-    watch_items_map_.erase(old_variable_name);
+
+    auto expression = item->name().toStdString();
+    auto range = expression_item_map_.equal_range(expression);
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        if (it->second.get() == item)
+        {
+            expression_item_map_.erase(it);
+            break;
+        }
+    }
+}
+
+void ExpressionWatchWidget::OnRequestAddWatchItem(const QString &expression)
+{
+    auto item = CreateWatchItem(expression);
+    if (!item)
+        return;
+    model_->AddWatchItem(item);
+}
+
+void ExpressionWatchWidget::OnRequestRemoveWatchItem(ValueItem *item)
+{
+    model_->RemoveWatchItem(item);
+    DeleteWatchItem(item);
+}
+
+void ExpressionWatchWidget::OnRequestReplaceWatchItem(ValueItem *old_item, const QString &new_expression)
+{
+    auto new_item = CreateWatchItem(new_expression);
+    if (!new_item)
+        return;
+    model_->ReplaceWatchItem(old_item, new_item);
+    DeleteWatchItem(old_item);
 }
 
 } // namespace gui

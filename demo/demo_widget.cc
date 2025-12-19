@@ -30,7 +30,14 @@ DemoWidget::DemoWidget(QWidget *parent)
     mock_equation_list_widget_ = new MockEquationGroupListWidget(equation_manager_.get(), this);
     equation_browser_widget_ = new xequation::gui::EquationBrowserWidget(equation_manager_.get(), this);
     variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(this);
-    expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(this);
+
+    auto eval_expr_handler = [this](const std::string &expr) { return equation_manager_->Eval(expr); };
+
+    auto parse_expr_handler = [this](const std::string &expr) {
+        return python::PythonEquationEngine::GetInstance().Parse(expr, ParseMode::kExpression);
+    };
+
+    expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(eval_expr_handler, parse_expr_handler, this);
 
     SetupUI();
     SetupConnections();
@@ -83,9 +90,17 @@ void DemoWidget::SetupConnections()
         &DemoWidget::OnEquationSelected
     );
 
+    equation_manager_->signals_manager().Connect<EquationEvent::kEquationAdded>(
+        [this](const Equation *equation) 
+        {
+            expression_watch_widget_->OnEquationAdded(equation);
+        }
+    );
+
     equation_manager_->signals_manager().Connect<EquationEvent::kEquationUpdated>(
         [this](const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type) {
             variable_inspect_widget_->OnEquationUpdated(equation, change_type);
+            expression_watch_widget_->OnEquationUpdated(equation, change_type);
         }
     );
 
@@ -397,7 +412,13 @@ void DemoWidget::OnShowExpressionWatch()
 {
     if (expression_watch_widget_ == nullptr)
     {
-        expression_watch_widget_ = new gui::ExpressionWatchWidget(this);
+        auto eval_expr_handler = [this](const std::string &expr) { return equation_manager_->Eval(expr); };
+
+        auto parse_expr_handler = [this](const std::string &expr) {
+            return python::PythonEquationEngine::GetInstance().Parse(expr, ParseMode::kExpression);
+        };
+
+        expression_watch_widget_ = new gui::ExpressionWatchWidget(eval_expr_handler, parse_expr_handler, this);
         expression_watch_widget_->show();
     }
     else
