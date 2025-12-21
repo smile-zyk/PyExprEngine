@@ -1,14 +1,17 @@
 #include "variable_inspect_widget.h"
 #include "value_model_view/value_item.h"
 #include "value_model_view/value_item_builder.h"
+
 #include <QVBoxLayout>
+#include <core/equation_manager.h>
+#include <core/equation_signals_manager.h>
+
 namespace xequation
 {
 namespace gui
 {
 
-VariableInspectWidget::VariableInspectWidget(QWidget *parent)
-    : QWidget(parent), model_(nullptr), view_(nullptr)
+VariableInspectWidget::VariableInspectWidget(const EquationManager* manager, QWidget *parent) : QWidget(parent), model_(nullptr), view_(nullptr), manager_(manager)
 {
     SetupUI();
     SetupConnections();
@@ -20,6 +23,7 @@ void VariableInspectWidget::SetupUI()
     setWindowFlags(
         Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint
     );
+    setContextMenuPolicy(Qt::CustomContextMenu);
 
     view_ = new ValueTreeView(this);
     model_ = new ValueTreeModel(view_);
@@ -36,7 +40,20 @@ void VariableInspectWidget::SetupUI()
     setMinimumSize(800, 600);
 }
 
-void VariableInspectWidget::SetupConnections() {}
+void VariableInspectWidget::SetupConnections()
+{
+    connect(
+        view_, &ValueTreeView::customContextMenuRequested, this, &VariableInspectWidget::OnContextMenuRequested
+    );
+
+    manager_->signals_manager().Connect<EquationEvent::kEquationRemoving>(
+        std::bind(&VariableInspectWidget::OnEquationRemoving, this, std::placeholders::_1)
+    );
+
+    manager_->signals_manager().Connect<EquationEvent::kEquationUpdated>(
+        std::bind(&VariableInspectWidget::OnEquationUpdated, this, std::placeholders::_1, std::placeholders::_2)
+    );
+}
 
 void VariableInspectWidget::OnCurrentEquationChanged(const Equation *equation)
 {
@@ -107,5 +124,21 @@ void VariableInspectWidget::OnEquationUpdated(
         SetCurrentEquation(equation);
     }
 }
+
+void VariableInspectWidget::OnContextMenuRequested(const QPoint& pos)
+{
+
+}
+
+void VariableInspectWidget::OnCopyVariableValue()
+{
+
+}
+
+void VariableInspectWidget::OnAddVariableToWatch()
+{
+
+}
+
 } // namespace gui
 } // namespace xequation

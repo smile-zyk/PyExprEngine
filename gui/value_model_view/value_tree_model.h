@@ -23,16 +23,18 @@ class ValueTreeModel : public QAbstractItemModel
     bool hasChildren(const QModelIndex& parent = QModelIndex()) const override;
     bool canFetchMore(const QModelIndex& parent) const override;
     void fetchMore(const QModelIndex& parent) override;
+    ValueItem* GetValueItemFromIndex(const QModelIndex &index) const;
+    QModelIndex GetIndexFromValueItem(ValueItem *item) const;
 
     void AddRootItem(ValueItem* item);
     void RemoveRootItem(ValueItem* item);
     void SetRootItems(const QVector<ValueItem*>& items);
     size_t GetRootItemCount() const { return root_items_.size(); }
+    ValueItem* GetRootItemAt(size_t index) const;
     void Clear();
 
   protected:
-    ValueItem* GetValueItemFromIndex(const QModelIndex &index) const;
-    QModelIndex GetIndexFromValueItem(ValueItem *item) const;
+
     QVector<ValueItem*> root_items_;
 };
 }

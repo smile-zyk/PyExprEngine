@@ -152,6 +152,8 @@ class EquationManager
 
     void RemoveExternalVariable(const std::string &var_name);
 
+    ParseResult Parse(const std::string &expression, ParseMode mode) const;
+
     InterpretResult Eval(const std::string &expression) const;
 
     void Reset();
@@ -195,9 +197,6 @@ class EquationManager
 
     void AddEquationToGroup(EquationGroup *group, EquationPtr equation);
     void RemoveEquationInGroup(EquationGroup *group, const std::string &equation_name);
-
-    void NotifyEquationGroupAdded(const EquationGroupId &group_id) const;
-    void NotifyEquationGroupRemoving(const EquationGroupId &group_id) const;
 
     ScopedConnection ConnectGraphDependencyUpdated(std::vector<std::string> &dependency_updated_equation) const;
     ScopedConnection ConnectGraphDependentUpdated(std::vector<std::string> &dependent_updated_equation) const;

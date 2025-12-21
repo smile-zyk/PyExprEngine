@@ -17,25 +17,35 @@ class VariableInspectWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit VariableInspectWidget(QWidget *parent = nullptr);
+    explicit VariableInspectWidget(const EquationManager* manager, QWidget *parent = nullptr);
     virtual ~VariableInspectWidget() = default;
     
     void SetCurrentEquation(const Equation* equation);
     const Equation* current_equation() const { return current_equation_; }
-
-    void OnEquationRemoving(const Equation* equation);
-    void OnEquationUpdated(const Equation* equation, bitmask::bitmask<EquationUpdateFlag> change_type);
     void OnCurrentEquationChanged(const Equation* equation);
 
 private:
     void SetupUI();
     void SetupConnections();
 
+protected:
+    void OnEquationRemoving(const Equation* equation);
+    void OnEquationUpdated(const Equation* equation, bitmask::bitmask<EquationUpdateFlag> change_type);
+    void OnContextMenuRequested(const QPoint& pos);
+    void OnCopyVariableValue();
+    void OnAddVariableToWatch();
+    
 private:
     ValueTreeView *view_;
     ValueTreeModel *model_;
+    const EquationManager* manager_;
     std::map<std::string, std::unique_ptr<ValueItem>> variable_items_cache_;
-    const Equation* current_equation_{nullptr};
+    const Equation* current_equation_{};
+    
+    // Menu for context actions
+    QMenu* context_menu_{};
+    QAction* copy_action_{};
+    QAction* add_watch_action_{};
 };
 }
 }

@@ -293,19 +293,6 @@ void EquationBrowserWidget::SetupUI()
 
     property_browser_->setHeaderVisible(false);
 
-    for (const EquationGroupId &group_id : manager_->GetEquationGroupIds())
-    {
-        const EquationGroup *group = manager_->GetEquationGroup(group_id);
-        for (const std::string &equation_name : group->GetEquationNames())
-        {
-            const Equation *equation = manager_->GetEquation(equation_name);
-            if (equation != nullptr)
-            {
-                OnEquationAdded(equation);
-            }
-        }
-    }
-
     setMinimumSize(500, 800);
 }
 

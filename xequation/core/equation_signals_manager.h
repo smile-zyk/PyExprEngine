@@ -36,6 +36,7 @@ enum class EquationEvent
 {
     kEquationAdded,
     kEquationRemoving,
+    kEquationRemoved,
     kEquationUpdated,
     kEquationGroupAdded,
     kEquationGroupRemoving,
@@ -44,6 +45,7 @@ enum class EquationEvent
 
 using EquationAddedCallback = std::function<void(const Equation *)>;
 using EquationRemovingCallback = std::function<void(const Equation *)>;
+using EquationRemovedCallback = std::function<void(const std::string&)>;
 using EquationUpdatedCallback = std::function<void(const Equation *, bitmask::bitmask<EquationUpdateFlag>)>;
 using EquationGroupAddedCallback = std::function<void(const EquationGroup *)>;
 using EquationGroupRemovingCallback = std::function<void(const EquationGroup *)>;
@@ -54,6 +56,7 @@ using ScopedConnection = boost::signals2::scoped_connection;
 
 using EquationAddedSignal = boost::signals2::signal<void(const Equation *)>;
 using EquationRemovingSignal = boost::signals2::signal<void(const Equation *)>;
+using EquationRemovedSignal = boost::signals2::signal<void(const std::string &)>;
 using EquationUpdatedSignal = boost::signals2::signal<void(const Equation *, bitmask::bitmask<EquationUpdateFlag>)>;
 using EquationGroupAddedSignal = boost::signals2::signal<void(const EquationGroup *)>;
 using EquationGroupRemovingSignal = boost::signals2::signal<void(const EquationGroup *)>;
@@ -76,6 +79,12 @@ template <>
 struct GetSignalType<EquationEvent::kEquationRemoving>
 {
     using type = EquationRemovingSignal;
+};
+
+template<>
+struct GetSignalType<EquationEvent::kEquationRemoved>
+{
+    using type = EquationRemovedSignal;
 };
 
 template <>
@@ -115,6 +124,12 @@ struct GetCallbackType<EquationEvent::kEquationRemoving>
 };
 
 template <>
+struct GetCallbackType<EquationEvent::kEquationRemoved>
+{
+    using type = EquationRemovedCallback;
+};
+
+template <>
 struct GetCallbackType<EquationEvent::kEquationUpdated>
 {
     using type = EquationUpdatedCallback;
@@ -149,6 +164,7 @@ class EquationSignalsManager
         signals_[EquationEvent::kEquationAdded] = std::unique_ptr<EquationAddedSignal>(new EquationAddedSignal());
         signals_[EquationEvent::kEquationRemoving] =
             std::unique_ptr<EquationRemovingSignal>(new EquationRemovingSignal());
+        signals_[EquationEvent::kEquationRemoved] = std::unique_ptr<EquationRemovedSignal>(new EquationRemovedSignal());
         signals_[EquationEvent::kEquationUpdated] = std::unique_ptr<EquationUpdatedSignal>(new EquationUpdatedSignal());
         signals_[EquationEvent::kEquationGroupAdded] =
             std::unique_ptr<EquationGroupAddedSignal>(new EquationGroupAddedSignal());
@@ -229,6 +245,7 @@ class EquationSignalsManager
     {
         DisconnectAll<EquationEvent::kEquationAdded>();
         DisconnectAll<EquationEvent::kEquationRemoving>();
+        DisconnectAll<EquationEvent::kEquationRemoved>();
         DisconnectAll<EquationEvent::kEquationUpdated>();
         DisconnectAll<EquationEvent::kEquationGroupAdded>();
         DisconnectAll<EquationEvent::kEquationGroupRemoving>();

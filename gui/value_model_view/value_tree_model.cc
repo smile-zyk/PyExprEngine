@@ -100,6 +100,7 @@ int ValueTreeModel::columnCount(const QModelIndex & /*parent*/) const
 
 QVariant ValueTreeModel::data(const QModelIndex &index, int role) const
 {
+
     if (!index.isValid() || (role != Qt::DisplayRole && role != Qt::EditRole))
         return QVariant();
 
@@ -201,6 +202,13 @@ void ValueTreeModel::SetRootItems(const QVector<ValueItem*>& items)
     beginResetModel();
     root_items_ = items;
     endResetModel();
+}
+
+ValueItem* ValueTreeModel::GetRootItemAt(size_t index) const
+{
+    if (index >= static_cast<size_t>(root_items_.size()))
+        return nullptr;
+    return root_items_[index];
 }
 
 void ValueTreeModel::Clear()

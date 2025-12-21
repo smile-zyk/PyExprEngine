@@ -101,9 +101,11 @@ std::vector<EquationGroupId> EquationManager::GetEquationGroupIds() const
 std::vector<std::string> EquationManager::GetEquationNames() const
 {
     std::vector<std::string> result;
-    for (const auto &entry : equation_name_to_group_id_map_)
+    for( const auto &entry : equation_group_map_)
     {
-        result.push_back(entry.first);
+        const EquationGroup *group = entry.second.get();
+        auto equation_names = group->GetEquationNames();
+        result.insert(result.end(), equation_names.begin(), equation_names.end());
     }
     return result;
 }
@@ -141,14 +143,16 @@ EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_st
     EquationGroupPtr group = EquationGroup::Create(this);
     group->set_statement(equation_statement);
     const EquationGroupId &id = group->id();
+    auto group_ptr = group.get();
+    equation_group_map_.insert({id, std::move(group)});
     for (const auto &item : res.items)
     {
         graph_->InvalidateNode(item.name);
         EquationPtr equation = Equation::Create(item, id, this);
-        AddEquationToGroup(group.get(), std::move(equation));
+        AddEquationToGroup(group_ptr, std::move(equation));
+        signals_manager_->Emit<EquationEvent::kEquationAdded>(group_ptr->GetEquation(item.name));
     }
-    equation_group_map_.insert({id, std::move(group)});
-    NotifyEquationGroupAdded(id);
+    signals_manager_->Emit<EquationEvent::kEquationGroupAdded>(group_ptr);
 
     for (const auto &equation_name : dependency_updated_equation)
     {
@@ -247,14 +251,15 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
 
     for (const auto &remove_eqn_name : to_remove_equation_names)
     {
-        signals_manager_->Emit<EquationEvent::kEquationRemoving>(group->GetEquation(remove_eqn_name));
         auto range = graph_->GetEdgesByTo(remove_eqn_name);
         for (auto it = range.first; it != range.second; it++)
         {
             graph_->InvalidateNode(it->from());
         }
+        signals_manager_->Emit<EquationEvent::kEquationRemoving>(group->GetEquation(remove_eqn_name));
         RemoveEquationInGroup(group, remove_eqn_name);
         context_->Remove(remove_eqn_name);
+        signals_manager_->Emit<EquationEvent::kEquationRemoved>(remove_eqn_name);
     }
 
     for (const auto &update_item : to_update_items)
@@ -308,8 +313,6 @@ void EquationManager::RemoveEquationGroup(const EquationGroupId &group_id)
         throw EquationException::EquationGroupNotFound(group_id);
     }
 
-    NotifyEquationGroupRemoving(group_id);
-
     EquationGroup *group = GetEquationGroupInternal(group_id);
     auto group_equation_names = group->GetEquationNames();
 
@@ -326,11 +329,15 @@ void EquationManager::RemoveEquationGroup(const EquationGroupId &group_id)
     }
     guard.commit();
 
+    signals_manager_->Emit<EquationEvent::kEquationGroupRemoving>(group);
+
     for (const std::string &equation_name : group_equation_names)
     {
         graph_->InvalidateNode(equation_name);
+        signals_manager_->Emit<EquationEvent::kEquationRemoving>(group->GetEquation(equation_name));
         RemoveEquationInGroup(group, equation_name);
         context_->Remove(equation_name);
+        signals_manager_->Emit<EquationEvent::kEquationRemoved>(equation_name);
     }
     equation_group_map_.erase(group_id);
 
@@ -357,6 +364,11 @@ void EquationManager::RemoveExternalVariable(const std::string &var_name)
     external_variable_names_.erase(var_name);
 }
 
+ParseResult EquationManager::Parse(const std::string &expression, ParseMode mode) const
+{
+    return parse_handler_(expression, mode);
+}
+
 InterpretResult EquationManager::Eval(const std::string &expression) const
 {
     return interpret_handler_(expression, context_.get(), InterpretMode::kEval);
@@ -364,15 +376,25 @@ InterpretResult EquationManager::Eval(const std::string &expression) const
 
 void EquationManager::Reset()
 {
+    graph_->Reset();
+
     for (const auto &equation_group_entry : equation_group_map_)
     {
-        NotifyEquationGroupRemoving(equation_group_entry.first);
+        for( const auto &equation_entry : equation_group_entry.second->equation_map())
+        {
+            signals_manager_->Emit<EquationEvent::kEquationRemoving>(equation_entry.second.get());
+        }
     }
-
-    graph_->Reset();
     equation_group_map_.clear();
     equation_name_to_group_id_map_.clear();
     context_->Clear();
+    for (const auto &equation_group_entry : equation_group_map_)
+    {
+        for( const auto &equation_entry : equation_group_entry.second->equation_map())
+        {
+            signals_manager_->Emit<EquationEvent::kEquationRemoved>(equation_entry.first);
+        }
+    }
     signals_manager_->DisconnectAllEvent();
 }
 
@@ -446,30 +468,6 @@ void EquationManager::RemoveEquationInGroup(EquationGroup *group, const std::str
 {
     equation_name_to_group_id_map_.erase(equation_name);
     group->RemoveEquation(equation_name);
-}
-
-void EquationManager::NotifyEquationGroupAdded(const EquationGroupId &group_id) const
-{
-    const EquationGroup *group = GetEquationGroup(group_id);
-    signals_manager_->Emit<EquationEvent::kEquationGroupAdded>(group);
-
-    std::vector<std::string> equation_names = group->GetEquationNames();
-    for (const std::string &equation_name : equation_names)
-    {
-        signals_manager_->Emit<EquationEvent::kEquationAdded>(group->GetEquation(equation_name));
-    }
-}
-
-void EquationManager::NotifyEquationGroupRemoving(const EquationGroupId &group_id) const
-{
-    const EquationGroup *group = GetEquationGroup(group_id);
-    signals_manager_->Emit<EquationEvent::kEquationGroupRemoving>(group);
-
-    std::vector<std::string> equation_names = group->GetEquationNames();
-    for (const std::string &equation_name : equation_names)
-    {
-        signals_manager_->Emit<EquationEvent::kEquationRemoving>(group->GetEquation(equation_name));
-    }
 }
 
 void EquationManager::Update()

@@ -1,8 +1,13 @@
 #include "expression_watch_widget.h"
 
 #include "core/equation_common.h"
+#include "core/equation_manager.h"
 #include "value_model_view/value_item.h"
 #include "value_model_view/value_item_builder.h"
+#include <QAction>
+#include <QApplication>
+#include <QClipboard>
+#include <QMenu>
 #include <QVBoxLayout>
 
 namespace xequation
@@ -172,24 +177,25 @@ void ExpressionWatchModel::ReplaceWatchItem(ValueItem *old_item, ValueItem *new_
     endInsertRows();
 }
 
-ExpressionWatchWidget::ExpressionWatchWidget(
-    EvalExprHandler eval_handler, ParseExprHandler parse_handler, QWidget *parent
-)
-    : eval_handler_(eval_handler), parse_handler_(parse_handler), QWidget(parent)
+ExpressionWatchWidget::ExpressionWatchWidget(const EquationManager *manager, QWidget *parent)
+    : manager_(manager), QWidget(parent)
 {
     SetupUI();
     SetupConnections();
 }
 
-void ExpressionWatchWidget::OnEquationAdded(const Equation *equation)
+void ExpressionWatchWidget::onEquationRemoved(const std::string &equation_name)
 {
-    // find all watch items depending on this equation
-    auto range = expression_item_equation_name_bimap_.right.equal_range(equation->name());
+    auto range = expression_item_equation_name_bimap_.right.equal_range(equation_name);
+    std::vector<ValueItem *> items_to_update;
     for (auto it = range.first; it != range.second; ++it)
     {
         ValueItem *item = it->get_left();
+        items_to_update.push_back(item);
+    }
+    for (auto item : items_to_update)
+    {
         auto expression = item->name();
-        ;
         // recreate the watch item
         auto new_item = CreateWatchItem(expression);
         if (new_item)
@@ -200,19 +206,21 @@ void ExpressionWatchWidget::OnEquationAdded(const Equation *equation)
     }
 }
 
-void ExpressionWatchWidget::OnEquationRemoving(const Equation *equation) {}
-
 void ExpressionWatchWidget::OnEquationUpdated(
     const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type
 )
 {
     // find all watch items depending on this equation
     auto range = expression_item_equation_name_bimap_.right.equal_range(equation->name());
+    std::vector<ValueItem *> items_to_update;
     for (auto it = range.first; it != range.second; ++it)
     {
         ValueItem *item = it->get_left();
+        items_to_update.push_back(item);
+    }
+    for (auto item : items_to_update)
+    {
         auto expression = item->name();
-        ;
         // recreate the watch item
         auto new_item = CreateWatchItem(expression);
         if (new_item)
@@ -229,6 +237,7 @@ void ExpressionWatchWidget::SetupUI()
     setWindowFlags(
         Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint
     );
+    setContextMenuPolicy(Qt::CustomContextMenu);
 
     view_ = new ValueTreeView(this);
     model_ = new ExpressionWatchModel(view_);
@@ -237,6 +246,7 @@ void ExpressionWatchWidget::SetupUI()
     view_->SetHeaderSectionResizeRatio(0, 1);
     view_->SetHeaderSectionResizeRatio(1, 3);
     view_->SetHeaderSectionResizeRatio(2, 1);
+    view_->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
     QVBoxLayout *main_layout = new QVBoxLayout(this);
     main_layout->addWidget(view_);
@@ -256,16 +266,24 @@ void ExpressionWatchWidget::SetupConnections()
     connect(
         model_, &ExpressionWatchModel::RequestReplaceWatchItem, this, &ExpressionWatchWidget::OnRequestReplaceWatchItem
     );
+
+    connect(
+        this, &ExpressionWatchWidget::customContextMenuRequested, this,
+        &ExpressionWatchWidget::OnCustomContextMenuRequested
+    );
+
+    manager_->signals_manager().Connect<EquationEvent::kEquationUpdated>(
+        std::bind(&ExpressionWatchWidget::OnEquationUpdated, this, std::placeholders::_1, std::placeholders::_2)
+    );
+
+    manager_->signals_manager().Connect<EquationEvent::kEquationRemoved>(
+        std::bind(&ExpressionWatchWidget::onEquationRemoved, this, std::placeholders::_1)
+    );
 }
 
 ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
 {
-    if (eval_handler_ == nullptr || parse_handler_ == nullptr)
-    {
-        return nullptr;
-    }
-
-    ParseResult parse_result = parse_handler_(expression.toStdString());
+    ParseResult parse_result = manager_->Parse(expression.toStdString(), ParseMode::kExpression);
     if (parse_result.items.size() != 1)
     {
         return nullptr;
@@ -282,7 +300,7 @@ ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
     }
     else
     {
-        InterpretResult interpret_result = eval_handler_(expression.toStdString());
+        InterpretResult interpret_result = manager_->Eval(expression.toStdString());
         if (interpret_result.status != ResultStatus::kSuccess)
         {
             item = ValueItem::Create(
@@ -350,6 +368,204 @@ void ExpressionWatchWidget::OnRequestReplaceWatchItem(ValueItem *old_item, const
         return;
     model_->ReplaceWatchItem(old_item, new_item);
     DeleteWatchItem(old_item);
+}
+
+enum SelectionFlags {
+    NoSelection         = 0x00,
+    HasSelection        = 0x01,
+    SingleSelection     = 0x02,
+    HasPlaceholder      = 0x04,
+    IsTopLevel          = 0x08
+};
+
+int GetSelectionFlags(const QModelIndexList& indexes, 
+                      ExpressionWatchModel* model) {
+    int flags = NoSelection;
+    
+    if (indexes.isEmpty()) {
+        return flags;
+    }
+    
+    flags |= HasSelection;
+    
+    if (indexes.size() == 1) {
+        flags |= SingleSelection;
+        
+        if (model->IsPlaceHolderIndex(indexes[0])) {
+            flags |= HasPlaceholder;
+        }
+        
+        if (!indexes[0].parent().isValid()) {
+            flags |= IsTopLevel;
+        }
+    }
+    
+    return flags;
+}
+
+void ExpressionWatchWidget::OnCustomContextMenuRequested(const QPoint &pos)
+{
+    static QMenu *menu = nullptr;
+    static QAction *copy_action = nullptr;
+    static QAction *paste_action = nullptr;
+    static QAction *edit_expression_action = nullptr;
+    static QAction *delete_watch_action = nullptr;
+    static QAction *select_all_action = nullptr;
+    static QAction *clear_all_action = nullptr;
+
+    if (!menu)
+    {
+        menu = new QMenu(this);
+        copy_action = menu->addAction("Copy");
+        paste_action = menu->addAction("Paste");
+        edit_expression_action = menu->addAction("Edit");
+        delete_watch_action = menu->addAction("Delete");
+        select_all_action = menu->addAction("Select All");
+        clear_all_action = menu->addAction("Clear All");
+
+        menu->addAction(copy_action);
+        menu->addAction(paste_action);
+        menu->addAction(edit_expression_action);
+        menu->addAction(delete_watch_action);
+        menu->addAction(select_all_action);
+        menu->addAction(clear_all_action);
+
+        connect(copy_action, &QAction::triggered, this, &ExpressionWatchWidget::OnCopyExpressionValue);
+        connect(paste_action, &QAction::triggered, this, &ExpressionWatchWidget::OnPasteExpression);
+        connect(edit_expression_action, &QAction::triggered, this, &ExpressionWatchWidget::OnEditExpression);
+        connect(delete_watch_action, &QAction::triggered, this, &ExpressionWatchWidget::OnDeleteExpression);
+        connect(select_all_action, &QAction::triggered, this, &ExpressionWatchWidget::OnSelectAllExpressions);
+        connect(clear_all_action, &QAction::triggered, this, &ExpressionWatchWidget::OnClearAllExpressions);
+    }
+
+    // disable/enable actions based on current selection
+    QModelIndexList select_indexs = view_->selectionModel()->selectedRows();
+    int flags = GetSelectionFlags(select_indexs, model_);
+
+    bool is_copy_enable = (flags & HasSelection) && 
+                        !((flags & SingleSelection) && (flags & HasPlaceholder));
+    bool is_paste_enable = true;
+    bool is_edit_enable = (flags & SingleSelection) && 
+                        (flags & IsTopLevel) && 
+                        !(flags & HasPlaceholder);
+    bool is_delete_enable = is_copy_enable;
+    bool is_select_all_enable = true;
+    bool is_clear_all_enable = true;
+
+    copy_action->setEnabled(is_copy_enable);
+    paste_action->setEnabled(is_paste_enable);
+    edit_expression_action->setEnabled(is_edit_enable);
+    delete_watch_action->setEnabled(is_delete_enable);
+    select_all_action->setEnabled(is_select_all_enable);
+    clear_all_action->setEnabled(is_clear_all_enable);
+
+    menu->exec(mapToGlobal(pos));
+}
+
+void ExpressionWatchWidget::OnCopyExpressionValue()
+{
+    QModelIndexList select_indexs = view_->selectionModel()->selectedRows();
+
+    QString combined_text;
+
+    for (const QModelIndex &index : select_indexs)
+    {
+        if (!index.isValid() || model_->IsPlaceHolderIndex(index))
+        {
+            continue;
+        }
+
+        ValueItem *item = model_->GetValueItemFromIndex(index);
+        if (!item)
+        {
+            continue;
+        }
+
+        combined_text += QString::fromStdString(item->value().ToString()) + "\n";
+    }
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(combined_text);
+}
+
+void ExpressionWatchWidget::OnPasteExpression()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    QString expression = clipboard->text().trimmed();
+    if (expression.isEmpty())
+    {
+        return;
+    }
+
+    auto item = CreateWatchItem(expression);
+    if (!item)
+        return;
+    model_->AddWatchItem(item);
+    view_->setCurrentIndex(model_->index(model_->rowCount() - 1, 0, QModelIndex()));
+}
+
+void ExpressionWatchWidget::OnEditExpression()
+{
+    QModelIndex current_index = view_->currentIndex();
+    if (!current_index.isValid() || current_index.parent().isValid() || model_->IsPlaceHolderIndex(current_index))
+    {
+        return;
+    }
+    auto index = model_->index(current_index.row(), 0, QModelIndex());
+    view_->edit(index);
+}
+
+void ExpressionWatchWidget::OnDeleteExpression()
+{
+    QModelIndexList select_indexs = view_->selectionModel()->selectedRows();
+
+    QVector<ValueItem *> items_to_remove;
+
+    for (const QModelIndex &index : select_indexs)
+    {
+        if (!index.isValid() || model_->IsPlaceHolderIndex(index))
+        {
+            return;
+        }
+
+        ValueItem *item = model_->GetValueItemFromIndex(index);
+        if (!item)
+        {
+            return;
+        }
+
+        items_to_remove.push_back(item);
+    }
+
+    for (auto item : items_to_remove)
+    {
+        model_->RemoveWatchItem(item);
+        DeleteWatchItem(item);
+    }
+}
+
+void ExpressionWatchWidget::OnSelectAllExpressions()
+{
+    view_->selectAll();
+}
+
+void ExpressionWatchWidget::OnClearAllExpressions()
+{
+    QVector<ValueItem *> items_to_remove;
+    size_t root_count = model_->GetRootItemCount();
+    for (size_t i = 0; i < root_count; ++i)
+    {
+        ValueItem *item = model_->GetRootItemAt(i);
+        if (item)
+        {
+            items_to_remove.push_back(item);
+        }
+    }
+
+    for (auto item : items_to_remove)
+    {
+        model_->RemoveWatchItem(item);
+        DeleteWatchItem(item);
+    }
 }
 
 } // namespace gui

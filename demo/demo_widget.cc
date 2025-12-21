@@ -29,15 +29,8 @@ DemoWidget::DemoWidget(QWidget *parent)
     equation_manager_ = xequation::python::PythonEquationEngine::GetInstance().CreateEquationManager();
     mock_equation_list_widget_ = new MockEquationGroupListWidget(equation_manager_.get(), this);
     equation_browser_widget_ = new xequation::gui::EquationBrowserWidget(equation_manager_.get(), this);
-    variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(this);
-
-    auto eval_expr_handler = [this](const std::string &expr) { return equation_manager_->Eval(expr); };
-
-    auto parse_expr_handler = [this](const std::string &expr) {
-        return python::PythonEquationEngine::GetInstance().Parse(expr, ParseMode::kExpression);
-    };
-
-    expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(eval_expr_handler, parse_expr_handler, this);
+    variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(equation_manager_.get(), this);
+    expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(equation_manager_.get(), this);
 
     SetupUI();
     SetupConnections();
@@ -89,24 +82,6 @@ void DemoWidget::SetupConnections()
         equation_browser_widget_, &xequation::gui::EquationBrowserWidget::EquationSelected, this,
         &DemoWidget::OnEquationSelected
     );
-
-    equation_manager_->signals_manager().Connect<EquationEvent::kEquationAdded>(
-        [this](const Equation *equation) 
-        {
-            expression_watch_widget_->OnEquationAdded(equation);
-        }
-    );
-
-    equation_manager_->signals_manager().Connect<EquationEvent::kEquationUpdated>(
-        [this](const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type) {
-            variable_inspect_widget_->OnEquationUpdated(equation, change_type);
-            expression_watch_widget_->OnEquationUpdated(equation, change_type);
-        }
-    );
-
-    equation_manager_->signals_manager().Connect<EquationEvent::kEquationRemoving>([this](const Equation *equation) {
-        variable_inspect_widget_->OnEquationRemoving(equation);
-    });
 }
 
 void DemoWidget::CreateActions()
@@ -379,52 +354,22 @@ void DemoWidget::OnShowDependencyGraph()
 
 void DemoWidget::OnShowEquationManager()
 {
-    if (equation_browser_widget_ == nullptr)
-    {
-        equation_browser_widget_ = new xequation::gui::EquationBrowserWidget(equation_manager_.get(), this);
-        equation_browser_widget_->show();
-    }
-    else
-    {
-        equation_browser_widget_->show();
-        equation_browser_widget_->raise();
-        equation_browser_widget_->activateWindow();
-    }
 
-    statusBar()->showMessage("Opening equation manager", 2000);
+    equation_browser_widget_->show();
+    equation_browser_widget_->raise();
+    equation_browser_widget_->activateWindow();
 }
 void DemoWidget::OnShowEquationInspector()
 {
-    if (variable_inspect_widget_ == nullptr)
-    {
-        variable_inspect_widget_ = new gui::VariableInspectWidget(this);
-        variable_inspect_widget_->show();
-    }
-    else
-    {
-        variable_inspect_widget_->show();
-        variable_inspect_widget_->raise();
-        variable_inspect_widget_->activateWindow();
-    }
+
+    variable_inspect_widget_->show();
+    variable_inspect_widget_->raise();
+    variable_inspect_widget_->activateWindow();
 }
 
 void DemoWidget::OnShowExpressionWatch()
 {
-    if (expression_watch_widget_ == nullptr)
-    {
-        auto eval_expr_handler = [this](const std::string &expr) { return equation_manager_->Eval(expr); };
-
-        auto parse_expr_handler = [this](const std::string &expr) {
-            return python::PythonEquationEngine::GetInstance().Parse(expr, ParseMode::kExpression);
-        };
-
-        expression_watch_widget_ = new gui::ExpressionWatchWidget(eval_expr_handler, parse_expr_handler, this);
-        expression_watch_widget_->show();
-    }
-    else
-    {
-        expression_watch_widget_->show();
-        expression_watch_widget_->raise();
-        expression_watch_widget_->activateWindow();
-    }
+    expression_watch_widget_->show();
+    expression_watch_widget_->raise();
+    expression_watch_widget_->activateWindow();
 }

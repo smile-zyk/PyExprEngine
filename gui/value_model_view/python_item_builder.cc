@@ -283,7 +283,7 @@ void PythonDictItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
         auto it = dict.begin();
         std::advance(it, i);
         py::handle key = it->first;
-        py::handle value = it->first;
+        py::handle value = it->second;
         QString key_str = PythonDefaultItemBuilder::GetObjectRepr(key);
         ValueItem::UniquePtr child_item = BuilderUtils::CreateValueItem(key_str, value, item);
         item->AddChild(std::move(child_item));
