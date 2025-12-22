@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QTreeView>
+#include <qabstractitemmodel.h>
 
 #include "value_tree_model.h"
 
@@ -26,7 +27,8 @@ class ValueTreeView : public QTreeView
     void setModel(QAbstractItemModel *model) override;
 
     void OnHeaderResized(int logical_index, int old_size, int new_size);
-
+    void OnVerticalScrollbarValueChanged(int value);
+    void FetchMoreIfNeeded();
   private:
     void SetupUI();
     void SetupConnections();

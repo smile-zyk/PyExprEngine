@@ -11,6 +11,7 @@ class ValueTreeModel : public QAbstractItemModel
 {
     Q_OBJECT
   public:
+    constexpr static int kLoadBatchSize = 50;
     explicit ValueTreeModel(QObject *parent = nullptr);
     ~ValueTreeModel() override = default;
 

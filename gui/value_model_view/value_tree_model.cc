@@ -1,9 +1,8 @@
 #include "value_tree_model.h"
-#include "value_item_builder.h"
 #include "python_item_builder.h"
+#include "value_item_builder.h"
 #include <QVariant>
 
-#define LOAD_BATCH_SIZE 50
 
 namespace xequation
 {
@@ -17,10 +16,7 @@ REGISTER_VALUE_ITEM_BUILDER(PythonDictItemBuilder, 0)
 REGISTER_VALUE_ITEM_BUILDER(PythonClassItemBuilder, 1)
 REGISTER_VALUE_ITEM_BUILDER(PythonDefaultItemBuilder, 2)
 
-ValueTreeModel::ValueTreeModel(QObject *parent)
-    : QAbstractItemModel(parent)
-{
-}
+ValueTreeModel::ValueTreeModel(QObject *parent) : QAbstractItemModel(parent) {}
 
 QModelIndex ValueTreeModel::index(int row, int column, const QModelIndex &parent) const
 {
@@ -31,20 +27,20 @@ QModelIndex ValueTreeModel::index(int row, int column, const QModelIndex &parent
     {
         if (row >= root_items_.size() || column >= columnCount())
             return QModelIndex();
-        ValueItem* child = root_items_[row];
+        ValueItem *child = root_items_[row];
         if (!child)
             return QModelIndex();
         return createIndex(row, column, child);
     }
 
-    ValueItem* parentItem = GetValueItemFromIndex(parent);
+    ValueItem *parentItem = GetValueItemFromIndex(parent);
     if (!parentItem)
         return QModelIndex();
 
     if (row >= parentItem->loaded_child_count())
         return QModelIndex();
 
-    ValueItem* child = parentItem->GetChildAt(row);
+    ValueItem *child = parentItem->GetChildAt(row);
     if (!child || column >= columnCount())
         return QModelIndex();
 
@@ -56,11 +52,11 @@ QModelIndex ValueTreeModel::parent(const QModelIndex &child) const
     if (!child.isValid())
         return QModelIndex();
 
-    ValueItem* childItem = GetValueItemFromIndex(child);
+    ValueItem *childItem = GetValueItemFromIndex(child);
     if (!childItem)
         return QModelIndex();
 
-    ValueItem* p = childItem->parent();
+    ValueItem *p = childItem->parent();
     if (!p)
         return QModelIndex();
 
@@ -72,7 +68,7 @@ QModelIndex ValueTreeModel::parent(const QModelIndex &child) const
         return createIndex(row, 0, p);
     }
 
-    ValueItem* grand = p->parent();
+    ValueItem *grand = p->parent();
     int row = grand ? grand->GetIndexOfChild(p) : -1;
     if (row < 0)
         return QModelIndex();
@@ -86,7 +82,7 @@ int ValueTreeModel::rowCount(const QModelIndex &parent) const
         return root_items_.size();
     }
 
-    ValueItem* item = GetValueItemFromIndex(parent);
+    ValueItem *item = GetValueItemFromIndex(parent);
     if (!item)
         return 0;
 
@@ -104,16 +100,20 @@ QVariant ValueTreeModel::data(const QModelIndex &index, int role) const
     if (!index.isValid() || (role != Qt::DisplayRole && role != Qt::EditRole))
         return QVariant();
 
-    ValueItem* item = GetValueItemFromIndex(index);
+    ValueItem *item = GetValueItemFromIndex(index);
     if (!item)
         return QVariant();
 
     switch (index.column())
     {
-    case 0: return item->name();
-    case 1: return item->display_value();
-    case 2: return item->type();
-    default: return QVariant();
+    case 0:
+        return item->name();
+    case 1:
+        return item->display_value();
+    case 2:
+        return item->type();
+    default:
+        return QVariant();
     }
 }
 
@@ -124,40 +124,44 @@ QVariant ValueTreeModel::headerData(int section, Qt::Orientation orientation, in
 
     switch (section)
     {
-    case 0: return "Name";
-    case 1: return "Value";
-    case 2: return "Type";
-    default: return QVariant();
+    case 0:
+        return "Name";
+    case 1:
+        return "Value";
+    case 2:
+        return "Type";
+    default:
+        return QVariant();
     }
 }
 
-bool ValueTreeModel::hasChildren(const QModelIndex& parent) const
+bool ValueTreeModel::hasChildren(const QModelIndex &parent) const
 {
     if (!parent.isValid())
         return !root_items_.isEmpty();
 
-    ValueItem* item = GetValueItemFromIndex(parent);
+    ValueItem *item = GetValueItemFromIndex(parent);
     if (!item)
         return false;
 
     return item->HasChildren();
 }
 
-bool ValueTreeModel::canFetchMore(const QModelIndex& parent) const
+bool ValueTreeModel::canFetchMore(const QModelIndex &parent) const
 {
     if (!parent.isValid())
         return false;
 
-    ValueItem* item = GetValueItemFromIndex(parent);
+    ValueItem *item = GetValueItemFromIndex(parent);
     if (!item)
         return false;
 
     return item->HasChildren() && !item->IsLoaded();
 }
 
-void ValueTreeModel::fetchMore(const QModelIndex& parent)
+void ValueTreeModel::fetchMore(const QModelIndex &parent)
 {
-    ValueItem* item = GetValueItemFromIndex(parent);
+    ValueItem *item = GetValueItemFromIndex(parent);
     if (!item || item->IsLoaded())
         return;
 
@@ -165,14 +169,15 @@ void ValueTreeModel::fetchMore(const QModelIndex& parent)
     size_t expected_count = item->expected_child_count();
 
     int begin = loaded_count;
-    int end = loaded_count + LOAD_BATCH_SIZE - 1 > expected_count - 1 ? expected_count - 1 : loaded_count + LOAD_BATCH_SIZE - 1;
-    
+    int end =
+        loaded_count + kLoadBatchSize - 1 > expected_count - 1 ? expected_count - 1 : loaded_count + kLoadBatchSize - 1;
+
     beginInsertRows(parent, begin, end);
     item->LoadChildren(begin, end);
     endInsertRows();
 }
 
-void ValueTreeModel::AddRootItem(ValueItem* item)
+void ValueTreeModel::AddRootItem(ValueItem *item)
 {
     if (!item)
         return;
@@ -183,7 +188,7 @@ void ValueTreeModel::AddRootItem(ValueItem* item)
     endInsertRows();
 }
 
-void ValueTreeModel::RemoveRootItem(ValueItem* item)
+void ValueTreeModel::RemoveRootItem(ValueItem *item)
 {
     if (!item)
         return;
@@ -197,14 +202,14 @@ void ValueTreeModel::RemoveRootItem(ValueItem* item)
     }
 }
 
-void ValueTreeModel::SetRootItems(const QVector<ValueItem*>& items)
+void ValueTreeModel::SetRootItems(const QVector<ValueItem *> &items)
 {
     beginResetModel();
     root_items_ = items;
     endResetModel();
 }
 
-ValueItem* ValueTreeModel::GetRootItemAt(size_t index) const
+ValueItem *ValueTreeModel::GetRootItemAt(size_t index) const
 {
     if (index >= static_cast<size_t>(root_items_.size()))
         return nullptr;
@@ -218,11 +223,11 @@ void ValueTreeModel::Clear()
     endResetModel();
 }
 
-ValueItem* ValueTreeModel::GetValueItemFromIndex(const QModelIndex &index) const
+ValueItem *ValueTreeModel::GetValueItemFromIndex(const QModelIndex &index) const
 {
     if (!index.isValid())
         return nullptr;
-    return static_cast<ValueItem*>(index.internalPointer());
+    return static_cast<ValueItem *>(index.internalPointer());
 }
 
 QModelIndex ValueTreeModel::GetIndexFromValueItem(ValueItem *item) const
@@ -238,7 +243,7 @@ QModelIndex ValueTreeModel::GetIndexFromValueItem(ValueItem *item) const
         return createIndex(row, 0, item);
     }
 
-    ValueItem* parent = item->parent();
+    ValueItem *parent = item->parent();
     int row = parent->GetIndexOfChild(item);
     if (row < 0)
         return QModelIndex();
