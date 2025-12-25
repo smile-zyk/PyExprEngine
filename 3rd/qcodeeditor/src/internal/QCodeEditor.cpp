@@ -20,6 +20,8 @@
 #include <QShortcut>
 #include <QMimeData>
 
+#include <QDebug>
+
 static QVector<QPair<QString, QString>> parentheses = {
     {"(", ")"},
     {"{", "}"},
@@ -445,15 +447,17 @@ void QCodeEditor::proceedCompleterEnd(QKeyEvent *e)
     {
         return;
     }
-
+    
     static QString eow(R"(~!@#$%^&*()_+{}|:"<>?,./;'[]\-=)");
 
     auto isShortcut = ((e->modifiers() & Qt::ControlModifier) && e->key() == Qt::Key_Space);
     auto completionPrefix = wordUnderCursor();
 
+    qDebug() << "Completion prefix:" << completionPrefix;
+
     if (!isShortcut &&
         (e->text().isEmpty() ||
-         completionPrefix.length() < 2 ||
+         completionPrefix.length() < 1 ||
          eow.contains(e->text().right(1))))
     {
         m_completer->popup()->hide();
@@ -675,6 +679,30 @@ void QCodeEditor::insertCompletion(QString s)
     }
 
     auto tc = textCursor();
+    
+    static auto is_word_char = [](QChar ch) -> bool
+    {
+        return ch.isLetterOrNumber() || ch == '_' || ch == '.';
+    };
+    
+    if (!document()) {
+        return;
+    }
+    
+    QString text = document()->toPlainText();
+    int pos = tc.position();
+    
+    if (text.isEmpty() || pos > text.length()) {
+        return;
+    }
+    
+    int start = pos;
+    
+    while (start > 0 && is_word_char(text[start - 1])) {
+        --start;
+    }
+    
+    tc.setPosition(start);
     tc.select(QTextCursor::SelectionType::WordUnderCursor);
     tc.insertText(s);
     setTextCursor(tc);
@@ -703,9 +731,40 @@ QChar QCodeEditor::charUnderCursor(int offset) const
 
 QString QCodeEditor::wordUnderCursor() const
 {
+    static auto is_word_char = [](QChar ch) -> bool
+    {
+        return ch.isLetterOrNumber() || ch == '_' || ch == '.';
+    };
+
     auto tc = textCursor();
-    tc.select(QTextCursor::WordUnderCursor);
-    return tc.selectedText();
+    
+    QTextDocument* doc = document();
+    if (!doc) {
+        return QString();
+    }
+    
+    int pos = tc.position();
+    QString text = doc->toPlainText();
+    
+    if (text.isEmpty() || pos > text.length()) {
+        return QString();
+    }
+    
+    int start = pos;
+    while (start > 0 && is_word_char(text[start - 1])) {
+        --start;
+    }
+    
+    int end = pos;
+    while (end < text.length() && is_word_char(text[end])) {
+        ++end;
+    }
+    
+    if (start < end) {
+        return text.mid(start, end - start);
+    }
+    
+    return QString();
 }
 
 void QCodeEditor::insertFromMimeData(const QMimeData* source)

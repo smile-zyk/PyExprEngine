@@ -1,23 +1,35 @@
 #include "code_highlighter.h"
 #include "python_highlighter.h"
+#include "language_model.h"
+
 #include <QSyntaxStyle>
 
 namespace xequation
 {
 namespace gui
 {
-CodeHighlighter* CodeHighlighter::Create(LanguageModel* model, QTextDocument* document)
+CodeHighlighter* CodeHighlighter::Create(const QString& language_name, QTextDocument* document)
 {
-    if (model->language_name() == "Python")
+    CodeHighlighter* result = nullptr;
+    if (language_name == "Python")
     {
-        return new PythonHighlighter(model, document);
+        result = new PythonHighlighter(document);
     }
-    return new CodeHighlighter(model, document);
+    else 
+    {
+        result = new CodeHighlighter(document);
+    }
+    return result;
 }
 
-CodeHighlighter::CodeHighlighter(LanguageModel* model, QTextDocument* document)
-    : QStyleSyntaxHighlighter(document), model_(model)
+CodeHighlighter::CodeHighlighter(QTextDocument* document)
+    : QStyleSyntaxHighlighter(document), model_(nullptr)
 {
+}
+
+void CodeHighlighter::SetModel(QAbstractItemModel* model)
+{
+    model_ = model;
 }
 
 CodeHighlighter::~CodeHighlighter()
@@ -26,6 +38,11 @@ CodeHighlighter::~CodeHighlighter()
 
 void CodeHighlighter::highlightBlock(const QString& text)
 {
+    if (!model_)
+    {
+        return;
+    }
+
     int row = model_->rowCount();
     for(int i = 0; i < row; ++i)
     {

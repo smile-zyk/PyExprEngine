@@ -1,6 +1,6 @@
 #pragma once
 
-#include "language_model.h"
+#include <QAbstractItemModel>
 #include <QStyleSyntaxHighlighter>
 
 namespace xequation
@@ -11,13 +11,14 @@ class CodeHighlighter : public QStyleSyntaxHighlighter
 {
     Q_OBJECT
   public:
-    static CodeHighlighter* Create(LanguageModel* model, QTextDocument* document = nullptr);
+    static CodeHighlighter* Create(const QString& language_name, QTextDocument* document = nullptr);
     ~CodeHighlighter() override;
+    void SetModel(QAbstractItemModel* model);
   protected:
-    explicit CodeHighlighter(LanguageModel* model, QTextDocument* document = nullptr);
+    explicit CodeHighlighter(QTextDocument* document = nullptr);
     virtual void highlightBlock(const QString& text) override;
   private:
-    LanguageModel* model_;
+    QAbstractItemModel* model_;
 };
 } // namespace gui
 } // namespace xequation

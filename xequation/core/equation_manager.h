@@ -181,6 +181,11 @@ class EquationManager
         return *signals_manager_;
     }
 
+    const std::string &language() const
+    {
+        return language_;
+    }
+
   private:
     EquationManager(const EquationManager &) = delete;
     EquationManager &operator=(const EquationManager &) = delete;

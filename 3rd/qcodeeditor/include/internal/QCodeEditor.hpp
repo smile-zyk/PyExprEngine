@@ -98,7 +98,7 @@ public:
      * @brief Method for setting completer.
      * @param completer Pointer to completer object.
      */
-    void setCompleter(QCompleter* completer);
+    virtual void setCompleter(QCompleter* completer);
 
     /**
      * @brief Method for getting completer.

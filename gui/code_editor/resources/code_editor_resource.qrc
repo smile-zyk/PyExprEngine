@@ -4,5 +4,12 @@
     <file>styles/dark_style.xml</file>
     <file>styles/light_style.xml</file>
     <file>languages/python.xml</file>
+    <file>icons/mode-light.png</file>
+    <file>icons/editor-eraser.png</file>
+    <file>icons/file-open.png</file>
+    <file>icons/file-save.png</file>
+    <file>icons/mode-light-filled.png</file>
+    <file>icons/redo.png</file>
+    <file>icons/undo.png</file>
   </qresource>
 </RCC>

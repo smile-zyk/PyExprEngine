@@ -22,7 +22,7 @@
         <name>False</name>
         <name>None</name>
     </section>
-    <section name="PrimitiveType">
+    <section name="Type">
         <name>float</name>
         <name>int</name>
         <name>bool</name>

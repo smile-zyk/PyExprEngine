@@ -13,6 +13,12 @@ expression_watch_widget.h
 expression_watch_widget.cc
 equation_editor.h
 equation_editor.cc
+equation_group_editor.h
+equation_group_editor.cc
+equation_group_filter_model.h
+equation_group_filter_model.cc
+equation_language_model.h
+equation_language_model.cc
 value_model_view/value_item_builder.h
 value_model_view/value_item_builder.cc
 value_model_view/value_tree_model.h

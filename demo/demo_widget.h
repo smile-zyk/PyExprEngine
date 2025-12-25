@@ -12,6 +12,7 @@
 #include "variable_inspect_widget.h"
 #include "expression_watch_widget.h"
 #include "mock_equation_group_list_widget.h"
+#include "equation_language_model.h"
 
 class QMenu;
 class QAction;
@@ -69,5 +70,6 @@ private:
     MockEquationGroupListWidget* mock_equation_list_widget_;
     xequation::gui::VariableInspectWidget* variable_inspect_widget_;
     xequation::gui::ExpressionWatchWidget* expression_watch_widget_;
+    xequation::gui::EquationLanguageModel* language_model_;
     std::unique_ptr<xequation::EquationManager> equation_manager_;
 };

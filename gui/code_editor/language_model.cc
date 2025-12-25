@@ -1,18 +1,19 @@
 #include "language_model.h"
-#include "core/equation_common.h"
 #include <QFile>
 #include <QLanguage>
 #include <qglobal.h>
 #include <qnamespace.h>
 
-namespace xequation {
-namespace gui {
+namespace xequation
+{
+namespace gui
+{
 
 QMap<QString, QString> LanguageModel::language_define_file_map_ = {
     {"Python", ":/languages/python.xml"},
 };
 
-LanguageModel::LanguageModel(const QString& language_name, QObject* parent)
+LanguageModel::LanguageModel(const QString &language_name, QObject *parent)
     : QAbstractListModel(parent), language_name_(language_name)
 {
     auto it = language_define_file_map_.find(language_name);
@@ -37,23 +38,23 @@ LanguageModel::LanguageModel(const QString& language_name, QObject* parent)
     }
 
     auto keys = language.keys();
-    for (auto&& key : keys)
+    for (auto &&key : keys)
     {
         auto names = language.names(key);
-        for (auto&& name : names)
+        for (auto &&name : names)
         {
-            LanguageItem item;
+            WordItem item;
             item.word = name;
             item.category = key;
             item.complete_content = name;
-            language_items_.append(item);
+            word_items_.append(item);
+            word_item_set_.insert(name);
+            language_item_set_.insert(name);
         }
     }
 }
 
-LanguageModel::~LanguageModel()
-{
-}
+LanguageModel::~LanguageModel() {}
 
 int LanguageModel::rowCount(const QModelIndex &parent) const
 {
@@ -61,21 +62,21 @@ int LanguageModel::rowCount(const QModelIndex &parent) const
     {
         return 0;
     }
-    return language_items_.size();
+    return word_items_.size();
 }
 
 QVariant LanguageModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= language_items_.size())
+    if (!index.isValid() || index.row() < 0 || index.row() >= word_items_.size())
     {
         return QVariant();
     }
 
-    const LanguageItem& item = language_items_.at(index.row());
+    const WordItem &item = word_items_.at(index.row());
     // display "{word}\t{category}"
     if (role == Qt::DisplayRole)
     {
-        return item.word + "\t" + item.category;
+        return item.word + "    " + item.category.toLower();
     }
     else if (role == Qt::EditRole)
     {
@@ -93,37 +94,41 @@ QVariant LanguageModel::data(const QModelIndex &index, int role) const
     return QVariant();
 }
 
-void LanguageModel::OnEquationAdded(const Equation* equation)
+void LanguageModel::AddWordItem(const QString &word, const QString &category, const QString &complete_content)
 {
-    QString name = QString::fromStdString(equation->name());
-    QString type = QString::fromStdString(ItemTypeConverter::ToString(equation->type()));
-    if(type == "Import" || type == "ImportFrom")
+    if (word_item_set_.contains(word))
     {
-        type = "Module";
+        return;
     }
 
-    LanguageItem item;
-    item.word = name;
-    item.category = type;
-    item.complete_content = name;
-    beginInsertRows(QModelIndex(), language_items_.size(), language_items_.size());
-    language_items_.append(item);
+    beginInsertRows(QModelIndex(), word_items_.size(), word_items_.size());
+    WordItem item;
+    item.word = word;
+    item.category = category;
+    item.complete_content = complete_content;
+    word_items_.append(item);
+    word_item_set_.insert(word);
     endInsertRows();
 }
 
-void LanguageModel::OnEquationRemoving(const Equation* equation)
+void LanguageModel::RemoveWordItem(const QString &word)
 {
-    QString name = QString::fromStdString(equation->name());
-    for (int i = 0; i < language_items_.size(); ++i)
+    if (!word_item_set_.contains(word) || language_item_set_.contains(word))
     {
-        if (language_items_[i].word == name)
+        return;
+    }
+    word_item_set_.remove(word);
+    for (int i = 0; i < word_items_.size(); ++i)
+    {
+        if (word_items_[i].word == word)
         {
             beginRemoveRows(QModelIndex(), i, i);
-            language_items_.removeAt(i);
+            word_items_.removeAt(i);
+            language_item_set_.remove(word);
             endRemoveRows();
             break;
         }
     }
 }
-}
-}
+} // namespace gui
+} // namespace xequation

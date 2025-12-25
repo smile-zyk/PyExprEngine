@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QHighlightRule>
+#include <QSet>
 
 #include <core/equation.h>
 
@@ -20,23 +21,26 @@ class LanguageModel : public QAbstractListModel
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 
-    void OnEquationAdded(const Equation *equation);
-    void OnEquationRemoving(const Equation *equation);
-
     const QString &language_name() const
     {
         return language_name_;
     }
 
+  protected:
+    void AddWordItem(const QString &word, const QString &category, const QString &complete_content);
+    void RemoveWordItem(const QString &word);
+
   private:
     static QMap<QString, QString> language_define_file_map_;
-    struct LanguageItem
+    struct WordItem
     {
         QString word;
         QString category;
         QString complete_content;
     };
-    QVector<LanguageItem> language_items_;
+    QSet<QString> language_item_set_;
+    QSet<QString> word_item_set_;
+    QVector<WordItem> word_items_;
     QString language_name_;
 };
 } // namespace gui

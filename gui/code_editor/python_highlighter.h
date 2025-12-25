@@ -10,7 +10,7 @@ class PythonHighlighter : public CodeHighlighter
 {
     Q_OBJECT
 public:
-    explicit PythonHighlighter(LanguageModel* model, QTextDocument* document = nullptr);
+    explicit PythonHighlighter(QTextDocument* document = nullptr);
 protected:
     void highlightBlock(const QString& text) override;
     void ApplyRules(const QString& text, const QVector<QHighlightRule>& rules);

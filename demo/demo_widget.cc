@@ -15,8 +15,9 @@
 #include <QWidget>
 #include <algorithm>
 
+#include "equation_group_editor.h"
 #include "python/python_qt_wrapper.h"
-#include "text_editor_dialog.h"
+
 
 using namespace xequation;
 
@@ -31,6 +32,8 @@ DemoWidget::DemoWidget(QWidget *parent)
     equation_browser_widget_ = new xequation::gui::EquationBrowserWidget(equation_manager_.get(), this);
     variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(equation_manager_.get(), this);
     expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(equation_manager_.get(), this);
+    language_model_ =
+        new xequation::gui::EquationLanguageModel(QString::fromStdString(equation_manager_->language()), this);
 
     SetupUI();
     SetupConnections();
@@ -57,8 +60,10 @@ void DemoWidget::SetupConnections()
     connect(show_equation_manager_action_, &QAction::triggered, this, &DemoWidget::OnShowEquationManager);
     connect(show_variable_inspector_action_, &QAction::triggered, this, &DemoWidget::OnShowEquationInspector);
     connect(show_expression_watch_action_, &QAction::triggered, this, &DemoWidget::OnShowExpressionWatch);
-    connect(variable_inspect_widget_, &xequation::gui::VariableInspectWidget::AddExpressionToWatch, expression_watch_widget_,
-            &xequation::gui::ExpressionWatchWidget::OnAddExpressionToWatch);
+    connect(
+        variable_inspect_widget_, &xequation::gui::VariableInspectWidget::AddExpressionToWatch,
+        expression_watch_widget_, &xequation::gui::ExpressionWatchWidget::OnAddExpressionToWatch
+    );
 
     connect(
         mock_equation_list_widget_, &MockEquationGroupListWidget::EditEquationGroupRequested, this,
@@ -83,6 +88,18 @@ void DemoWidget::SetupConnections()
     connect(
         equation_browser_widget_, &xequation::gui::EquationBrowserWidget::EquationSelected, this,
         &DemoWidget::OnEquationSelected
+    );
+
+    equation_manager_->signals_manager().Connect<EquationEvent::kEquationAdded>(
+        [this](const Equation* equation) {
+            language_model_->OnEquationAdded(equation);
+        }
+    );
+
+    equation_manager_->signals_manager().Connect<EquationEvent::kEquationRemoving>(
+        [this](const Equation* equation) {
+            language_model_->OnEquationRemoving(equation);
+        }
     );
 }
 
@@ -178,14 +195,17 @@ void DemoWidget::OnEditEquationGroupRequest(const xequation::EquationGroupId &id
 
     if (equation_group_set_.count(id) != 0)
     {
-        TextEditorDialog *editor = new TextEditorDialog(this, "Edit Equation Group");
-        editor->setText(QString::fromStdString(equation_manager_->GetEquationGroup(id)->statement()));
-        connect(editor, &TextEditorDialog::textSubmitted, [this, editor, id](const QString &statement) {
-            if (EditEquationGroup(id, statement.toStdString()))
-            {
-                editor->accept();
+        xequation::gui::EquationGroupEditor *editor =
+            new xequation::gui::EquationGroupEditor(language_model_, this, "Edit Equation Group");
+        editor->SetEquationGroup(equation_manager_->GetEquationGroup(id));
+        connect(
+            editor, &xequation::gui::EquationGroupEditor::TextSubmitted, [this, editor, id](const QString &statement) {
+                if (EditEquationGroup(id, statement.toStdString()))
+                {
+                    editor->accept();
+                }
             }
-        });
+        );
 
         editor->exec();
     }
@@ -328,9 +348,10 @@ void DemoWidget::OnEquationSelected(const xequation::Equation *equation)
 
 void DemoWidget::OnInsertEquationGroupRequest()
 {
-    TextEditorDialog *editor = new TextEditorDialog(this, "Insert Equation Group");
+    xequation::gui::EquationGroupEditor *editor =
+        new xequation::gui::EquationGroupEditor(language_model_, this, "Insert Equation Group");
 
-    connect(editor, &TextEditorDialog::textSubmitted, [this, editor](const QString &statement) {
+    connect(editor, &xequation::gui::EquationGroupEditor::TextSubmitted, [this, editor](const QString &statement) {
         xequation::EquationGroupId id;
         if (AddEquationGroup(statement.toStdString(), id))
         {

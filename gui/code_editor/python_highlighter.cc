@@ -3,13 +3,11 @@
 #include <QSyntaxStyle>
 #include <qglobal.h>
 
-
 namespace xequation
 {
 namespace gui
 {
-PythonHighlighter::PythonHighlighter(LanguageModel *model, QTextDocument *document)
-    : CodeHighlighter(model, document)
+PythonHighlighter::PythonHighlighter(QTextDocument *document) : CodeHighlighter(document)
 {
     // Initialize pre-model rules
     // Variables
@@ -39,6 +37,7 @@ PythonHighlighter::PythonHighlighter(LanguageModel *model, QTextDocument *docume
     block_rules_.append({QRegularExpression("(''')"), QRegularExpression("(''')"), "String"});
     block_rules_.append({QRegularExpression("(\"\"\")"), QRegularExpression("(\"\"\")"), "String"});
 }
+
 void PythonHighlighter::ApplyRules(const QString &text, const QVector<QHighlightRule> &rules)
 {
     for (const auto &rule : rules)
