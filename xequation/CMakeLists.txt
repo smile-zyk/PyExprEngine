@@ -1,6 +1,14 @@
 find_package(Boost REQUIRED COMPONENTS multi_index uuid compute)
 find_path(TSL_ORDERED_MAP_INCLUDE_DIRS "tsl/ordered_hash.h")
+
+set(BIN2C_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/python/bin2c.py)
+
+set(PYTHON_PARSER_INPUT ${CMAKE_CURRENT_SOURCE_DIR}/python/python_parser.py)
+set(PYTHON_PARSER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/python)
+set(PYTHON_PARSER_OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/python/python_parser_embed.h)
+
 set(xequation_SRC
+    ${PYTHON_PARSER_OUTPUT}
     core/value.h
     core/value.cc
     core/dependency_graph.h
@@ -28,6 +36,17 @@ set(xequation_SRC
 )
 
 add_library(xequation STATIC ${xequation_SRC})
+
+add_custom_target(generate_python_parser ALL
+    COMMAND ${Python_EXECUTABLE} ${BIN2C_SCRIPT} ${PYTHON_PARSER_INPUT} 
+            -o ${PYTHON_PARSER_OUTPUT_DIR} -v python_parser -n xequation
+    DEPENDS ${BIN2C_SCRIPT} ${PYTHON_PARSER_INPUT}
+    BYPRODUCTS ${PYTHON_PARSER_OUTPUT}
+    COMMENT "Generating python_parser_embed.h from python_parser.py"
+    VERBATIM
+)
+
+add_dependencies(xequation generate_python_parser)
 
 set_target_properties(xequation PROPERTIES CXX_VISIBILITY_PRESET hidden)
 

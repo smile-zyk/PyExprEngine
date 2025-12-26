@@ -23,8 +23,6 @@ class PythonExecutor {
   
   // Evaluates Python expression in the given local dictionary.
   InterpretResult Eval(const std::string& expression, const pybind11::dict& local_dict = pybind11::dict());
- private:
-  pybind11::object executor_;
 };
 } // namespace python
 } // namespace xequation

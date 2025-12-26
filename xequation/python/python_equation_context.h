@@ -10,33 +10,39 @@ class PythonEquationContext : public EquationContext
 {
   public:
     // Checks if key exists.
-     bool Contains(const std::string &key) const override;
+    bool Contains(const std::string &key) const override;
 
     // Gets value for the given key.
-     Value Get(const std::string &key) const override;
+    Value Get(const std::string &key) const override;
 
     // Sets value for the given key.
-     void Set(const std::string &key, const Value &value) override;
+    void Set(const std::string &key, const Value &value) override;
 
     // Removes the given key.
-     bool Remove(const std::string &key) override;
+    bool Remove(const std::string &key) override;
 
     // Clears all entries.
-     void Clear() override;
+    void Clear() override;
 
     // Returns all keys in the context.
-     std::unordered_set<std::string> keys() const override;
+    std::unordered_set<std::string> keys() const override;
 
     // Returns the number of entries.
-     size_t size() const override;
+    size_t size() const override;
 
     // Checks if the dictionary is empty.
-     bool empty() const override;
+    bool empty() const override;
 
-    pybind11::dict& dict() { return dict_; }
-    const pybind11::dict& dict() const { return dict_; }
+    pybind11::dict &dict()
+    {
+        return dict_;
+    }
+    const pybind11::dict &dict() const
+    {
+        return dict_;
+    }
 
-    std::vector<std::string> GetAllBuiltinNames() const;
+    pybind11::dict builtin_dict() const;
 
   private:
     friend class PythonEquationEngine;
@@ -49,5 +55,5 @@ class PythonEquationContext : public EquationContext
     PythonEquationContext &operator=(PythonEquationContext &&) noexcept = delete;
     pybind11::dict dict_;
 };
-}
+} // namespace python
 } // namespace xequation

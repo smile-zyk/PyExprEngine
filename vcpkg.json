@@ -6,6 +6,7 @@
     "boost-signals2",
     "boost-compute",
     "boost-bimap",
+    "boost-graph",
     "tsl-ordered-map"
   ]
 }

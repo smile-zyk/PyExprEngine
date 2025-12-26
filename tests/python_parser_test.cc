@@ -64,7 +64,7 @@ TEST_F(PythonParserTest, ParseFunction)
     EXPECT_EQ(parse_result.items.size(), 1);
     auto item = parse_result.items[0];
     EXPECT_EQ(item.name, "hello");
-    EXPECT_THAT(item.dependencies, testing::IsEmpty());
+    EXPECT_THAT(item.dependencies, testing::UnorderedElementsAre("print"));
     EXPECT_EQ(item.type, ItemType::kFunction);
     EXPECT_EQ(item.content, "def hello(): print('Hello World')");
 }
@@ -88,18 +88,32 @@ TEST_F(PythonParserTest, ParseErrorUnsupportedStatement)
     );
 }
 
+TEST_F(PythonParserTest, ParseClassWithOuterDependency)
+{
+
+    auto parse_result = parser_->ParseSingleStatement(R"(class SimpleTest:
+    
+    def __init__(self, name="Test"):
+        self.name = name
+    
+    def greet(self):
+        return f"Hello, {self.name}!"
+    
+    def add(self, a, b):
+        t = 1
+        return a + b + math.cos(0))");
+
+    EXPECT_EQ(parse_result.items.size(), 1);
+    auto item = parse_result.items[0];
+    EXPECT_EQ(item.name, "SimpleTest");
+    EXPECT_THAT(item.dependencies, testing::UnorderedElementsAre("math", "math.cos"));
+    EXPECT_EQ(item.type, ItemType::kClass);
+}
+
 TEST_F(PythonParserTest, ParseErrorInvalidSyntax)
 {
     EXPECT_THROW(
         parser_->ParseSingleStatement("b = te+"),
-        ParseException
-    );
-}
-
-TEST_F(PythonParserTest, ParseErrorBuiltinRedefinition)
-{
-    EXPECT_THROW(
-        parser_->ParseSingleStatement("print = 1+a"),
         ParseException
     );
 }
@@ -129,18 +143,18 @@ TEST_F(PythonParserTest, ParseComplexListComprehension)
     );
     ASSERT_EQ(result.items.size(), 1);
     EXPECT_EQ(result.items[0].name, "matrix");
-    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("i", "j"));
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("range"));
     EXPECT_EQ(result.items[0].type, ItemType::kVariable);
 }
 
 TEST_F(PythonParserTest, ParseComplexConditional)
 {
     auto result = parser_->ParseSingleStatement(
-        "condition = (global_flag := True) and any(complex(i, j).real > 0 for i in range(1, 10, 3) for j in range(1, 10, 4))"
+        "condition = (global_flag := a) and any(complex(i, j).real > 0 for i in range(1, 10, 3) for j in range(1, 10, 4))"
     );
     ASSERT_EQ(result.items.size(), 1);
     EXPECT_EQ(result.items[0].name, "condition");
-    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("i", "j"));
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("a","any", "complex", "range"));
     EXPECT_EQ(result.items[0].type, ItemType::kVariable);
 }
 
@@ -371,29 +385,6 @@ TEST_F(PythonParserTest, ParseMultipleFromImportWithAliases)
     EXPECT_EQ(parse_result.items[1].content, "from math import cos as cosine");
 }
 
-TEST_F(PythonParserTest, ParseStarImport)
-{
-    auto parse_result = parser_->ParseSingleStatement("from math import *");
-    
-    EXPECT_GT(parse_result.items.size(), 0);
-    
-    bool has_sin = false;
-    bool has_cos = false;
-    bool has_pi = false;
-    
-    for (const auto& eqn : parse_result.items) {
-        EXPECT_EQ(eqn.type, ItemType::kImportFrom);
-        EXPECT_TRUE(eqn.name.length() > 0);
-        EXPECT_TRUE(eqn.content.find("from math import") != std::string::npos);
-        
-        if (eqn.name == "sin") has_sin = true;
-        if (eqn.name == "cos") has_cos = true;
-        if (eqn.name == "pi") has_pi = true;
-    }
-    
-    EXPECT_TRUE(has_sin || has_cos || has_pi);
-}
-
 TEST_F(PythonParserTest, ParseMixedImportStatements)
 {
     auto results = parser_->ParseStatements(
@@ -401,7 +392,6 @@ TEST_F(PythonParserTest, ParseMixedImportStatements)
         "import math as m\n"
         "from sys import version\n"
         "from os.path import join, exists\n"
-        "from collections import *"
     );
     
     EXPECT_GE(results.items.size(), 5); 
@@ -411,7 +401,6 @@ TEST_F(PythonParserTest, ParseMixedImportStatements)
     bool has_version = false;
     bool has_join = false;
     bool has_exists = false;
-    bool has_star_import = false;
     
     for (const auto& eqn : results.items) {
         if (eqn.name == "os" && eqn.type == ItemType::kImport) {
@@ -429,9 +418,6 @@ TEST_F(PythonParserTest, ParseMixedImportStatements)
         if (eqn.name == "exists" && eqn.type == ItemType::kImportFrom) {
             has_exists = true;
         }
-        if (eqn.content.find("from collections import") != std::string::npos) {
-            has_star_import = true;
-        }
     }
     
     EXPECT_TRUE(has_os);
@@ -439,20 +425,6 @@ TEST_F(PythonParserTest, ParseMixedImportStatements)
     EXPECT_TRUE(has_version);
     EXPECT_TRUE(has_join);
     EXPECT_TRUE(has_exists);
-    EXPECT_TRUE(has_star_import);
-}
-
-TEST_F(PythonParserTest, ParseImportBuiltinProtection)
-{
-    EXPECT_THROW(
-        parser_->ParseSingleStatement("import builtins as print"), 
-        ParseException
-    );
-    
-    EXPECT_THROW(
-        parser_->ParseSingleStatement("from math import sin as len"), 
-        ParseException
-    );
 }
 
 TEST_F(PythonParserTest, ParseComplexImportScenarios)

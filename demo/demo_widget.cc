@@ -146,7 +146,12 @@ void DemoWidget::InitializeLanguageModel()
     {
         equation_manager_->context();
         const python::PythonEquationContext* py_context = dynamic_cast<const python::PythonEquationContext*>(&equation_manager_->context());
-        auto all_builtin_names = py_context->GetAllBuiltinNames();
+        auto builtin_dict = py_context->builtin_dict();
+        std::vector<std::string> all_builtin_names;
+        for (auto item : builtin_dict)
+        {
+            all_builtin_names.push_back(item.first.cast<std::string>());
+        }
         for (const auto& name : all_builtin_names)
         {
             QString word = QString::fromStdString(name);

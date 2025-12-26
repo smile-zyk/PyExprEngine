@@ -79,18 +79,17 @@ bool PythonEquationContext::empty() const
     return dict_.empty();
 }
 
-std::vector<std::string> PythonEquationContext::GetAllBuiltinNames() const
+pybind11::dict PythonEquationContext::builtin_dict() const
 {
     pybind11::gil_scoped_acquire acquire;
 
     pybind11::object builtins = dict_["__builtins__"];
-    pybind11::object dir_func = pybind11::module_::import("builtins").attr("dir");
-    pybind11::object builtin_names_obj = dir_func(builtins);
-
-    std::vector<std::string> builtin_names;
-    for (auto name : builtin_names_obj)
+    if (pybind11::isinstance<pybind11::module>(builtins))
     {
-        builtin_names.push_back(name.cast<std::string>());
+        return builtins.attr("__dict__").cast<pybind11::dict>();
     }
-    return builtin_names;
+    else
+    {
+        return builtins.cast<pybind11::dict>();
+    }
 }
