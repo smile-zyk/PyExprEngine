@@ -14,6 +14,8 @@ PythonDefaultItemBuilder::~PythonDefaultItemBuilder() = default;
 
 bool PythonDefaultItemBuilder::CanBuild(const Value &value)
 {
+    py::gil_scoped_acquire acquire;
+
     if (value.Type() == typeid(py::object) || value.Type() == typeid(py::handle))
     {
         return true;
@@ -24,6 +26,8 @@ bool PythonDefaultItemBuilder::CanBuild(const Value &value)
 ValueItem::UniquePtr
 PythonDefaultItemBuilder::CreateValueItem(const QString &name, const Value &value, ValueItem *parent)
 {
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(value);
     auto item = ValueItem::Create(name, value, parent);
     item->set_type(GetTypeName(obj));
@@ -38,13 +42,13 @@ QString PythonDefaultItemBuilder::GetTypeName(py::handle obj, bool qualified)
 
     try
     {
-        py::handle type_obj = py::type::of(obj);
-        py::handle type_name_attr = type_obj.attr("__name__");
+        py::object type_obj = py::type::of(obj);
+        py::object type_name_attr = type_obj.attr("__name__");
         std::string type_name_str = type_name_attr.cast<std::string>();
 
         if (qualified && py::hasattr(type_obj, "__module__"))
         {
-            py::handle module_attr = type_obj.attr("__module__");
+            py::object module_attr = type_obj.attr("__module__");
             std::string module_str = module_attr.cast<std::string>();
 
             if (!module_str.empty() && module_str != "builtins" && module_str != "__main__" && module_str != "builtin")
@@ -73,7 +77,7 @@ QString PythonDefaultItemBuilder::GetObjectRepr(py::handle obj)
 
     try
     {
-        py::handle repr_obj = py::repr(obj);
+        py::object repr_obj = py::repr(obj);
         std::string repr_result = repr_obj.cast<std::string>();
         return QString::fromStdString(repr_result);
     }
@@ -81,7 +85,7 @@ QString PythonDefaultItemBuilder::GetObjectRepr(py::handle obj)
     {
         try
         {
-            py::handle str_obj = py::str(obj);
+            py::object str_obj = py::str(obj);
             std::string str_result = str_obj.cast<std::string>();
             return QString::fromStdString(str_result);
         }
@@ -99,6 +103,8 @@ QString PythonDefaultItemBuilder::GetObjectRepr(py::handle obj)
 // PythonListItemBuilder implementation
 bool PythonListItemBuilder::CanBuild(const Value &value)
 {
+    py::gil_scoped_acquire acquire;
+
     if (value.Type() == typeid(py::object) || value.Type() == typeid(py::handle))
     {
         auto obj = py::cast(value);
@@ -113,6 +119,8 @@ bool PythonListItemBuilder::CanBuild(const Value &value)
 
 ValueItem::UniquePtr PythonListItemBuilder::CreateValueItem(const QString &name, const Value &value, ValueItem *parent)
 {
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(value);
     auto list = py::cast<py::list>(obj);
     auto item = ValueItem::Create(name, value, parent);
@@ -132,6 +140,8 @@ void PythonListItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
         return;
     }
 
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(item->value());
     auto list = py::cast<py::list>(obj);
 
@@ -150,6 +160,8 @@ void PythonListItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 // PythonTupleItemBuilder implementation
 bool PythonTupleItemBuilder::CanBuild(const Value &value)
 {
+    py::gil_scoped_acquire acquire;
+
     if (value.Type() == typeid(py::object) || value.Type() == typeid(py::handle))
     {
         auto obj = py::cast(value);
@@ -164,6 +176,8 @@ bool PythonTupleItemBuilder::CanBuild(const Value &value)
 
 ValueItem::UniquePtr PythonTupleItemBuilder::CreateValueItem(const QString &name, const Value &value, ValueItem *parent)
 {
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(value);
     auto tuple = py::cast<py::tuple>(obj);
     auto item = ValueItem::Create(name, value, parent);
@@ -183,6 +197,8 @@ void PythonTupleItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
         return;
     }
 
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(item->value());
     auto tuple = py::cast<py::tuple>(obj);
     for (size_t i = begin; i <= end; ++i)
@@ -200,6 +216,8 @@ void PythonTupleItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 // PythonSetItemBuilder implementation
 bool PythonSetItemBuilder::CanBuild(const Value &value)
 {
+    py::gil_scoped_acquire acquire;
+
     if (value.Type() == typeid(py::object) || value.Type() == typeid(py::handle))
     {
         auto obj = py::cast(value);
@@ -214,6 +232,8 @@ bool PythonSetItemBuilder::CanBuild(const Value &value)
 
 ValueItem::UniquePtr PythonSetItemBuilder::CreateValueItem(const QString &name, const Value &value, ValueItem *parent)
 {
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(value);
     auto set = py::cast<py::set>(obj);
     auto item = ValueItem::Create(name, value, parent);
@@ -233,6 +253,8 @@ void PythonSetItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
         return;
     }
 
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(item->value());
     auto set = py::cast<py::set>(obj);
     for (int i = begin; i <= end; i++)
@@ -249,6 +271,8 @@ void PythonSetItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 // PythonDictItemBuilder implementation
 bool PythonDictItemBuilder::CanBuild(const Value &value)
 {
+    py::gil_scoped_acquire acquire;
+
     if (value.Type() == typeid(py::object) || value.Type() == typeid(py::handle))
     {
         auto obj = py::cast(value);
@@ -263,6 +287,8 @@ bool PythonDictItemBuilder::CanBuild(const Value &value)
 
 ValueItem::UniquePtr PythonDictItemBuilder::CreateValueItem(const QString &name, const Value &value, ValueItem *parent)
 {
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(value);
     auto dict = py::cast<py::dict>(obj);
     auto item = ValueItem::Create(name, value, parent);
@@ -282,14 +308,16 @@ void PythonDictItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
         return;
     }
 
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(item->value());
     auto dict = py::cast<py::dict>(obj);
     for (int i = begin; i <= end; i++)
     {
         auto it = dict.begin();
         std::advance(it, i);
-        py::handle key = it->first;
-        py::handle value = it->second;
+        py::object key = py::reinterpret_borrow<py::object>(it->first);
+        py::object value = py::reinterpret_borrow<py::object>(it->second);
         QString key_str = PythonDefaultItemBuilder::GetObjectRepr(key);
         ValueItem::UniquePtr child_item = BuilderUtils::CreateValueItem(key_str, value, item);
         item->AddChild(std::move(child_item));
@@ -298,6 +326,8 @@ void PythonDictItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
 
 bool PythonClassItemBuilder::CanBuild(const Value &value)
 {
+    py::gil_scoped_acquire acquire;
+
     if (value.Type() == typeid(py::object) || value.Type() == typeid(py::handle))
     {
         auto obj = py::cast(value);
@@ -308,6 +338,8 @@ bool PythonClassItemBuilder::CanBuild(const Value &value)
 
 ValueItem::UniquePtr PythonClassItemBuilder::CreateValueItem(const QString &name, const Value &value, ValueItem *parent)
 {
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(value);
     auto dict = py::cast<py::dict>(obj.attr("__dict__"));
     auto item = ValueItem::Create(name, value, parent);
@@ -325,14 +357,16 @@ void PythonClassItemBuilder::LoadChildren(ValueItem *item, int begin, int end)
         return;
     }
 
+    py::gil_scoped_acquire acquire;
+
     auto obj = py::cast(item->value());
     auto dict = py::cast<py::dict>(obj.attr("__dict__"));
     for (int i = begin; i <= end; i++)
     {
         auto it = dict.begin();
         std::advance(it, i);
-        py::handle key = it->first;
-        py::handle value = it->second;
+        py::object key = py::reinterpret_borrow<py::object>(it->first);
+        py::object value = py::reinterpret_borrow<py::object>(it->second);
         // check key is py::str
         QString key_str = PythonDefaultItemBuilder::GetObjectRepr(key);
         std::string type_str = GetTypeName(value).toStdString();

@@ -5,6 +5,28 @@
 #include <gtest/gtest.h>
 #include <pybind11/embed.h>
 
+/**
+ * Unit tests for PythonParser
+ * 
+ * Test Organization:
+ * 1. Basic Statement Parsing - Simple assignments, imports, functions, classes
+ * 2. Error Handling - Invalid syntax, unsupported statements, edge cases
+ * 3. Complex Expressions - Numeric, comprehensions, conditionals, function chains
+ * 4. Comments and Special Characters
+ * 5. Caching Functionality
+ * 6. Multi-statement Parsing and Splitting
+ * 7. Import Statement Variations
+ * 8. Expression Parsing (ParseExpression API)
+ * 9. Type Annotations (AnnAssign)
+ * 10. Nested Scopes and Dependencies
+ * 11. Comprehensions and Generators
+ * 12. Attribute Chains and Method Calls
+ * 13. Walrus Operator (:=)
+ * 14. Edge Cases and Unsupported Statements
+ * 15. Special Python Features (f-strings, slicing, operators)
+ * 16. Multi-line and Async Code
+ * 17. Extended Cache Tests
+ */
 
 using namespace xequation;
 using namespace xequation::python;
@@ -24,6 +46,10 @@ class PythonParserTest : public ::testing::Test
 
     std::unique_ptr<PythonParser> parser_;
 };
+
+// ============================================================================
+// Basic Statement Parsing Tests
+// ============================================================================
 
 TEST_F(PythonParserTest, ParseSimpleAssignment)
 {
@@ -80,6 +106,10 @@ TEST_F(PythonParserTest, ParseClass)
     EXPECT_EQ(item.content, "class Person: pass");
 }
 
+// ============================================================================
+// Error Handling Tests
+// ============================================================================
+
 TEST_F(PythonParserTest, ParseErrorUnsupportedStatement)
 {
     EXPECT_THROW(
@@ -126,6 +156,10 @@ TEST_F(PythonParserTest, ParseErrorMultipleAssignment)
     );
 }
 
+// ============================================================================
+// Complex Expression Tests
+// ============================================================================
+
 TEST_F(PythonParserTest, ParseComplexNumeric)
 {
     auto result = parser_->ParseSingleStatement("a = 3 + 4j + 2 - 1j + 1 + 2j");
@@ -170,6 +204,10 @@ TEST_F(PythonParserTest, ParseFunctionCallChain)
     EXPECT_EQ(result.items[0].type, ItemType::kVariable);
 }
 
+// ============================================================================
+// Comment and Special Character Tests
+// ============================================================================
+
 TEST_F(PythonParserTest, ParseEmptyString)
 {
     EXPECT_THROW(
@@ -209,6 +247,10 @@ TEST_F(PythonParserTest, ParseSpecialCharacters)
     EXPECT_EQ(result.items[0].name, "_private_var");
     EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("public_var"));
 }
+
+// ============================================================================
+// Cache Tests
+// ============================================================================
 
 TEST_F(PythonParserTest, CacheBasicFunctionality)
 {
@@ -253,6 +295,10 @@ TEST_F(PythonParserTest, CacheWithDifferentContent)
 
     EXPECT_EQ(size2, size1);
 }
+
+// ============================================================================
+// Multi-statement Parsing and Splitting Tests
+// ============================================================================
 
 TEST_F(PythonParserTest, ParseMultipleStatements)
 {
@@ -308,6 +354,10 @@ TEST_F(PythonParserTest, SplitStatementsComplex)
     EXPECT_TRUE(statements[2].find("result = calculate") != std::string::npos);
 }
 
+// ============================================================================
+// Performance Tests
+// ============================================================================
+
 TEST_F(PythonParserTest, CachePerformance)
 {
     std::string complex_expr = "t = sqrt(x*x + y*y) + sin(angle) * cos(angle)";
@@ -328,6 +378,10 @@ TEST_F(PythonParserTest, CachePerformance)
     EXPECT_EQ(result1.items[0].name, result2.items[0].name);
     EXPECT_EQ(result1.items[0].content, result2.items[0].content);
 }
+
+// ============================================================================
+// Import Statement Tests
+// ============================================================================
 
 TEST_F(PythonParserTest, ParseMultipleImport)
 {
@@ -454,6 +508,460 @@ TEST_F(PythonParserTest, ParseComplexImportScenarios)
     
     EXPECT_TRUE(has_ospath);
     EXPECT_TRUE(has_np);
+}
+
+// ============================================================================
+// Expression Parsing Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseExpressionSimple)
+{
+    auto result = parser_->ParseExpression("a + b");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "__expression__");
+    EXPECT_EQ(result.items[0].type, ItemType::kExpression);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("a", "b"));
+}
+
+TEST_F(PythonParserTest, ParseExpressionWithAttributes)
+{
+    auto result = parser_->ParseExpression("math.sqrt(x) + obj.value");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("math", "math.sqrt", "x", "obj", "obj.value"));
+}
+
+TEST_F(PythonParserTest, ParseExpressionWithNestedAttributes)
+{
+    auto result = parser_->ParseExpression("obj.data.values.sum()");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies,
+                testing::IsSupersetOf({"obj", "obj.data", "obj.data.values", "obj.data.values.sum"}));
+}
+
+TEST_F(PythonParserTest, ParseExpressionWithFunctionCallChain)
+{
+    auto result = parser_->ParseExpression("func1(func2(x)).result");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::IsSupersetOf({"func1", "func2", "x"}));
+}
+
+TEST_F(PythonParserTest, ParseExpressionInvalidSyntax)
+{
+    auto result = parser_->ParseExpression("a +");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].type, ItemType::kError);
+    EXPECT_NE(result.items[0].status, ResultStatus::kSuccess);
+}
+
+TEST_F(PythonParserTest, ParseExpressionEmpty)
+{
+    auto result = parser_->ParseExpression("");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].type, ItemType::kError);
+}
+
+TEST_F(PythonParserTest, ParseExpressionLambda)
+{
+    auto result = parser_->ParseExpression("lambda x: x + y");
+    EXPECT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("y"));
+}
+
+// ============================================================================
+// Type Annotation Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseAnnotatedAssignmentWithValue)
+{
+    auto result = parser_->ParseSingleStatement("x: int = 10");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "x");
+    EXPECT_EQ(result.items[0].type, ItemType::kVariable);
+    EXPECT_THAT(result.items[0].dependencies, testing::IsEmpty());
+}
+
+TEST_F(PythonParserTest, ParseAnnotatedAssignmentWithExpression)
+{
+    auto result = parser_->ParseSingleStatement("result: float = a + b * c");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "result");
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("a", "b", "c"));
+}
+
+TEST_F(PythonParserTest, ParseAnnotatedAssignmentWithoutValue)
+{
+    auto result = parser_->ParseSingleStatement("x: int");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "x");
+    EXPECT_EQ(result.items[0].type, ItemType::kVariable);
+    EXPECT_THAT(result.items[0].dependencies, testing::IsEmpty());
+}
+
+TEST_F(PythonParserTest, ParseAnnotatedAssignmentComplexType)
+{
+    auto result = parser_->ParseSingleStatement("data: List[Dict[str, int]] = process(raw_data)");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "data");
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("process", "raw_data"));
+}
+
+// ============================================================================
+// Nested Scope and Dependency Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseFunctionWithNestedFunction)
+{
+    auto result = parser_->ParseSingleStatement(R"(def outer(x):
+    def inner(y):
+        return y + z
+    return inner(x) + global_var)");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "outer");
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("z", "global_var"));
+}
+
+TEST_F(PythonParserTest, ParseFunctionWithDefaultArguments)
+{
+    auto result = parser_->ParseSingleStatement("def func(x, y=default_val, z=compute()): return x + y");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "func");
+    EXPECT_THAT(result.items[0].dependencies, testing::IsSupersetOf({"default_val", "compute"}));
+}
+
+TEST_F(PythonParserTest, ParseFunctionWithGlobalReference)
+{
+    auto result = parser_->ParseSingleStatement(R"(def calculate(x, y):
+    temp = x + y
+    return temp * GLOBAL_CONSTANT + external_func(x))");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("GLOBAL_CONSTANT", "external_func"));
+}
+
+TEST_F(PythonParserTest, ParseClassWithNestedClass)
+{
+    auto result = parser_->ParseSingleStatement(R"(class Outer:
+    class Inner:
+        def method(self):
+            return external_var
+    def outer_method(self):
+        return another_var)");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "Outer");
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("external_var", "another_var"));
+}
+
+TEST_F(PythonParserTest, ParseClassWithInheritance)
+{
+    auto result = parser_->ParseSingleStatement(R"(class Child(ParentClass, Mixin):
+    def method(self):
+        return self.value + helper_func())");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "Child");
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::IsSupersetOf({"ParentClass", "Mixin", "helper_func"}));
+}
+
+TEST_F(PythonParserTest, ParseClassWithDecorator)
+{
+    auto result = parser_->ParseSingleStatement(R"(@dataclass
+class MyClass:
+    x: int
+    def method(self):
+        return external)");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "MyClass");
+    EXPECT_THAT(result.items[0].dependencies, testing::IsSupersetOf({"dataclass", "external"}));
+}
+
+// ============================================================================
+// Comprehension and Generator Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseNestedListComprehension)
+{
+    auto result = parser_->ParseSingleStatement(
+        "matrix = [[i*j + offset for j in cols] for i in rows]"
+    );
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("offset", "cols", "rows"));
+}
+
+TEST_F(PythonParserTest, ParseSetComprehension)
+{
+    auto result = parser_->ParseSingleStatement("s = {x * multiplier for x in data if x > threshold}");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("multiplier", "data", "threshold"));
+}
+
+TEST_F(PythonParserTest, ParseDictComprehension)
+{
+    auto result = parser_->ParseSingleStatement("d = {k: transform(v) for k, v in items}");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("transform", "items"));
+}
+
+TEST_F(PythonParserTest, ParseGeneratorExpression)
+{
+    auto result = parser_->ParseSingleStatement("gen = (x * factor for x in sequence if predicate(x))");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("factor", "sequence", "predicate"));
+}
+
+// ============================================================================
+// Attribute Chain and Method Call Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseAttributeChainAccess)
+{
+    auto result = parser_->ParseSingleStatement("value = obj.attr1.attr2.attr3");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies,
+                testing::IsSupersetOf({"obj", "obj.attr1", "obj.attr1.attr2", "obj.attr1.attr2.attr3"}));
+}
+
+TEST_F(PythonParserTest, ParseMethodChainWithAttributes)
+{
+    auto result = parser_->ParseSingleStatement("result = data.filter().sort().values");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::IsSupersetOf({"data"}));
+}
+
+TEST_F(PythonParserTest, ParseMixedAttributeAndIndex)
+{
+    auto result = parser_->ParseSingleStatement("val = obj.items[index].property");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::IsSupersetOf({"obj", "index"}));
+}
+
+// ============================================================================
+// Walrus Operator Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseWalrusOperatorSimple)
+{
+    auto result = parser_->ParseSingleStatement("result = (temp := a + b) * 2");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "result");
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("a", "b"));
+}
+
+TEST_F(PythonParserTest, ParseWalrusOperatorInComprehension)
+{
+    auto result = parser_->ParseSingleStatement("data = [y for x in items if (y := transform(x)) > threshold]");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("items", "transform", "threshold"));
+}
+
+// ============================================================================
+// Edge Cases and Error Handling Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseFromImportWildcard)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("from math import *"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseAssignmentToAttribute)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("obj.attr = value"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseAssignmentToIndex)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("lst[0] = value"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseTupleUnpacking)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("a, b = 1, 2"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseAugmentedAssignment)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("x += 1"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseForLoop)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("for i in range(10): pass"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseIfStatement)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("if x > 0: y = 1"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseWhileLoop)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("while True: pass"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseWithStatement)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("with open('file.txt') as f: pass"),
+        ParseException
+    );
+}
+
+TEST_F(PythonParserTest, ParseTryExcept)
+{
+    EXPECT_THROW(
+        parser_->ParseSingleStatement("try: pass\nexcept: pass"),
+        ParseException
+    );
+}
+
+// ============================================================================
+// Special Python Features Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseFStringWithVariables)
+{
+    auto result = parser_->ParseSingleStatement("msg = f'Hello {name}, you have {count} items'");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("name", "count"));
+}
+
+TEST_F(PythonParserTest, ParseFStringWithExpressions)
+{
+    auto result = parser_->ParseSingleStatement("text = f'Result: {calculate(x, y):.2f}'");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("calculate", "x", "y"));
+}
+
+TEST_F(PythonParserTest, ParseSlicing)
+{
+    auto result = parser_->ParseSingleStatement("subset = data[start:end:step]");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("data", "start", "end", "step"));
+}
+
+TEST_F(PythonParserTest, ParseUnaryOperators)
+{
+    auto result = parser_->ParseSingleStatement("val = -x + ~y + (not z)");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("x", "y", "z"));
+}
+
+TEST_F(PythonParserTest, ParseTernaryOperator)
+{
+    auto result = parser_->ParseSingleStatement("result = a if condition else b");
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_THAT(result.items[0].dependencies, testing::UnorderedElementsAre("a", "condition", "b"));
+}
+
+// ============================================================================
+// Multi-line and Complex Code Tests
+// ============================================================================
+
+TEST_F(PythonParserTest, ParseMultiLineFunction)
+{
+    auto result = parser_->ParseSingleStatement(R"(def complex_function(x, y, z=default):
+    # Calculate intermediate values
+    temp1 = helper1(x)
+    temp2 = helper2(y)
+    
+    # Combine results
+    result = temp1 + temp2 + external_var
+    return result * z)");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "complex_function");
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::IsSupersetOf({"default", "helper1", "helper2", "external_var"}));
+}
+
+TEST_F(PythonParserTest, ParseMultiLineClass)
+{
+    auto result = parser_->ParseSingleStatement(R"(class DataProcessor:
+    # Class attribute
+    DEFAULT_BUFFER = 1024
+    
+    def __init__(self, size=DEFAULT_SIZE):
+        self.size = size
+        self.buffer = allocate(size)
+    
+    def process(self, data):
+        return transform(data, self.size))");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "DataProcessor");
+    EXPECT_THAT(result.items[0].dependencies, 
+                testing::UnorderedElementsAre("DEFAULT_SIZE", "allocate", "transform"));
+}
+
+TEST_F(PythonParserTest, ParseAsyncFunction)
+{
+    auto result = parser_->ParseSingleStatement(R"(async def fetch_data(url):
+    response = await http_client.get(url)
+    return response.json())");
+    
+    ASSERT_EQ(result.items.size(), 1);
+    EXPECT_EQ(result.items[0].name, "fetch_data");
+    EXPECT_THAT(result.items[0].dependencies, testing::IsSupersetOf({"http_client"}));
+}
+
+// ============================================================================
+// Cache Tests (Extended)
+// ============================================================================
+
+TEST_F(PythonParserTest, CacheWithComplexExpressions)
+{
+    std::string code = "result = math.sqrt(x**2 + y**2) + numpy.array([1,2,3]).sum()";
+    
+    parser_->ParseSingleStatement(code);
+    size_t size1 = parser_->GetParseResultCacheSize();
+    
+    parser_->ParseSingleStatement(code);
+    size_t size2 = parser_->GetParseResultCacheSize();
+    
+    EXPECT_EQ(size1, size2);
+}
+
+TEST_F(PythonParserTest, CacheIndependentOfWhitespace)
+{
+    auto result1 = parser_->ParseSingleStatement("a=b+c");
+    auto result2 = parser_->ParseSingleStatement("a = b + c");
+    
+    EXPECT_EQ(result1.items[0].name, result2.items[0].name);
+    EXPECT_EQ(result1.items[0].dependencies, result2.items[0].dependencies);
 }
 
 int main(int argc, char **argv)

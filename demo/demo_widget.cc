@@ -13,6 +13,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtConcurrent/QtConcurrent>
 #include <algorithm>
 
 #include "equation_group_editor.h"
@@ -144,6 +145,7 @@ void DemoWidget::InitializeLanguageModel()
     }
     if(language_model_->language_name() == "Python")
     {
+        pybind11::gil_scoped_acquire acquire;
         equation_manager_->context();
         const python::PythonEquationContext* py_context = dynamic_cast<const python::PythonEquationContext*>(&equation_manager_->context());
         auto builtin_dict = py_context->builtin_dict();
@@ -191,6 +193,7 @@ void DemoWidget::OnInsertEquationRequest()
         if (AddEquationGroup(statement.toStdString(), id))
         {
             single_equation_set_.insert(id);
+            AsyncUpdateEquationGroup(id);
             editor->OnSuccess();
         }
     });
@@ -210,6 +213,7 @@ void DemoWidget::OnEditEquationGroupRequest(const xequation::EquationGroupId &id
             [this, editor](const EquationGroupId &group_id, const QString &statement) {
                 if (EditEquationGroup(group_id, statement.toStdString()))
                 {
+                    AsyncUpdateEquationGroup(group_id);
                     editor->OnSuccess();
                 }
             }
@@ -227,6 +231,7 @@ void DemoWidget::OnEditEquationGroupRequest(const xequation::EquationGroupId &id
             editor, &xequation::gui::EquationGroupEditor::TextSubmitted, [this, editor, id](const QString &statement) {
                 if (EditEquationGroup(id, statement.toStdString()))
                 {
+                    AsyncUpdateEquationGroup(id);
                     editor->accept();
                 }
             }
@@ -262,7 +267,6 @@ bool DemoWidget::AddEquationGroup(const std::string &statement, xequation::Equat
     try
     {
         id = equation_manager_->AddEquationGroup(statement);
-        equation_manager_->UpdateEquationGroup(id);
         return true;
     }
     catch (const EquationException &e)
@@ -286,7 +290,6 @@ bool DemoWidget::EditEquationGroup(const xequation::EquationGroupId &id, const s
     try
     {
         equation_manager_->EditEquationGroup(id, statement);
-        equation_manager_->UpdateEquationGroup(id);
         return true;
     }
     catch (const EquationException &e)
@@ -332,6 +335,22 @@ bool DemoWidget::RemoveEquationGroup(const xequation::EquationGroupId &id)
         QMessageBox::warning(this, "Warning", e.what(), QMessageBox::Ok);
         return false;
     }
+}
+
+void DemoWidget::AsyncUpdateEquationGroup(const xequation::EquationGroupId& id)
+{
+    QtConcurrent::run([this, id]() {
+        pybind11::gil_scoped_acquire acquire;
+        try
+        {
+            equation_manager_->UpdateEquationGroup(id);
+        }
+        catch (const std::exception& e)
+        {
+            std::string error_msg = e.what();
+            qDebug() << "Error updating equation group:" << QString::fromStdString(error_msg);
+        }
+    });
 }
 
 void DemoWidget::OnEquationGroupSelected(const xequation::EquationGroupId &id)
@@ -381,6 +400,7 @@ void DemoWidget::OnInsertEquationGroupRequest()
         if (AddEquationGroup(statement.toStdString(), id))
         {
             equation_group_set_.insert(id);
+            AsyncUpdateEquationGroup(id);
             editor->accept();
         }
     });

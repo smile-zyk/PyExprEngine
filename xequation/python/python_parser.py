@@ -14,12 +14,59 @@ class PythonParser:
         # Map of supported AST node types to their category names
         self.valid_types = {
             "FunctionDef": "func",
+            "AsyncFunctionDef": "func",
             "ClassDef": "class",
             "Import": "import",
             "ImportFrom": "import_from",
             "Assign": "var",
             "AnnAssign": "var",
         }
+
+    @staticmethod
+    def _collect_function_param_names(args_node):
+        """Collect all parameter names from a function arguments node.
+        
+        Args:
+            args_node: AST arguments node
+            
+        Returns:
+            Set of parameter names
+        """
+        param_names = set()
+        for arg in args_node.args:
+            param_names.add(arg.arg)
+        if args_node.vararg:
+            param_names.add(args_node.vararg.arg)
+        if args_node.kwarg:
+            param_names.add(args_node.kwarg.arg)
+        for arg in args_node.kwonlyargs:
+            param_names.add(arg.arg)
+        return param_names
+
+    @staticmethod
+    def _collect_body_local_names(body):
+        """Collect locally defined names from a function or class body.
+        
+        Args:
+            body: List of AST statement nodes
+            
+        Returns:
+            Set of locally defined names
+        """
+        local_names = set()
+        for stmt in body:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                local_names.add(stmt.name)
+            elif isinstance(stmt, ast.ClassDef):
+                local_names.add(stmt.name)
+            elif isinstance(stmt, ast.Assign):
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name):
+                        local_names.add(target.id)
+            elif isinstance(stmt, ast.AnnAssign):
+                if isinstance(stmt.target, ast.Name):
+                    local_names.add(stmt.target.id)
+        return local_names
 
     def split_statements(self, code):
         """Split multi-statement code into individual statements.
@@ -147,9 +194,9 @@ class PythonParser:
     def _analyze_FunctionDef(self, node, code):
         """Analyze a function definition statement.
         
-        Extracts external variables used in function body as dependencies.
-        Filters out function parameters and local variables to find only
-        truly external variable references.
+        Extracts external variables used in function body, decorators, and default
+        parameters as dependencies. Filters out function parameters and local 
+        variables to find only truly external variable references.
         
         Args:
             node: AST FunctionDef node
@@ -159,36 +206,24 @@ class PythonParser:
             Dict with function name and metadata
         """
         # Collect parameter names and local variables defined in function
-        local_names = set()
+        local_names = self._collect_function_param_names(node.args)
+        local_names.update(self._collect_body_local_names(node.body))
         
-        # Add function parameters
-        for arg in node.args.args:
-            local_names.add(arg.arg)
-        if node.args.vararg:
-            local_names.add(node.args.vararg.arg)
-        if node.args.kwarg:
-            local_names.add(node.args.kwarg.arg)
-        for arg in node.args.kwonlyargs:
-            local_names.add(arg.arg)
-        
-        # Add locally defined variables (assignments in function body)
-        for stmt in node.body:
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                local_names.add(stmt.name)
-            elif isinstance(stmt, ast.ClassDef):
-                local_names.add(stmt.name)
-            elif isinstance(stmt, ast.Assign):
-                for target in stmt.targets:
-                    if isinstance(target, ast.Name):
-                        local_names.add(target.id)
-            elif isinstance(stmt, ast.AnnAssign):
-                if isinstance(stmt.target, ast.Name):
-                    local_names.add(stmt.target.id)
-        
-        # Extract dependencies while skipping local names
+        # Extract dependencies from decorators and default arguments
         all_refs = []
+        for decorator in node.decorator_list:
+            all_refs.extend(self._extract_dependencies(decorator))
+        
+        for default in node.args.defaults:
+            all_refs.extend(self._extract_dependencies(default))
+        for default in (node.args.kw_defaults or []):
+            if default is not None:
+                all_refs.extend(self._extract_dependencies(default))
+        
+        # Extract dependencies from function body while skipping local names
         for stmt in node.body:
             all_refs.extend(self._extract_dependencies(stmt, skip_names=local_names))
+        
         # Remove duplicates while preserving order
         dependencies = list(dict.fromkeys(all_refs))
         
@@ -201,12 +236,27 @@ class PythonParser:
             "status": "Success"
         }
 
+    def _analyze_AsyncFunctionDef(self, node, code):
+        """Analyze an async function definition statement.
+        
+        Delegates to _analyze_FunctionDef as async functions have the same
+        dependency analysis requirements as regular functions.
+        
+        Args:
+            node: AST AsyncFunctionDef node
+            code: Original source code
+            
+        Returns:
+            Dict with function name and metadata
+        """
+        return self._analyze_FunctionDef(node, code)
+
     def _analyze_ClassDef(self, node, code):
         """Analyze a class definition statement.
         
-        Extracts external variables used in class body as dependencies.
-        Filters out class attributes and method parameters to find only
-        truly external variable references.
+        Extracts external variables used in class body, base classes, decorators,
+        and metaclass arguments as dependencies. Filters out class attributes 
+        and method parameters to find only truly external variable references.
         
         Args:
             node: AST ClassDef node
@@ -215,29 +265,24 @@ class PythonParser:
         Returns:
             Dict with class name and metadata
         """
-        # Collect all variables defined within the class (attributes, methods, nested classes)
-        # Method parameters will be handled by the dependency visitor's nested scope logic.
-        class_internal_names = set()
-
-        for stmt in node.body:
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Method name is internal
-                class_internal_names.add(stmt.name)
-            elif isinstance(stmt, ast.ClassDef):
-                class_internal_names.add(stmt.name)
-            elif isinstance(stmt, ast.Assign):
-                for target in stmt.targets:
-                    if isinstance(target, ast.Name):
-                        class_internal_names.add(target.id)
-            elif isinstance(stmt, ast.AnnAssign):
-                if isinstance(stmt.target, ast.Name):
-                    class_internal_names.add(stmt.target.id)
+        # Collect all variables defined within the class
+        class_internal_names = self._collect_body_local_names(node.body)
         
-        # Extract dependencies while skipping class internals
-        skip_names = class_internal_names
+        # Extract dependencies from decorators, base classes, and keywords
         all_refs = []
+        for decorator in node.decorator_list:
+            all_refs.extend(self._extract_dependencies(decorator))
+        
+        for base in node.bases:
+            all_refs.extend(self._extract_dependencies(base))
+        
+        for keyword in node.keywords:
+            all_refs.extend(self._extract_dependencies(keyword.value))
+        
+        # Extract dependencies from class body while skipping class internals
         for stmt in node.body:
-            all_refs.extend(self._extract_dependencies(stmt, skip_names=skip_names))
+            all_refs.extend(self._extract_dependencies(stmt, skip_names=class_internal_names))
+        
         # Remove duplicates while preserving order
         dependencies = list(dict.fromkeys(all_refs))
         
@@ -400,6 +445,170 @@ class PythonParser:
             "status": "Success"
         }
 
+    class _DependencyVisitor(ast.NodeVisitor):
+        """AST visitor that collects variable references with nested scope handling."""
+        
+        def __init__(self, deps_list, skip_set):
+            self.deps_list = deps_list
+            # Maintain a stack of skip sets to respect nested scopes
+            self._skip_stack = [set(skip_set) if skip_set else set()]
+
+        def _current_skip(self):
+            return self._skip_stack[-1]
+
+        def visit_Name(self, node):
+            """Record simple variable names that are being read."""
+            if isinstance(node.ctx, ast.Load):
+                if node.id not in self._current_skip():
+                    self.deps_list.append(node.id)
+
+        def visit_Attribute(self, node):
+            """Record attribute access chains (e.g., x.y.z)."""
+            if isinstance(node.ctx, ast.Load):
+                if isinstance(node.value, (ast.Name, ast.Attribute)):
+                    attr_path = self._get_base_attribute_path(node)
+                    if attr_path:
+                        # Add all prefixes: x, x.y, x.y.z
+                        parts = attr_path.split(".")
+                        for i in range(1, len(parts) + 1):
+                            partial_path = ".".join(parts[:i])
+                            base = parts[0]
+                            if base not in self._current_skip():
+                                self.deps_list.append(partial_path)
+            self.generic_visit(node)
+
+        def visit_NamedExpr(self, node):
+            """Handle walrus operator: dependencies come from RHS only."""
+            # Evaluate RHS dependencies
+            self.visit(node.value)
+            # Treat the walrus target as a local binding in the current scope
+            if isinstance(node.target, ast.Name):
+                self._current_skip().add(node.target.id)
+            elif isinstance(node.target, (ast.Tuple, ast.List)):
+                for name in self._collect_target_names(node.target):
+                    self._current_skip().add(name)
+
+        def _collect_target_names(self, target):
+            """Collect all names from assignment targets (handles unpacking)."""
+            names = set()
+            if isinstance(target, ast.Name):
+                names.add(target.id)
+            elif isinstance(target, (ast.Tuple, ast.List)):
+                for elt in target.elts:
+                    names.update(self._collect_target_names(elt))
+            return names
+
+        def _visit_comprehension_like(self, generators, extra_skip=None, body_visit=None):
+            """Handle comprehension scopes: targets introduce local names."""
+            local_names = set(extra_skip) if extra_skip else set()
+            for gen in generators:
+                local_names.update(self._collect_target_names(gen.target))
+            self._skip_stack.append(self._current_skip().union(local_names))
+            # Visit generator iter expressions and ifs
+            for gen in generators:
+                self.visit(gen.iter)
+                for if_clause in gen.ifs:
+                    self.visit(if_clause)
+            if body_visit:
+                body_visit()
+            self._skip_stack.pop()
+
+        def visit_ListComp(self, node):
+            self._visit_comprehension_like(node.generators, body_visit=lambda: self.visit(node.elt))
+
+        def visit_SetComp(self, node):
+            self._visit_comprehension_like(node.generators, body_visit=lambda: self.visit(node.elt))
+
+        def visit_GeneratorExp(self, node):
+            self._visit_comprehension_like(node.generators, body_visit=lambda: self.visit(node.elt))
+
+        def visit_DictComp(self, node):
+            self._visit_comprehension_like(
+                node.generators,
+                body_visit=lambda: (self.visit(node.key), self.visit(node.value))
+            )
+
+        def visit_FunctionDef(self, node):
+            """Handle nested function scope: skip parameters and locals."""
+            local_names = PythonParser._collect_function_param_names(node.args)
+            local_names.update(PythonParser._collect_body_local_names(node.body))
+            
+            # Visit decorators and default arguments BEFORE entering function scope
+            # (they are evaluated in the outer scope)
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            for default in node.args.defaults:
+                self.visit(default)
+            for default in (node.args.kw_defaults or []):
+                if default is not None:
+                    self.visit(default)
+            
+            # Enter scope
+            self._skip_stack.append(self._current_skip().union(local_names))
+            for stmt in node.body:
+                self.visit(stmt)
+            self._skip_stack.pop()
+
+        def visit_AsyncFunctionDef(self, node):
+            """Handle nested async function similar to FunctionDef."""
+            return self.visit_FunctionDef(node)
+
+        def visit_ClassDef(self, node):
+            """Handle nested class scope: skip class internals."""
+            class_locals = PythonParser._collect_body_local_names(node.body)
+            
+            # Visit decorators and base classes BEFORE entering class scope
+            # (they are evaluated in the outer scope)
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            for base in node.bases:
+                self.visit(base)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+            
+            # Enter class scope
+            self._skip_stack.append(self._current_skip().union(class_locals))
+            for stmt in node.body:
+                self.visit(stmt)
+            self._skip_stack.pop()
+
+        def visit_Lambda(self, node):
+            """Handle lambda scope: skip parameters while visiting defaults and body."""
+            local_names = PythonParser._collect_function_param_names(node.args)
+
+            # Visit defaults BEFORE entering scope
+            for default in node.args.defaults:
+                self.visit(default)
+            for default in (node.args.kw_defaults or []):
+                if default is not None:
+                    self.visit(default)
+            
+            # Enter scope and visit body
+            self._skip_stack.append(self._current_skip().union(local_names))
+            self.visit(node.body)
+            self._skip_stack.pop()
+
+        def _get_base_attribute_path(self, node):
+            """Recursively build attribute path, stopping at function calls."""
+            if isinstance(node, ast.Attribute):
+                left_part = self._get_base_attribute_path(node.value)
+                if left_part and not self._contains_call(node.value):
+                    return f"{left_part}.{node.attr}"
+                return None
+            if isinstance(node, ast.Name):
+                return node.id
+            return None
+
+        def _contains_call(self, node):
+            """Check if node or its chain contains a function call."""
+            if isinstance(node, ast.Call):
+                return True
+            if isinstance(node, ast.Attribute):
+                return self._contains_call(node.value)
+            if isinstance(node, ast.Name):
+                return False
+            return False
+
     def _extract_dependencies(self, node, skip_names=None):
         """Extract all variable dependencies from an AST node.
         
@@ -417,155 +626,7 @@ class PythonParser:
         dependencies = []
         skip_set = set(skip_names) if skip_names else set()
 
-        class DependencyVisitor(ast.NodeVisitor):
-            """AST visitor that collects variable references with nested scope handling."""
-            
-            def __init__(self, deps_list, skip_set):
-                self.deps_list = deps_list
-                # Maintain a stack of skip sets to respect nested scopes
-                self._skip_stack = [set(skip_set) if skip_set else set()]
-
-            def _current_skip(self):
-                return self._skip_stack[-1]
-
-            def visit_Name(self, node):
-                """Record simple variable names that are being read."""
-                if isinstance(node.ctx, ast.Load):
-                    if node.id not in self._current_skip():
-                        self.deps_list.append(node.id)
-
-            def visit_Attribute(self, node):
-                """Record attribute access chains (e.g., x.y.z)."""
-                if isinstance(node.ctx, ast.Load):
-                    if isinstance(node.value, (ast.Name, ast.Attribute)):
-                        attr_path = self._get_base_attribute_path(node)
-                        if attr_path:
-                            # Add all prefixes: x, x.y, x.y.z
-                            parts = attr_path.split(".")
-                            for i in range(1, len(parts) + 1):
-                                partial_path = ".".join(parts[:i])
-                                base = parts[0]
-                                if base not in self._current_skip():
-                                    self.deps_list.append(partial_path)
-                self.generic_visit(node)
-
-            def visit_NamedExpr(self, node):
-                """Handle walrus operator: dependencies come from RHS only."""
-                self.visit(node.value)
-
-            def _collect_target_names(self, target):
-                names = set()
-                if isinstance(target, ast.Name):
-                    names.add(target.id)
-                elif isinstance(target, (ast.Tuple, ast.List)):
-                    for elt in target.elts:
-                        names.update(self._collect_target_names(elt))
-                return names
-
-            def _visit_comprehension_like(self, generators, extra_skip=None, body_visit=None):
-                # Handle comprehension scopes: targets introduce local names
-                local_names = set(extra_skip) if extra_skip else set()
-                for gen in generators:
-                    local_names.update(self._collect_target_names(gen.target))
-                self._skip_stack.append(self._current_skip().union(local_names))
-                # Visit generator iter expressions and ifs
-                for gen in generators:
-                    self.visit(gen.iter)
-                    for if_clause in gen.ifs:
-                        self.visit(if_clause)
-                if body_visit:
-                    body_visit()
-                self._skip_stack.pop()
-
-            def visit_ListComp(self, node):
-                self._visit_comprehension_like(node.generators, body_visit=lambda: self.visit(node.elt))
-
-            def visit_SetComp(self, node):
-                self._visit_comprehension_like(node.generators, body_visit=lambda: self.visit(node.elt))
-
-            def visit_GeneratorExp(self, node):
-                self._visit_comprehension_like(node.generators, body_visit=lambda: self.visit(node.elt))
-
-            def visit_DictComp(self, node):
-                self._visit_comprehension_like(
-                    node.generators,
-                    body_visit=lambda: (self.visit(node.key), self.visit(node.value))
-                )
-
-            def visit_FunctionDef(self, node):
-                """Handle nested function scope: skip parameters and locals."""
-                local_names = set()
-                # Parameters
-                for arg in node.args.args:
-                    local_names.add(arg.arg)
-                if node.args.vararg:
-                    local_names.add(node.args.vararg.arg)
-                if node.args.kwarg:
-                    local_names.add(node.args.kwarg.arg)
-                for arg in node.args.kwonlyargs:
-                    local_names.add(arg.arg)
-                # Locals defined in body
-                for stmt in node.body:
-                    if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                        local_names.add(stmt.name)
-                    elif isinstance(stmt, ast.Assign):
-                        for target in stmt.targets:
-                            if isinstance(target, ast.Name):
-                                local_names.add(target.id)
-                    elif isinstance(stmt, ast.AnnAssign):
-                        if isinstance(stmt.target, ast.Name):
-                            local_names.add(stmt.target.id)
-                # Enter scope
-                self._skip_stack.append(self._current_skip().union(local_names))
-                for stmt in node.body:
-                    self.visit(stmt)
-                self._skip_stack.pop()
-
-            def visit_AsyncFunctionDef(self, node):
-                """Handle nested async function similar to FunctionDef."""
-                return self.visit_FunctionDef(node)
-
-            def visit_ClassDef(self, node):
-                """Handle nested class scope: skip class internals and method names; method params handled in nested FunctionDef."""
-                class_locals = set()
-                for stmt in node.body:
-                    if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                        class_locals.add(stmt.name)
-                    elif isinstance(stmt, ast.Assign):
-                        for target in stmt.targets:
-                            if isinstance(target, ast.Name):
-                                class_locals.add(target.id)
-                    elif isinstance(stmt, ast.AnnAssign):
-                        if isinstance(stmt.target, ast.Name):
-                            class_locals.add(stmt.target.id)
-                # Enter class scope
-                self._skip_stack.append(self._current_skip().union(class_locals))
-                for stmt in node.body:
-                    self.visit(stmt)
-                self._skip_stack.pop()
-
-            def _get_base_attribute_path(self, node):
-                """Recursively build attribute path, stopping at function calls."""
-                if isinstance(node, ast.Attribute):
-                    left_part = self._get_base_attribute_path(node.value)
-                    if left_part and not self._contains_call(node.value):
-                        return f"{left_part}.{node.attr}"
-                    return None
-                if isinstance(node, ast.Name):
-                    return node.id
-                return None
-
-            def _contains_call(self, node):
-                """Check if node or its chain contains a function call."""
-                if isinstance(node, ast.Call):
-                    return True
-                if isinstance(node, ast.Attribute):
-                    return self._contains_call(node.value)
-                if isinstance(node, ast.Name):
-                    return False
-                return False
-
-        visitor = DependencyVisitor(dependencies, skip_set)
+        visitor = self._DependencyVisitor(dependencies, skip_set)
         visitor.visit(node)
 
         return list(dict.fromkeys(dependencies))

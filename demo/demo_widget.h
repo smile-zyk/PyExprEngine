@@ -43,6 +43,7 @@ private:
     bool AddEquationGroup(const std::string& statement, xequation::EquationGroupId& id);
     bool EditEquationGroup(const xequation::EquationGroupId& id, const std::string& statement);
     bool RemoveEquationGroup(const xequation::EquationGroupId& id);
+    void AsyncUpdateEquationGroup(const xequation::EquationGroupId& id);
     
 private:
     void SetupUI();

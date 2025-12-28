@@ -3,6 +3,7 @@
 #include <string>
 
 #include "core/equation.h"
+#include "core/equation_common.h"
 #include "python/python_equation_context.h"
 #include "python/python_equation_engine.h"
 
@@ -17,7 +18,7 @@ TEST(PythonEquationEngine, TestInit)
 
 TEST(PythonEquationEngine, TestParse)
 {
-    auto result = PythonEquationEngine::GetInstance().Parse("e = a + b + c");
+    auto result = PythonEquationEngine::GetInstance().Parse("e = a + b + c", ParseMode::kStatement);
     
     EXPECT_EQ(result.items.size(), 1);
     auto item = result.items[0];
@@ -65,7 +66,7 @@ d=a+b*c
     obj = v.Cast<pybind11::object>();
     EXPECT_EQ(obj.cast<int>(), 37);
 
-    auto import_id = equation_manager->AddEquationGroup("from math import*;p=pi");
+    auto import_id = equation_manager->AddEquationGroup("from math import sin,pi;p=pi");
     equation_manager->UpdateEquationGroup(import_id);
     equation_manager->AddEquationGroup("f=sin(a*p)");
     equation_manager->UpdateEquation("f");

@@ -9,6 +9,7 @@ using namespace xequation;
 using namespace xequation::python;
 
 PythonEquationEngine::PyEnvConfig PythonEquationEngine::config_;
+static PyThreadState* g_main_thread_state = nullptr;
 
 PythonEquationEngine::PythonEquationEngine()
 {
@@ -32,6 +33,7 @@ void PythonEquationEngine::SetPyEnvConfig(const PyEnvConfig &config)
 
 InterpretResult PythonEquationEngine::Interpret(const std::string &code, const EquationContext *context, InterpretMode mode)
 {
+    pybind11::gil_scoped_acquire acquire;
     const PythonEquationContext* py_context = dynamic_cast<const PythonEquationContext*>(context);
     if (mode == InterpretMode::kEval)
     {
@@ -45,6 +47,7 @@ InterpretResult PythonEquationEngine::Interpret(const std::string &code, const E
 
 ParseResult PythonEquationEngine::Parse(const std::string &code, ParseMode mode)
 {
+    pybind11::gil_scoped_acquire acquire;
     if (mode == ParseMode::kExpression)
     {
         return code_parser->ParseExpression(code);
@@ -100,10 +103,19 @@ void PythonEquationEngine::InitializePyEnv()
     {
         throw std::runtime_error("Python initialization failed");
     }
+
+    // Release the GIL from the main thread so background threads can acquire it.
+    g_main_thread_state = PyEval_SaveThread();
 }
 
 void PythonEquationEngine::FinalizePyEnv()
 {
+    // Restore GIL to finalize cleanly
+    if (g_main_thread_state)
+    {
+        PyEval_RestoreThread(g_main_thread_state);
+        g_main_thread_state = nullptr;
+    }
     Py_Finalize();
 }
 

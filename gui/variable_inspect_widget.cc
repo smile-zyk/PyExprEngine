@@ -10,6 +10,7 @@
 #include <QClipboard>
 #include <core/equation_manager.h>
 #include <core/equation_signals_manager.h>
+#include "python/python_qt_wrapper.h"
 
 namespace xequation
 {
@@ -85,6 +86,7 @@ void VariableInspectWidget::OnCurrentEquationChanged(const Equation *equation)
 
 void VariableInspectWidget::SetCurrentEquation(const Equation *equation)
 {
+    pybind11::gil_scoped_acquire acquire;
     if (current_equation_ == equation)
     {
         return;

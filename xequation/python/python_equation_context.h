@@ -1,6 +1,7 @@
 #pragma once
 #include "core/equation_context.h"
 #include "python_common.h"
+#include <memory>
 
 namespace xequation
 {
@@ -35,11 +36,11 @@ class PythonEquationContext : public EquationContext
 
     pybind11::dict &dict()
     {
-        return dict_;
+        return *dict_;
     }
     const pybind11::dict &dict() const
     {
-        return dict_;
+        return *dict_;
     }
 
     pybind11::dict builtin_dict() const;
@@ -53,7 +54,7 @@ class PythonEquationContext : public EquationContext
 
     PythonEquationContext(PythonEquationContext &&) noexcept = delete;
     PythonEquationContext &operator=(PythonEquationContext &&) noexcept = delete;
-    pybind11::dict dict_;
+    std::unique_ptr<pybind11::dict> dict_;
 };
 } // namespace python
 } // namespace xequation
