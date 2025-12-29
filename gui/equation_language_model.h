@@ -2,6 +2,7 @@
 
 #include "code_editor/language_model.h"
 #include "core/equation.h"
+#include "core/equation_signals_manager.h"
 
 namespace xequation
 {

@@ -87,6 +87,9 @@ class ExpressionWatchWidget : public QWidget
     QAction *select_all_action_{};
     QAction *clear_all_action_{};
 
+    ScopedConnection equation_removed_connection_;
+    ScopedConnection equation_updated_connection_;
+
     static int GetSelectionFlags(const QModelIndexList &indexes, ExpressionWatchModel *model);
 };
 } // namespace gui

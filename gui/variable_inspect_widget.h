@@ -47,6 +47,8 @@ private:
     // actions
     QAction* copy_action_{};
     QAction* add_watch_action_{};
+    ScopedConnection equation_removing_connection_;
+    ScopedConnection equation_updated_connection_;
 };
 }
 }

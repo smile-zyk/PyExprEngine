@@ -271,7 +271,7 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
         update_eqn->set_type(update_item.type);
         context_->Remove(update_item.name);
         signals_manager_->Emit<EquationEvent::kEquationUpdated>(
-            update_eqn, EquationUpdateFlag::kContent | EquationUpdateFlag::kType
+            update_eqn, EquationUpdateFlag::kContent | EquationUpdateFlag::kType | EquationUpdateFlag::kValue
         );
     }
 

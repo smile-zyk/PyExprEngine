@@ -8,6 +8,7 @@
 #include <memory>
 #include <unordered_set>
 
+#include "core/equation_signals_manager.h"
 #include "equation_browser_widget.h"
 #include "variable_inspect_widget.h"
 #include "expression_watch_widget.h"
@@ -74,4 +75,6 @@ private:
     xequation::gui::ExpressionWatchWidget* expression_watch_widget_;
     xequation::gui::EquationLanguageModel* language_model_;
     std::unique_ptr<xequation::EquationManager> equation_manager_;
+
+    std::unordered_map<QObject*, std::vector<xequation::ScopedConnection>> connection_map_;
 };

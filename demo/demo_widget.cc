@@ -97,15 +97,18 @@ void DemoWidget::SetupConnections()
         &DemoWidget::OnEquationSelected
     );
 
-    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationAdded>(
+    auto connection_added = xequation::gui::ConnectEquationSignal<EquationEvent::kEquationAdded>(
         &equation_manager_->signals_manager(), language_model_,
         &xequation::gui::EquationLanguageModel::OnEquationAdded
     );
 
-    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationRemoving>(
+    auto connection_removing = xequation::gui::ConnectEquationSignal<EquationEvent::kEquationRemoving>(
         &equation_manager_->signals_manager(), language_model_,
         &xequation::gui::EquationLanguageModel::OnEquationRemoving
     );
+
+    connection_map_[language_model_].push_back(std::move(connection_added));
+    connection_map_[language_model_].push_back(std::move(connection_removing));
 }
 
 void DemoWidget::CreateActions()

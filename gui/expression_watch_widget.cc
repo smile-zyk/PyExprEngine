@@ -321,8 +321,8 @@ void ExpressionWatchWidget::SetupConnections()
     connect(select_all_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnSelectAllExpressions);
     connect(clear_all_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnClearAllExpressions);
 
-    ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationUpdated);
-    ConnectEquationSignal<EquationEvent::kEquationRemoved>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationRemoved);
+    equation_updated_connection_ = ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationUpdated);
+    equation_removed_connection_ = ConnectEquationSignal<EquationEvent::kEquationRemoved>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationRemoved);
 }
 
 ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
