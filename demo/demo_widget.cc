@@ -1,4 +1,6 @@
 #include "demo_widget.h"
+#include "code_editor/language_model.h"
+#include "core/equation_signals_manager.h"
 #include "equation_editor.h"
 
 #include <QAction>
@@ -15,9 +17,12 @@
 #include <QWidget>
 #include <QtConcurrent/QtConcurrent>
 #include <algorithm>
+#include <qnamespace.h>
 
 #include "equation_group_editor.h"
+#include "equation_language_model.h"
 #include "python/python_qt_wrapper.h"
+#include "equation_signals_qt_utils.h"
 
 
 using namespace xequation;
@@ -92,16 +97,14 @@ void DemoWidget::SetupConnections()
         &DemoWidget::OnEquationSelected
     );
 
-    equation_manager_->signals_manager().Connect<EquationEvent::kEquationAdded>(
-        [this](const Equation* equation) {
-            language_model_->OnEquationAdded(equation);
-        }
+    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationAdded>(
+        &equation_manager_->signals_manager(), language_model_,
+        &xequation::gui::EquationLanguageModel::OnEquationAdded
     );
 
-    equation_manager_->signals_manager().Connect<EquationEvent::kEquationRemoving>(
-        [this](const Equation* equation) {
-            language_model_->OnEquationRemoving(equation);
-        }
+    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationRemoving>(
+        &equation_manager_->signals_manager(), language_model_,
+        &xequation::gui::EquationLanguageModel::OnEquationRemoving
     );
 }
 
@@ -226,6 +229,7 @@ void DemoWidget::OnEditEquationGroupRequest(const xequation::EquationGroupId &id
     {
         xequation::gui::EquationGroupEditor *editor =
             new xequation::gui::EquationGroupEditor(language_model_, this, "Edit Equation Group");
+        editor->setAttribute(Qt::WA_DeleteOnClose);
         editor->SetEquationGroup(equation_manager_->GetEquationGroup(id));
         connect(
             editor, &xequation::gui::EquationGroupEditor::TextSubmitted, [this, editor, id](const QString &statement) {
@@ -340,7 +344,6 @@ bool DemoWidget::RemoveEquationGroup(const xequation::EquationGroupId &id)
 void DemoWidget::AsyncUpdateEquationGroup(const xequation::EquationGroupId& id)
 {
     QtConcurrent::run([this, id]() {
-        pybind11::gil_scoped_acquire acquire;
         try
         {
             equation_manager_->UpdateEquationGroup(id);
@@ -394,7 +397,7 @@ void DemoWidget::OnInsertEquationGroupRequest()
 {
     xequation::gui::EquationGroupEditor *editor =
         new xequation::gui::EquationGroupEditor(language_model_, this, "Insert Equation Group");
-
+    editor->setAttribute(Qt::WA_DeleteOnClose);
     connect(editor, &xequation::gui::EquationGroupEditor::TextSubmitted, [this, editor](const QString &statement) {
         xequation::EquationGroupId id;
         if (AddEquationGroup(statement.toStdString(), id))

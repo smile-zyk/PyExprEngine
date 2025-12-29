@@ -1,4 +1,5 @@
 #include "variable_inspect_widget.h"
+#include "equation_signals_qt_utils.h"
 #include "value_model_view/value_item.h"
 #include "value_model_view/value_item_builder.h"
 
@@ -10,7 +11,6 @@
 #include <QClipboard>
 #include <core/equation_manager.h>
 #include <core/equation_signals_manager.h>
-#include "python/python_qt_wrapper.h"
 
 namespace xequation
 {
@@ -70,13 +70,8 @@ void VariableInspectWidget::SetupConnections()
     connect(copy_action_, &QAction::triggered, this, &VariableInspectWidget::OnCopyVariableValue);
     connect(add_watch_action_, &QAction::triggered, this, &VariableInspectWidget::OnAddVariableToWatch);
 
-    manager_->signals_manager().Connect<EquationEvent::kEquationRemoving>(
-        std::bind(&VariableInspectWidget::OnEquationRemoving, this, std::placeholders::_1)
-    );
-
-    manager_->signals_manager().Connect<EquationEvent::kEquationUpdated>(
-        std::bind(&VariableInspectWidget::OnEquationUpdated, this, std::placeholders::_1, std::placeholders::_2)
-    );
+    ConnectEquationSignal<EquationEvent::kEquationRemoving>(&manager_->signals_manager(), this, &VariableInspectWidget::OnEquationRemoving);
+    ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &VariableInspectWidget::OnEquationUpdated);
 }
 
 void VariableInspectWidget::OnCurrentEquationChanged(const Equation *equation)
@@ -86,7 +81,6 @@ void VariableInspectWidget::OnCurrentEquationChanged(const Equation *equation)
 
 void VariableInspectWidget::SetCurrentEquation(const Equation *equation)
 {
-    pybind11::gil_scoped_acquire acquire;
     if (current_equation_ == equation)
     {
         return;

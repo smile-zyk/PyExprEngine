@@ -7,6 +7,7 @@
 #include <QVariant>
 #include <string>
 #include <tsl/ordered_set.h>
+#include "equation_signals_qt_utils.h"
 
 namespace xequation
 {
@@ -298,21 +299,11 @@ void EquationBrowserWidget::SetupUI()
 
 void EquationBrowserWidget::SetupConnections()
 {
-    equation_added_connection_ =
-        manager_->signals_manager().ConnectScoped<EquationEvent::kEquationAdded>([this](const Equation *equation) {
-            OnEquationAdded(equation);
-        });
+    equation_added_connection_ = ConnectEquationSignal<EquationEvent::kEquationAdded>(&manager_->signals_manager(), this, &EquationBrowserWidget::OnEquationAdded);
 
-    equation_removing_connection_ =
-        manager_->signals_manager().ConnectScoped<EquationEvent::kEquationRemoving>([this](const Equation *equation) {
-            OnEquationRemoving(equation);
-        });
+    equation_removing_connection_ = ConnectEquationSignal<EquationEvent::kEquationRemoving>(&manager_->signals_manager(), this, &EquationBrowserWidget::OnEquationRemoving);
 
-    equation_updated_connection_ = manager_->signals_manager().ConnectScoped<EquationEvent::kEquationUpdated>(
-        [this](const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type) {
-            OnEquationUpdated(equation, change_type);
-        }
-    );
+    equation_updated_connection_ = ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &EquationBrowserWidget::OnEquationUpdated);
 
     connect(
         property_browser_, &QtTreePropertyBrowser::currentItemChanged, this,

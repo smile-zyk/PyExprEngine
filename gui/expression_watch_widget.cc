@@ -2,6 +2,8 @@
 
 #include "core/equation_common.h"
 #include "core/equation_manager.h"
+#include "core/equation_signals_manager.h"
+#include "equation_signals_qt_utils.h"
 #include "value_model_view/value_item.h"
 #include "value_model_view/value_item_builder.h"
 #include <QAction>
@@ -185,7 +187,7 @@ ExpressionWatchWidget::ExpressionWatchWidget(const EquationManager *manager, QWi
     SetupConnections();
 }
 
-void ExpressionWatchWidget::onEquationRemoved(const std::string &equation_name)
+void ExpressionWatchWidget::OnEquationRemoved(const std::string &equation_name)
 {
     auto range = expression_item_equation_name_bimap_.right.equal_range(equation_name);
     std::vector<ValueItem *> items_to_update;
@@ -319,13 +321,8 @@ void ExpressionWatchWidget::SetupConnections()
     connect(select_all_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnSelectAllExpressions);
     connect(clear_all_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnClearAllExpressions);
 
-    manager_->signals_manager().Connect<EquationEvent::kEquationUpdated>(
-        std::bind(&ExpressionWatchWidget::OnEquationUpdated, this, std::placeholders::_1, std::placeholders::_2)
-    );
-
-    manager_->signals_manager().Connect<EquationEvent::kEquationRemoved>(
-        std::bind(&ExpressionWatchWidget::onEquationRemoved, this, std::placeholders::_1)
-    );
+    ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationUpdated);
+    ConnectEquationSignal<EquationEvent::kEquationRemoved>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationRemoved);
 }
 
 ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)

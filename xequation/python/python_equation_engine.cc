@@ -3,6 +3,7 @@
 #include "python_executor.h"
 #include "python/python_parser.h"
 #include "python/python_equation_context.h"
+#include "value_pybind_converter.h"
 #include <memory>
 
 using namespace xequation;
@@ -24,6 +25,7 @@ PythonEquationEngine::PythonEquationEngine()
     }
     code_parser = std::unique_ptr<PythonParser>(new PythonParser());
     code_executor = std::unique_ptr<PythonExecutor>(new PythonExecutor());
+    value_convert::RegisterPybindValueCallbacksOnce();
 }
 
 void PythonEquationEngine::SetPyEnvConfig(const PyEnvConfig &config)

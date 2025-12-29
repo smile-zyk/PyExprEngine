@@ -46,7 +46,7 @@ class ExpressionWatchWidget : public QWidget
   public:
     ExpressionWatchWidget(const EquationManager *manager_, QWidget *parent = nullptr);
     ~ExpressionWatchWidget() = default;
-    void onEquationRemoved(const std::string &equation_name);
+    void OnEquationRemoved(const std::string &equation_name);
     void OnEquationUpdated(const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type);
     void OnAddExpressionToWatch(const QString &expression);
 

@@ -1,10 +1,13 @@
 #pragma once
 #include "core/value.h"
 #include "python_base.h"
+#include <atomic>
 #include <map>
 #include <memory>
+#include <pybind11/pybind11.h>
 #include <string>
 #include <vector>
+
 
 #include "core/value.h"
 
@@ -12,6 +15,69 @@ namespace xequation
 {
 namespace value_convert
 {
+inline std::vector<PyGILState_STATE> &gil_state_stack()
+{
+    static thread_local std::vector<PyGILState_STATE> stack;
+    return stack;
+}
+
+inline void acquire_gil()
+{
+    if (Py_IsInitialized())
+    {
+        gil_state_stack().push_back(PyGILState_Ensure());
+    }
+}
+
+inline void release_gil()
+{
+    auto &stack = gil_state_stack();
+    if (!stack.empty() && Py_IsInitialized())
+    {
+        PyGILState_STATE st = stack.back();
+        stack.pop_back();
+        PyGILState_Release(st);
+    }
+}
+
+template <typename T>
+inline void RegisterCallbacksForType()
+{
+    Value::RegisterBeforeConstruct<T>([](const std::type_info &) { acquire_gil(); });
+    Value::RegisterAfterConstruct<T>([](const Value &) { release_gil(); });
+    Value::RegisterBeforeDestruct<T>([](const Value &) { acquire_gil(); });
+    Value::RegisterAfterDestruct<T>([](const std::type_info &) { release_gil(); });
+}
+
+inline void RegisterPybindValueCallbacksOnce()
+{
+    static std::atomic<bool> callbacks_registered{false};
+
+    if (callbacks_registered.load(std::memory_order_acquire))
+        return;
+
+    if (!Py_IsInitialized())
+        return;
+
+    // Acquire GIL before construct; release after; acquire before destruct; release after.
+    using V = xequation::Value;
+
+    // Cover common pybind11 Python types
+    RegisterCallbacksForType<pybind11::handle>();
+    RegisterCallbacksForType<pybind11::object>();
+    RegisterCallbacksForType<pybind11::int_>();
+    RegisterCallbacksForType<pybind11::float_>();
+    RegisterCallbacksForType<pybind11::bool_>();
+    RegisterCallbacksForType<pybind11::str>();
+    RegisterCallbacksForType<pybind11::list>();
+    RegisterCallbacksForType<pybind11::tuple>();
+    RegisterCallbacksForType<pybind11::dict>();
+    RegisterCallbacksForType<pybind11::set>();
+    RegisterCallbacksForType<pybind11::none>();
+
+    callbacks_registered.store(true, std::memory_order_release);
+}
+
 class PyObjectConverter
 {
   public:
