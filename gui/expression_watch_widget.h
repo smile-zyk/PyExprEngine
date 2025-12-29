@@ -6,10 +6,10 @@
 #include "value_model_view/value_tree_model.h"
 #include "value_model_view/value_tree_view.h"
 
+#include <QEvent>
 #include <boost/bimap.hpp>
 #include <boost/bimap/multiset_of.hpp>
 #include <map>
-#include <QEvent>
 
 
 namespace xequation
@@ -44,7 +44,9 @@ class ExpressionWatchModel : public ValueTreeModel
 class ExpressionWatchWidget : public QWidget
 {
   public:
-    ExpressionWatchWidget(const EquationManager *manager_, QWidget *parent = nullptr);
+    using ParseExprHandler = std::function<ParseResult(const QString &expression)>;
+    using EvalExprHandler = std::function<InterpretResult(const QString &expression)>;
+    ExpressionWatchWidget(ParseExprHandler parse_handler, EvalExprHandler eval_handler, QWidget *parent = nullptr);
     ~ExpressionWatchWidget() = default;
     void OnEquationRemoved(const std::string &equation_name);
     void OnEquationUpdated(const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type);
@@ -53,6 +55,7 @@ class ExpressionWatchWidget : public QWidget
   protected:
     void SetupUI();
     void SetupConnections();
+    static int GetSelectionFlags(const QModelIndexList &indexes, ExpressionWatchModel *model);
     ValueItem *CreateWatchItem(const QString &expression);
     void DeleteWatchItem(ValueItem *item);
     void SetCurrentItemToPlaceholder();
@@ -75,7 +78,6 @@ class ExpressionWatchWidget : public QWidget
         ExpressionItemEquationNameBimap;
     ExpressionWatchModel *model_;
     ValueTreeView *view_;
-    const EquationManager *manager_;
     ExpressionItemEquationNameBimap expression_item_equation_name_bimap_;
     std::multimap<std::string, ValueItem::UniquePtr> expression_item_map_;
 
@@ -87,10 +89,8 @@ class ExpressionWatchWidget : public QWidget
     QAction *select_all_action_{};
     QAction *clear_all_action_{};
 
-    ScopedConnection equation_removed_connection_;
-    ScopedConnection equation_updated_connection_;
-
-    static int GetSelectionFlags(const QModelIndexList &indexes, ExpressionWatchModel *model);
+    ParseExprHandler parse_handler_;
+    EvalExprHandler eval_handler_;
 };
 } // namespace gui
 } // namespace xequation

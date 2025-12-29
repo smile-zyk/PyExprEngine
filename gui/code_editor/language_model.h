@@ -5,6 +5,7 @@
 #include <QSet>
 
 #include <core/equation.h>
+#include "tsl/ordered_set.h"
 
 namespace xequation
 {
@@ -28,7 +29,7 @@ class LanguageModel : public QAbstractListModel
 
     void AddWordItem(const QString &word, const QString &category, const QString &complete_content);
     void RemoveWordItem(const QString &word);
-
+    
   private:
     static QMap<QString, QString> language_define_file_map_;
     struct WordItem
@@ -39,8 +40,9 @@ class LanguageModel : public QAbstractListModel
     };
     QSet<QString> language_item_set_;
     QSet<QString> word_item_set_;
-    QVector<WordItem> word_items_;
+    tsl::ordered_map<QString, tsl::ordered_set<WordItem>> word_items_map_;
     QString language_name_;
+    int total_word_count_{0};
 };
 } // namespace gui
 } // namespace xequation

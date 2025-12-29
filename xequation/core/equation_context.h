@@ -38,5 +38,7 @@ class EquationContext
     {
       return keys().size() == 0;
     }
+
+    virtual std::set<std::string> GetBuiltinNames() const { return {}; }
 };
 } // namespace xequation

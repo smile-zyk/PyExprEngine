@@ -1,3 +1,4 @@
+#include <regex>
 #include "equation_manager.h"
 #include "equation_common.h"
 #include "core/equation_signals_manager.h"
@@ -39,20 +40,6 @@ bool EquationManager::IsEquationExist(const std::string &equation_name) const
     const EquationGroup *group = equation_group_map_.at(id).get();
     bool is_equation_exist = group->IsEquationExist(equation_name);
     return is_equation_exist;
-}
-
-bool EquationManager::IsStatementSingleEquation(const std::string &equation_statement) const
-{
-    try
-    {
-        auto res = parse_handler_(equation_statement, ParseMode::kStatement);
-        return res.items.size() == 1;
-    }
-    catch (const ParseException &e)
-    {
-        // If parsing fails, we consider it a single equation.
-        return true;
-    }
 }
 
 const EquationGroup *EquationManager::GetEquationGroup(const EquationGroupId &group_id) const
@@ -118,7 +105,7 @@ const tsl::ordered_set<std::string> &EquationManager::GetExternalVariableNames()
 
 EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_statement)
 {
-    auto res = parse_handler_(equation_statement, ParseMode::kStatement);
+    auto res = Parse(equation_statement, ParseMode::kStatement);
 
     for (const auto &item : res.items)
     {
@@ -168,6 +155,32 @@ EquationGroupId EquationManager::AddEquationGroup(const std::string &equation_st
     return id;
 }
 
+EquationGroupId EquationManager::AddSingleEquation(const std::string& equation_name, const std::string& equation_content)
+{
+    if (IsEquationExist(equation_name))
+    {
+        throw EquationException::EquationAlreadyExists(equation_name);
+    }
+
+    // use regex to validate equation name
+    static const std::regex name_regex("^[A-Za-z_][A-Za-z0-9_]*$");
+    if (!std::regex_match(equation_name, name_regex))
+    {
+        throw ParseException("Invalid equation name: " + equation_name);
+    }
+
+    std::string statement = equation_name + " = " + equation_content;
+
+    auto res = Parse(statement, ParseMode::kStatement);
+
+    if(res.items.size() != 1)
+    {
+        throw ParseException("Failed to parse single equation: " + statement);
+    }
+
+    return AddEquationGroup(statement);
+}
+
 void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const std::string &equation_statement)
 {
     if (IsEquationGroupExist(group_id) == false)
@@ -184,7 +197,7 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
 
     const EquationPtrOrderedMap &old_name_equation_map = group->equation_map();
 
-    ParseResult new_result = parse_handler_(equation_statement, ParseMode::kStatement);
+    ParseResult new_result = Parse(equation_statement, ParseMode::kStatement);
     std::unordered_map<std::string, ParseResultItem> new_name_item_map;
     for (const auto &item : new_result.items)
     {
@@ -269,9 +282,10 @@ void EquationManager::EditEquationGroup(const EquationGroupId &group_id, const s
         Equation *update_eqn = group->GetEquation(update_item.name);
         update_eqn->set_content(update_item.content);
         update_eqn->set_type(update_item.type);
+        update_eqn->set_status(ResultStatus::kPending);
         context_->Remove(update_item.name);
         signals_manager_->Emit<EquationEvent::kEquationUpdated>(
-            update_eqn, EquationUpdateFlag::kContent | EquationUpdateFlag::kType | EquationUpdateFlag::kValue
+            update_eqn, EquationUpdateFlag::kContent | EquationUpdateFlag::kType | EquationUpdateFlag::kValue | EquationUpdateFlag::kStatus
         );
     }
 
@@ -367,7 +381,22 @@ void EquationManager::RemoveExternalVariable(const std::string &var_name)
 
 ParseResult EquationManager::Parse(const std::string &expression, ParseMode mode) const
 {
-    return parse_handler_(expression, mode);
+    auto res = parse_handler_(expression, mode);
+    // remove dependencies in builtin names
+    std::set<std::string> builtin_names = context_->GetBuiltinNames();
+    for (auto &item : res.items)
+    {
+        std::vector<std::string> filtered_dependencies;
+        for (const auto &dep : item.dependencies)
+        {
+            if (builtin_names.count(dep) == 0)
+            {
+                filtered_dependencies.push_back(dep);
+            }
+        }
+        item.dependencies = filtered_dependencies;
+    }
+    return res;
 }
 
 InterpretResult EquationManager::Eval(const std::string &expression) const

@@ -180,8 +180,8 @@ void ExpressionWatchModel::ReplaceWatchItem(ValueItem *old_item, ValueItem *new_
     endInsertRows();
 }
 
-ExpressionWatchWidget::ExpressionWatchWidget(const EquationManager *manager, QWidget *parent)
-    : manager_(manager), QWidget(parent)
+ExpressionWatchWidget::ExpressionWatchWidget(ParseExprHandler parse_handler, EvalExprHandler eval_handler, QWidget *parent)
+    : QWidget(parent), parse_handler_(parse_handler), eval_handler_(eval_handler)
 {
     SetupUI();
     SetupConnections();
@@ -320,14 +320,11 @@ void ExpressionWatchWidget::SetupConnections()
     connect(delete_watch_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnDeleteExpression);
     connect(select_all_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnSelectAllExpressions);
     connect(clear_all_action_, &QAction::triggered, this, &ExpressionWatchWidget::OnClearAllExpressions);
-
-    equation_updated_connection_ = ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationUpdated);
-    equation_removed_connection_ = ConnectEquationSignal<EquationEvent::kEquationRemoved>(&manager_->signals_manager(), this, &ExpressionWatchWidget::OnEquationRemoved);
 }
 
 ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
 {
-    ParseResult parse_result = manager_->Parse(expression.toStdString(), ParseMode::kExpression);
+    ParseResult parse_result = parse_handler_(expression);
     if (parse_result.items.size() != 1)
     {
         return nullptr;
@@ -344,7 +341,7 @@ ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
     }
     else
     {
-        InterpretResult interpret_result = manager_->Eval(expression.toStdString());
+        InterpretResult interpret_result = eval_handler_(expression);
         if (interpret_result.status != ResultStatus::kSuccess)
         {
             item = ValueItem::Create(

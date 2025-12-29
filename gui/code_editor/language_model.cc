@@ -47,9 +47,10 @@ LanguageModel::LanguageModel(const QString &language_name, QObject *parent)
             item.word = name;
             item.category = key;
             item.complete_content = name;
-            word_items_.append(item);
+            word_items_map_[key].insert(item);
             word_item_set_.insert(name);
             language_item_set_.insert(name);
+            total_word_count_++;
         }
     }
 }
@@ -62,17 +63,18 @@ int LanguageModel::rowCount(const QModelIndex &parent) const
     {
         return 0;
     }
-    return word_items_.size();
+
+    return total_word_count_
 }
 
 QVariant LanguageModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= word_items_.size())
+    if (!index.isValid() || index.row() < 0 || index.row() >= total_word_count_)
     {
         return QVariant();
     }
 
-    const WordItem &item = word_items_.at(index.row());
+    const WordItem &item = word_items_map_.at(index.row());
     // display "{word}\t{category}"
     if (role == Qt::DisplayRole)
     {
@@ -109,6 +111,8 @@ void LanguageModel::AddWordItem(const QString &word, const QString &category, co
     word_items_.append(item);
     word_item_set_.insert(word);
     endInsertRows();
+
+    category_to_word_items_map_[category].insert(&word_items_.back());
 }
 
 void LanguageModel::RemoveWordItem(const QString &word)

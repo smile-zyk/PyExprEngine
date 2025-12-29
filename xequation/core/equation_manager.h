@@ -140,9 +140,9 @@ class EquationManager
 
     bool IsEquationExist(const std::string &eqn_name) const;
 
-    bool IsStatementSingleEquation(const std::string &equation_statement) const;
-
     EquationGroupId AddEquationGroup(const std::string &equation_statement);
+
+    EquationGroupId AddSingleEquation(const std::string& equation_name, const std::string& equation_content);
 
     void EditEquationGroup(const EquationGroupId &group_id, const std::string &equation_statement);
 

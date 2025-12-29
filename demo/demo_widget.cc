@@ -36,7 +36,7 @@ DemoWidget::DemoWidget(QWidget *parent)
     equation_manager_ = xequation::python::PythonEquationEngine::GetInstance().CreateEquationManager();
     mock_equation_list_widget_ = new MockEquationGroupListWidget(equation_manager_.get(), this);
     equation_browser_widget_ = new xequation::gui::EquationBrowserWidget(equation_manager_.get(), this);
-    variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(equation_manager_.get(), this);
+    variable_inspect_widget_ = new xequation::gui::VariableInspectWidget(this);
     expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(equation_manager_.get(), this);
     language_model_ =
         new xequation::gui::EquationLanguageModel(QString::fromStdString(equation_manager_->language()), this);
@@ -151,15 +151,7 @@ void DemoWidget::InitializeLanguageModel()
     }
     if(language_model_->language_name() == "Python")
     {
-        pybind11::gil_scoped_acquire acquire;
-        equation_manager_->context();
-        const python::PythonEquationContext* py_context = dynamic_cast<const python::PythonEquationContext*>(&equation_manager_->context());
-        auto builtin_dict = py_context->builtin_dict();
-        std::vector<std::string> all_builtin_names;
-        for (auto item : builtin_dict)
-        {
-            all_builtin_names.push_back(item.first.cast<std::string>());
-        }
+        std::set<std::string> all_builtin_names = equation_manager_->context().GetBuiltinNames();
         for (const auto& name : all_builtin_names)
         {
             QString word = QString::fromStdString(name);

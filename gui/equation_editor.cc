@@ -10,8 +10,38 @@ namespace xequation
 {
 namespace gui
 {
-ContextSelectionWidget::ContextSelectionWidget(const QMap<QString, QList<QString>> &data_map, QWidget *parent)
-    : QWidget(parent), data_map_(data_map)
+bool ContextFilterModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const
+{
+    auto *src = sourceModel();
+    QModelIndex idx = src->index(source_row, 0, source_parent);
+    QString word = src->data(idx, LanguageModel::kWordRole).toString();
+    if (word.isEmpty())
+    {
+        return true;
+    }
+
+    if (!category_.isEmpty())
+    {
+        QString category = src->data(idx, LanguageModel::kCategoryRole).toString();
+        if (category != category_)
+        {
+            return false;
+        }
+    }
+
+    if (!filter_text_.isEmpty())
+    {
+        if (!word.contains(filter_text_, Qt::CaseInsensitive))
+        {
+            return false;
+        }
+    }
+
+    return EquationGroupFilterModel::filterAcceptsRow(source_row, source_parent);
+}
+    
+ContextSelectionWidget::ContextSelectionWidget(EquationLanguageModel* language_model, QWidget *parent)
+    : QWidget(parent), language_model_(language_model)
 {
     SetupUI();
     SetupConnections();
@@ -92,18 +122,31 @@ void ContextSelectionWidget::OnFilterTextChanged(const QString &text)
     }
 }
 
-EquationEditor::EquationEditor(const EquationManager *manager, QWidget *parent)
-    : QDialog(parent), manager_(manager), group_(nullptr), mode_(Mode::kInsert)
+EquationEditor::EquationEditor(EquationLanguageModel* language_model, QWidget *parent)
+    : QDialog(parent), group_(nullptr), language_model_(language_model)
 {
     SetupUI();
     SetupConnections();
 }
 
-EquationEditor::EquationEditor(const EquationGroup *group, QWidget *parent)
-    : QDialog(parent), group_(group), manager_(group->manager()), mode_(Mode::kEdit)
+void EquationEditor::SetEquationGroup(const EquationGroup* group)
 {
-    SetupUI();
-    SetupConnections();
+    group_ = group;
+    if (group_ != nullptr)
+    {
+        const auto &equation_names = group_->GetEquationNames();
+        if (equation_names.size() == 1)
+        {
+            const auto &equation = group_->GetEquation(equation_names[0]);
+            equation_name_edit_->setText(QString::fromStdString(equation->name()));
+            expression_edit_->setText(QString::fromStdString(equation->content()));
+        }
+        else 
+        {
+            equation_name_edit_->clear();
+            expression_edit_->clear();
+        }
+    }
 }
 
 void EquationEditor::SetupUI()
@@ -115,21 +158,6 @@ void EquationEditor::SetupUI()
     insert_button_ = new QPushButton("Insert", this);
     ok_button_ = new QPushButton("OK", this);
     cancel_button_ = new QPushButton("Cancel", this);
-
-    if (mode_ == Mode::kEdit && group_ != nullptr)
-    {
-        const auto &equation_names = group_->GetEquationNames();
-        if (equation_names.size() == 1)
-        {
-            const auto &equation = group_->GetEquation(equation_names[0]);
-            equation_name_edit_->setText(QString::fromStdString(equation->name()));
-            expression_edit_->setText(QString::fromStdString(equation->content()));
-        }
-        else 
-        {
-            mode_ = Mode::kInsert;
-        }
-    }
 
     context_button_ = new QPushButton("Context>>", this);
     QMap<QString, QList<QString>> data_map;

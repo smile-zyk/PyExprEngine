@@ -15,7 +15,7 @@ class VariableInspectWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit VariableInspectWidget(const EquationManager* manager, QWidget *parent = nullptr);
+    explicit VariableInspectWidget(QWidget *parent = nullptr);
     virtual ~VariableInspectWidget() = default;
     
     void SetCurrentEquation(const Equation* equation);
@@ -40,7 +40,6 @@ protected:
 private:
     ValueTreeView *view_;
     ValueTreeModel *model_;
-    const EquationManager* manager_;
     std::map<std::string, std::unique_ptr<ValueItem>> variable_items_cache_;
     const Equation* current_equation_{};
     

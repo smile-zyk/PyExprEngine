@@ -22,8 +22,9 @@ public:
         group_ = group;
         invalidateFilter();
     }
-private:
+protected:
     bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
+private:
     const EquationGroup* group_;
 };
 }

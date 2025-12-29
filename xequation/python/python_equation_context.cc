@@ -94,3 +94,16 @@ pybind11::dict PythonEquationContext::builtin_dict() const
         return builtins.cast<pybind11::dict>();
     }
 }
+
+std::set<std::string> PythonEquationContext::GetBuiltinNames() const
+{
+    pybind11::gil_scoped_acquire acquire;
+
+    pybind11::dict builtins_dict = builtin_dict();
+    std::set<std::string> names;
+    for (auto key : builtins_dict.attr("keys")())
+    {
+        names.insert(key.cast<std::string>());
+    }
+    return names;
+}

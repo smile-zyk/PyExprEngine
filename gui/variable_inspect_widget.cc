@@ -17,7 +17,7 @@ namespace xequation
 namespace gui
 {
 
-VariableInspectWidget::VariableInspectWidget(const EquationManager* manager, QWidget *parent) : QWidget(parent), model_(nullptr), view_(nullptr), manager_(manager)
+VariableInspectWidget::VariableInspectWidget(QWidget *parent) : QWidget(parent), model_(nullptr), view_(nullptr)
 {
     SetupUI();
     SetupConnections();
@@ -69,9 +69,6 @@ void VariableInspectWidget::SetupConnections()
 
     connect(copy_action_, &QAction::triggered, this, &VariableInspectWidget::OnCopyVariableValue);
     connect(add_watch_action_, &QAction::triggered, this, &VariableInspectWidget::OnAddVariableToWatch);
-
-    equation_removing_connection_ = ConnectEquationSignal<EquationEvent::kEquationRemoving>(&manager_->signals_manager(), this, &VariableInspectWidget::OnEquationRemoving);
-    equation_updated_connection_ = ConnectEquationSignal<EquationEvent::kEquationUpdated>(&manager_->signals_manager(), this, &VariableInspectWidget::OnEquationUpdated);
 }
 
 void VariableInspectWidget::OnCurrentEquationChanged(const Equation *equation)

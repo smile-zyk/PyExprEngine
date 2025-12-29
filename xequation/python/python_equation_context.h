@@ -45,6 +45,8 @@ class PythonEquationContext : public EquationContext
 
     pybind11::dict builtin_dict() const;
 
+    std::set<std::string> GetBuiltinNames() const override;
+
   private:
     friend class PythonEquationEngine;
     PythonEquationContext();
