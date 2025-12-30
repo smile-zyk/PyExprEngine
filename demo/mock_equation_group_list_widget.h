@@ -3,7 +3,6 @@
 #include "core/equation.h"
 #include "core/equation_group.h"
 #include "core/equation_manager.h"
-#include "core/equation_signals_manager.h"
 
 #include <QListWidget>
 

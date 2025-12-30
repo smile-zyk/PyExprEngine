@@ -111,7 +111,7 @@ void DemoWidget::SetupConnections()
         &xequation::gui::EquationBrowserWidget::OnEquationAdded
     );
 
-    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationRemoving>(
+    xequation::gui::ConnectEquationSignalDirect<EquationEvent::kEquationRemoving>(
         &equation_manager_->signals_manager(), equation_browser_widget_,
         &xequation::gui::EquationBrowserWidget::OnEquationRemoving
     );
@@ -121,7 +121,7 @@ void DemoWidget::SetupConnections()
         &xequation::gui::EquationBrowserWidget::OnEquationUpdated
     );
 
-    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationRemoving>(
+    xequation::gui::ConnectEquationSignalDirect<EquationEvent::kEquationRemoving>(
         &equation_manager_->signals_manager(), variable_inspect_widget_,
         &xequation::gui::VariableInspectWidget::OnEquationRemoving
     );
@@ -146,7 +146,7 @@ void DemoWidget::SetupConnections()
         &xequation::gui::EquationCompletionModel::OnEquationAdded
     );
 
-    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationRemoving>(
+    xequation::gui::ConnectEquationSignalDirect<EquationEvent::kEquationRemoving>(
         &equation_manager_->signals_manager(), equation_completion_model_,
         &xequation::gui::EquationCompletionModel::OnEquationRemoving
     );

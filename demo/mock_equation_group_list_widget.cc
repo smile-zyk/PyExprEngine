@@ -64,7 +64,7 @@ void MockEquationGroupListWidget::SetupConnections()
         &manager_->signals_manager(), this, &MockEquationGroupListWidget::OnEquationGroupAdded
     );
     
-    xequation::gui::ConnectEquationSignal<EquationEvent::kEquationGroupRemoving>(
+    xequation::gui::ConnectEquationSignalDirect<EquationEvent::kEquationGroupRemoving>(
         &manager_->signals_manager(), this, &MockEquationGroupListWidget::OnEquationGroupRemoving
     );
 
