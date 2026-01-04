@@ -28,6 +28,7 @@ enum class ResultStatus
     kIndexError,
     kKeyError,
     kAttributeError,
+    kKeyBoardInterrupt,
     kUnknownError
 };
 
@@ -213,6 +214,8 @@ class ResultStatusConverter
             return ResultStatus::kKeyError;
         else if (status_str == "AttributeError")
             return ResultStatus::kAttributeError;
+        else if (status_str == "KeyBoardInterrupt")
+            return ResultStatus::kKeyBoardInterrupt;
         else
             return ResultStatus::kPending;
     }
@@ -249,6 +252,8 @@ class ResultStatusConverter
             return "KeyError";
         case ResultStatus::kAttributeError:
             return "AttributeError";
+        case ResultStatus::kKeyBoardInterrupt:
+            return "KeyBoardInterrupt";
         default:
             return "Unknown";
         }

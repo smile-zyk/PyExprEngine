@@ -61,6 +61,10 @@ inline ResultStatus MapPythonExceptionToStatus(const pybind11::error_already_set
     {
         return ResultStatus::kAttributeError;
     }
+    else if (type_name_str == "KeyboardInterrupt")
+    {
+        return ResultStatus::kKeyBoardInterrupt;
+    }
 
     return ResultStatus::kUnknownError;
 }
