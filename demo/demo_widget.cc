@@ -561,14 +561,7 @@ void DemoWidget::OnInsertEquationGroupRequest()
 
 void DemoWidget::OnShowDependencyGraph()
 {
-    statusBar()->showMessage("Showing dependency graph", 2000);
-
-    QMessageBox::information(
-        this, "Dependency Graph",
-        "Dependency Graph Feature\n\n"
-        "This will display dependency relationships between equations.\n"
-        "To be implemented: Visualize equation dependencies."
-    );
+    python::PythonEquationEngine::GetInstance().Interrupt();
 }
 
 void DemoWidget::OnShowEquationManager()

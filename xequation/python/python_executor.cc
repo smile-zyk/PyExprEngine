@@ -19,6 +19,9 @@ InterpretResult PythonExecutor::Exec(const std::string &code_string, const pybin
 {
     pybind11::gil_scoped_acquire acquire;
 
+    // store python thread state
+    current_thread_state_.store(PyThreadState_Get(), std::memory_order_release);
+
     InterpretResult res;
     res.mode = InterpretMode::kExec;
     try
@@ -35,6 +38,7 @@ InterpretResult PythonExecutor::Exec(const std::string &code_string, const pybin
         std::string error_msg = str_func(pv).cast<std::string>();
         res.message = error_msg;
     }
+    current_thread_state_.store(nullptr, std::memory_order_release);
     return res;
 }
 
@@ -46,6 +50,8 @@ InterpretResult PythonExecutor::Eval(const std::string &expression, const pybind
     res.mode = InterpretMode::kEval;
     try
     {
+        // store python thread state
+
         pybind11::object result = pybind11::eval(expression.c_str(), local_dict);
         res.value = result;
         res.status = ResultStatus::kSuccess;
