@@ -13,6 +13,8 @@ expression_watch_widget.h
 expression_watch_widget.cc
 equation_editor.h
 equation_editor.cc
+equation_manager_task.h
+equation_manager_task.cc
 equation_group_editor.h
 equation_group_editor.cc
 equation_completion_model.h
@@ -38,6 +40,10 @@ code_editor/code_highlighter.cc
 code_editor/python_highlighter.h
 code_editor/python_highlighter.cc
 code_editor/resources/code_editor_resource.qrc
+task/task.h
+task/task.cc
+task/task_manager.h
+task/task_manager.cc
 )
 
 add_library(xequation_gui STATIC ${xequation_gui_SRC})

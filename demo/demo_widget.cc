@@ -4,6 +4,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
@@ -13,12 +14,15 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QCloseEvent>
 #include <QtConcurrent/QtConcurrent>
 #include <algorithm>
+#include <memory>
+#include <quuid.h>
+#include <utility>
 
 #include "equation_editor.h"
 #include "equation_group_editor.h"
+#include "equation_manager_task.h"
 #include "equation_signals_qt_utils.h"
 #include "python/python_qt_wrapper.h"
 
@@ -47,6 +51,8 @@ DemoWidget::DemoWidget(QWidget *parent)
     };
 
     expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(parse_expr_handle, eval_expr_handle, this);
+
+    task_manager_ = new xequation::gui::TaskManager(this, 1);
 
     SetupUI();
     SetupConnections();
@@ -100,13 +106,36 @@ void DemoWidget::SetupConnections()
     );
 
     connect(
+        mock_equation_list_widget_, &MockEquationGroupListWidget::UpdateEquationGroupRequested, this,
+        &DemoWidget::OnUpdateEquationGroupRequest
+    );
+
+    connect(
+        mock_equation_list_widget_, &MockEquationGroupListWidget::AddEquationGroupToExpressionWatchRequested, this,
+        &DemoWidget::OnAddEquationGroupToExpressionWatchRequest
+    );
+
+    connect(
         equation_browser_widget_, &xequation::gui::EquationBrowserWidget::EquationSelected, this,
         &DemoWidget::OnEquationSelected
     );
 
-    // xequation::gui::EquationBrowserWidget* equation_browser_widget_;
-    // xequation::gui::VariableInspectWidget* variable_inspect_widget_;
-    // xequation::gui::ExpressionWatchWidget* expression_watch_widget_;
+    // connect to task_manager_ signals for debugging
+    connect(task_manager_, &xequation::gui::TaskManager::TaskStarted, this, [this](const QUuid &task_id) {
+        qDebug() << "Task started:" << task_id.toString();
+    });
+
+    connect(
+        task_manager_, &xequation::gui::TaskManager::TaskFinished, this,
+        [this](const QUuid &task_id, const QVariant &result) {
+            qDebug() << "Task finished:" << task_id.toString() << "Result:" << result;
+        }
+    );
+
+    connect(task_manager_, &xequation::gui::TaskManager::TaskCancelled, this, [this](const QUuid &task_id) {
+        qDebug() << "Task cancelled:" << task_id.toString();
+    });
+
     xequation::gui::ConnectEquationSignal<EquationEvent::kEquationAdded>(
         &equation_manager_->signals_manager(), equation_browser_widget_,
         &xequation::gui::EquationBrowserWidget::OnEquationAdded
@@ -228,13 +257,16 @@ void DemoWidget::OnInsertEquationRequest()
 {
     xequation::gui::EquationEditor *editor = new xequation::gui::EquationEditor(equation_completion_model_, this);
 
-    connect(editor, &xequation::gui::EquationEditor::AddEquationRequest, [this, editor](const QString &equation_name, const QString &expression) {
-        xequation::EquationGroupId id;
-        if (AddEquation(equation_name, expression))
-        {
-            editor->accept();
+    connect(
+        editor, &xequation::gui::EquationEditor::AddEquationRequest,
+        [this, editor](const QString &equation_name, const QString &expression) {
+            xequation::EquationGroupId id;
+            if (AddEquation(equation_name, expression))
+            {
+                editor->accept();
+            }
         }
-    });
+    );
 
     editor->exec();
 }
@@ -299,24 +331,42 @@ void DemoWidget::OnCopyEquationGroupRequest(const xequation::EquationGroupId &id
     QApplication::clipboard()->setText(QString::fromStdString(equation_manager_->GetEquationGroup(id)->statement()));
 }
 
+void DemoWidget::OnUpdateEquationGroupRequest(const xequation::EquationGroupId &id)
+{
+    AsyncUpdateEquationGroup(id);
+}
+
+void DemoWidget::OnAddEquationGroupToExpressionWatchRequest(const xequation::EquationGroupId &id) 
+{
+    const EquationGroup* group = equation_manager_->GetEquationGroup(id);
+    if (!group) {
+        return;
+    }
+
+    for (const auto& equation_name : group->GetEquationNames()) {
+        expression_watch_widget_->OnAddExpressionToWatch(QString::fromStdString(equation_name));
+    }
+}
+
 bool DemoWidget::AddEquationGroup(const std::string &statement)
 {
-    if (is_updating_equation_group_)
+    if (!task_manager_->IsIdle())
     {
-        QMessageBox::warning(this, "Operation Locked", 
-            "Cannot add equation group while updating another equation group. Please wait for the current operation to complete.", 
-            QMessageBox::Ok);
+        QMessageBox::warning(
+            this, "Operation Locked",
+            "Cannot add equation group while updating another equation group. Please wait for the current operation to "
+            "complete.",
+            QMessageBox::Ok
+        );
         return false;
     }
-    
+
     try
     {
         auto id = equation_manager_->AddEquationGroup(statement);
         equation_group_set_.insert(id);
         // Delay the async update to ensure GIL is fully released
-        QTimer::singleShot(0, [this, id]() {
-            AsyncUpdateEquationGroup(id);
-        });
+        QTimer::singleShot(0, [this, id]() { AsyncUpdateEquationGroup(id); });
         return true;
     }
     catch (const EquationException &e)
@@ -337,21 +387,22 @@ bool DemoWidget::AddEquationGroup(const std::string &statement)
 }
 bool DemoWidget::EditEquationGroup(const xequation::EquationGroupId &id, const std::string &statement)
 {
-    if (is_updating_equation_group_)
+    if (!task_manager_->IsIdle())
     {
-        QMessageBox::warning(this, "Operation Locked", 
-            "Cannot edit equation group while updating another equation group. Please wait for the current operation to complete.", 
-            QMessageBox::Ok);
+        QMessageBox::warning(
+            this, "Operation Locked",
+            "Cannot edit equation group while updating another equation group. Please wait for the current operation "
+            "to complete.",
+            QMessageBox::Ok
+        );
         return false;
     }
-    
+
     try
     {
         equation_manager_->EditEquationGroup(id, statement);
         // Delay the async update to ensure GIL is fully released
-        QTimer::singleShot(0, [this, id]() {
-            AsyncUpdateEquationGroup(id);
-        });
+        QTimer::singleShot(0, [this, id]() { AsyncUpdateEquationGroup(id); });
         return true;
     }
     catch (const EquationException &e)
@@ -373,22 +424,22 @@ bool DemoWidget::EditEquationGroup(const xequation::EquationGroupId &id, const s
 
 bool DemoWidget::AddEquation(const QString &equation_name, const QString &expression)
 {
-    if (is_updating_equation_group_)
+    if (!task_manager_->IsIdle())
     {
-        QMessageBox::warning(this, "Operation Locked", 
-            "Cannot add equation while updating an equation group. Please wait for the current operation to complete.", 
-            QMessageBox::Ok);
+        QMessageBox::warning(
+            this, "Operation Locked",
+            "Cannot add equation while updating an equation group. Please wait for the current operation to complete.",
+            QMessageBox::Ok
+        );
         return false;
     }
-    
+
     try
     {
         auto id = equation_manager_->AddSingleEquation(equation_name.toStdString(), expression.toStdString());
         single_equation_set_.insert(id);
         // Delay the async update to ensure GIL is fully released
-        QTimer::singleShot(0, [this, id]() {
-            AsyncUpdateEquationGroup(id);
-        });
+        QTimer::singleShot(0, [this, id]() { AsyncUpdateEquationGroup(id); });
         return true;
     }
     catch (const EquationException &e)
@@ -408,25 +459,25 @@ bool DemoWidget::AddEquation(const QString &equation_name, const QString &expres
     }
 }
 
-bool DemoWidget::EditEquation(const xequation::EquationGroupId &group_id, const QString &equation_name, const QString &expression)
+bool DemoWidget::EditEquation(
+    const xequation::EquationGroupId &group_id, const QString &equation_name, const QString &expression
+)
 {
-    if (is_updating_equation_group_)
+    if (!task_manager_->IsIdle())
     {
-        QMessageBox::warning(this, "Operation Locked", 
-            "Cannot edit equation while updating an equation group. Please wait for the current operation to complete.", 
-            QMessageBox::Ok);
+        QMessageBox::warning(
+            this, "Operation Locked",
+            "Cannot edit equation while updating an equation group. Please wait for the current operation to complete.",
+            QMessageBox::Ok
+        );
         return false;
     }
-    
+
     try
     {
-        equation_manager_->EditSingleEquation(
-            group_id, equation_name.toStdString(), expression.toStdString()
-        );
+        equation_manager_->EditSingleEquation(group_id, equation_name.toStdString(), expression.toStdString());
         // Delay the async update to ensure GIL is fully released
-        QTimer::singleShot(0, [this, group_id]() {
-            AsyncUpdateEquationGroup(group_id);
-        });
+        QTimer::singleShot(0, [this, group_id]() { AsyncUpdateEquationGroup(group_id); });
         return true;
     }
     catch (const EquationException &e)
@@ -448,14 +499,17 @@ bool DemoWidget::EditEquation(const xequation::EquationGroupId &group_id, const 
 
 bool DemoWidget::RemoveEquationGroup(const xequation::EquationGroupId &id)
 {
-    if (is_updating_equation_group_)
+    if (!task_manager_->IsIdle())
     {
-        QMessageBox::warning(this, "Operation Locked", 
-            "Cannot remove equation group while updating another equation group. Please wait for the current operation to complete.", 
-            QMessageBox::Ok);
+        QMessageBox::warning(
+            this, "Operation Locked",
+            "Cannot remove equation group while updating another equation group. Please wait for the current operation "
+            "to complete.",
+            QMessageBox::Ok
+        );
         return false;
     }
-    
+
     try
     {
         auto equation_names = equation_manager_->GetEquationGroup(id)->GetEquationNames();
@@ -484,26 +538,19 @@ bool DemoWidget::RemoveEquationGroup(const xequation::EquationGroupId &id)
 
 void DemoWidget::AsyncUpdateEquationGroup(const xequation::EquationGroupId &id)
 {
-    // Mark the update as in progress
-    is_updating_equation_group_ = true;
-    
-    // Use QFuture to properly manage the async task
-    // This ensures GIL is properly released before starting the background thread
-    QtConcurrent::run([this, id]() {
-        try
-        {
-            // UpdateEquationGroup will acquire GIL internally as needed
-            equation_manager_->UpdateEquationGroup(id);
+    auto task = std::unique_ptr<xequation::gui::UpdateEquationGroupTask>(
+        new xequation::gui::UpdateEquationGroupTask(equation_manager_.get(), id)
+    );
+    // connect task to debug output
+    connect(
+        task.get(), &xequation::gui::EquationManagerTask::ProgressUpdated, this,
+        [this](QUuid id, int progress, const QString &message) {
+            // output to console for demo purpose
+            qDebug() << "Task Progress:" << progress << "% -" << message;
         }
-        catch (const std::exception &e)
-        {
-            std::string error_msg = e.what();
-            qDebug() << "Error updating equation group:" << QString::fromStdString(error_msg);
-        }
-        
-        // Mark the update as complete
-        is_updating_equation_group_ = false;
-    });
+    );
+
+    task_manager_->EnqueueTask(std::move(task));
 }
 
 void DemoWidget::OnEquationGroupSelected(const xequation::EquationGroupId &id)
@@ -561,7 +608,17 @@ void DemoWidget::OnInsertEquationGroupRequest()
 
 void DemoWidget::OnShowDependencyGraph()
 {
-    python::PythonEquationEngine::GetInstance().Interrupt();
+    // for test cancel running tasks
+    auto running_task_ids = task_manager_->GetRunningTaskIds();
+    if (running_task_ids.empty())
+    {
+        QMessageBox::information(this, "Info", "No equation update task is running.", QMessageBox::Ok);
+        return;
+    }
+    for (int i = 0; i < running_task_ids.size(); ++i)
+    {
+        task_manager_->CancelTask(running_task_ids[i]);
+    }
 }
 
 void DemoWidget::OnShowEquationManager()
@@ -573,7 +630,6 @@ void DemoWidget::OnShowEquationManager()
 }
 void DemoWidget::OnShowEquationInspector()
 {
-
     variable_inspect_widget_->show();
     variable_inspect_widget_->raise();
     variable_inspect_widget_->activateWindow();

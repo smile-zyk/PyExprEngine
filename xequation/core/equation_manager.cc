@@ -577,6 +577,16 @@ void EquationManager::UpdateEquationGroup(const EquationGroupId &group_id)
     }
 }
 
+void EquationManager::UpdateEquationWithoutPropagate(const std::string &equation_name)
+{
+    if (IsEquationExist(equation_name) == false)
+    {
+        throw EquationException::EquationNotFound(equation_name);
+    }
+
+    UpdateEquationInternal(equation_name);
+}
+
 Equation *EquationManager::GetEquationInternal(const std::string &equation_name)
 {
     bool is_name_exist = equation_name_to_group_id_map_.count(equation_name) != 0;

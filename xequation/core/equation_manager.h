@@ -162,6 +162,8 @@ class EquationManager
 
     void UpdateEquationGroup(const EquationGroupId &group_id);
 
+    void UpdateEquationWithoutPropagate(const std::string &equation_name);
+
     const DependencyGraph &graph()
     {
         return *graph_;

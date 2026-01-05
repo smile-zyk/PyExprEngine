@@ -169,6 +169,10 @@ void CompletionListModel::AddCompletionItem(const QString& word, const QString& 
     item.word = word;
     item.category = FindCategoryByName(category_name);
     item.complete_content = complete_content;
+    if(category_name == "Function" || category_name == "Class")
+    {
+        item.complete_content += "()";
+    }
     
     int insert_pos = 0;
     for (int i = 0; i < items_.size(); ++i)

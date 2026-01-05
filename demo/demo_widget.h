@@ -13,6 +13,7 @@
 #include "expression_watch_widget.h"
 #include "mock_equation_group_list_widget.h"
 #include "equation_completion_model.h"
+#include "task/task_manager.h"
 
 class QMenu;
 class QAction;
@@ -32,6 +33,8 @@ private:
     void OnEditEquationGroupRequest(const xequation::EquationGroupId& id);
     void OnRemoveEquationGroupRequest(const xequation::EquationGroupId& id);
     void OnCopyEquationGroupRequest(const xequation::EquationGroupId& id);
+    void OnUpdateEquationGroupRequest(const xequation::EquationGroupId& id);
+    void OnAddEquationGroupToExpressionWatchRequest(const xequation::EquationGroupId& id);
     void OnEquationGroupSelected(const xequation::EquationGroupId& id);
     void OnEquationSelected(const xequation::Equation* equation);
     void OnInsertEquationGroupRequest();
@@ -76,7 +79,5 @@ private:
     xequation::gui::VariableInspectWidget* variable_inspect_widget_;
     xequation::gui::ExpressionWatchWidget* expression_watch_widget_;
     xequation::gui::EquationCompletionModel* equation_completion_model_;
-
-    // State for managing EquationManager update lock
-    bool is_updating_equation_group_ = false;
+    xequation::gui::TaskManager* task_manager_;
 };

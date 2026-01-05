@@ -22,13 +22,7 @@ class PythonEquationEngine : public EquationEngine<PythonEquationEngine>
     static void SetPyEnvConfig(const PyEnvConfig &config);
     InterpretResult Interpret(const std::string &expr, const EquationContext *context = nullptr, InterpretMode mode = InterpretMode::kExec) override;
     ParseResult Parse(const std::string &expr, ParseMode mode = ParseMode::kExpression) override;
-    void Interrupt()
-    {
-        if (code_executor)
-        {
-            code_executor->Interrupt();
-        }
-    }
+
     std::unique_ptr<EquationContext> CreateContext() override;
     std::string GetLanguage() const override { return "Python"; }
   private:

@@ -20,6 +20,8 @@ signals:
     void EditEquationGroupRequested(const xequation::EquationGroupId& id);
     void RemoveEquationGroupRequested(const xequation::EquationGroupId& id);
     void CopyEquationGroupRequested(const xequation::EquationGroupId& id);
+    void UpdateEquationGroupRequested(const xequation::EquationGroupId& id);
+    void AddEquationGroupToExpressionWatchRequested(const xequation::EquationGroupId& id);
     void EquationGroupSelected(const xequation::EquationGroupId& id);
 
 private:
