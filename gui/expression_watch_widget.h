@@ -4,6 +4,7 @@
 #include "value_model_view/value_item.h"
 #include "value_model_view/value_tree_model.h"
 #include "value_model_view/value_tree_view.h"
+#include "task/task_manager.h"
 
 #include <QEvent>
 #include <boost/bimap.hpp>
@@ -42,13 +43,16 @@ class ExpressionWatchModel : public ValueTreeModel
 class ExpressionWatchWidget : public QWidget
 {
   public:
-    using ParseExprHandler = std::function<ParseResult(const QString &expression)>;
-    using EvalExprHandler = std::function<InterpretResult(const QString &expression)>;
-    ExpressionWatchWidget(ParseExprHandler parse_handler, EvalExprHandler eval_handler, QWidget *parent = nullptr);
+    ExpressionWatchWidget(QWidget *parent = nullptr);
     ~ExpressionWatchWidget() = default;
     void OnEquationRemoved(const std::string &equation_name);
     void OnEquationUpdated(const Equation *equation, bitmask::bitmask<EquationUpdateFlag> change_type);
     void OnAddExpressionToWatch(const QString &expression);
+    void OnEvalResultSubmitted(ValueItem* item, const InterpretResult& result);
+    
+  signals:
+    void ParseResultRequested(const QString& expression, ParseResult &result);
+    void EvalResultAsyncRequested(ValueItem* item);
 
   protected:
     void SetupUI();
@@ -86,9 +90,6 @@ class ExpressionWatchWidget : public QWidget
     QAction *delete_watch_action_{};
     QAction *select_all_action_{};
     QAction *clear_all_action_{};
-
-    ParseExprHandler parse_handler_;
-    EvalExprHandler eval_handler_;
 };
 } // namespace gui
 } // namespace xequation

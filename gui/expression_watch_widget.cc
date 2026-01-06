@@ -6,9 +6,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
-#include <QMenu>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QVBoxLayout>
+#include <QMessageBox>
+
 
 namespace xequation
 {
@@ -177,8 +179,7 @@ void ExpressionWatchModel::ReplaceWatchItem(ValueItem *old_item, ValueItem *new_
     endInsertRows();
 }
 
-ExpressionWatchWidget::ExpressionWatchWidget(ParseExprHandler parse_handler, EvalExprHandler eval_handler, QWidget *parent)
-    : QWidget(parent), parse_handler_(parse_handler), eval_handler_(eval_handler)
+ExpressionWatchWidget::ExpressionWatchWidget(QWidget *parent) : QWidget(parent)
 {
     SetupUI();
     SetupConnections();
@@ -241,6 +242,41 @@ void ExpressionWatchWidget::OnAddExpressionToWatch(const QString &expression)
     }
 }
 
+void ExpressionWatchWidget::OnEvalResultSubmitted(ValueItem *old_item, const InterpretResult &result)
+{
+    if (!old_item)
+        return;
+
+    ValueItem::UniquePtr new_item;
+
+    QString expression = old_item->name();
+
+    if (result.status != ResultStatus::kSuccess)
+    {
+        new_item = ValueItem::Create(
+            expression, QString::fromStdString(result.message),
+            QString::fromStdString(ResultStatusConverter::ToString(result.status))
+        );
+    }
+    else
+    {
+        Value value = result.value;
+        new_item = BuilderUtils::CreateValueItem(expression, value);
+    }
+
+    // get old item dependencies
+    auto range = expression_item_equation_name_bimap_.left.equal_range(old_item);
+    for (auto it = range.first; it != range.second; ++it)
+    {
+        expression_item_equation_name_bimap_.insert({new_item.get(), it->get_right()});
+    }    
+    // insert new item
+    expression_item_map_.insert({expression.toStdString(), std::move(new_item)});
+
+    model_->ReplaceWatchItem(old_item, new_item.get());
+    DeleteWatchItem(old_item);
+}
+
 void ExpressionWatchWidget::SetupUI()
 {
     setWindowTitle("Expression Watch");
@@ -284,8 +320,10 @@ void ExpressionWatchWidget::SetupUI()
     select_all_action_->setShortcutContext(shortcut_context);
     clear_all_action_->setShortcutContext(shortcut_context);
 
-    view_->addActions({copy_action_, paste_action_, edit_expression_action_, delete_watch_action_, select_all_action_,
-                      clear_all_action_});
+    view_->addActions(
+        {copy_action_, paste_action_, edit_expression_action_, delete_watch_action_, select_all_action_,
+         clear_all_action_}
+    );
     view_->installEventFilter(this);
 }
 
@@ -321,7 +359,9 @@ void ExpressionWatchWidget::SetupConnections()
 
 ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
 {
-    ParseResult parse_result = parse_handler_(expression);
+    ParseResult parse_result;
+    emit ParseResultRequested(expression, parse_result);
+
     if (parse_result.items.size() != 1)
     {
         return nullptr;
@@ -338,19 +378,9 @@ ValueItem *ExpressionWatchWidget::CreateWatchItem(const QString &expression)
     }
     else
     {
-        InterpretResult interpret_result = eval_handler_(expression);
-        if (interpret_result.status != ResultStatus::kSuccess)
-        {
-            item = ValueItem::Create(
-                expression, QString::fromStdString(interpret_result.message),
-                QString::fromStdString(ResultStatusConverter::ToString(interpret_result.status))
-            );
-        }
-        else
-        {
-            Value value = interpret_result.value;
-            item = BuilderUtils::CreateValueItem(expression, value);
-        }
+        // create calculating value item
+        item = ValueItem::Create(expression, "Calculating...", "Calculating");
+        emit EvalResultAsyncRequested(item.get());
         const auto &dependencies = parse_item.dependencies;
         for (const auto &dependency : dependencies)
         {
@@ -406,6 +436,11 @@ void ExpressionWatchWidget::OnRequestRemoveWatchItem(ValueItem *item)
 
 void ExpressionWatchWidget::OnRequestReplaceWatchItem(ValueItem *old_item, const QString &new_expression)
 {
+    if(old_item->type() == "Calculating")
+    {
+        QMessageBox::warning(this, "Warning", "Cannot edit an expression that is still calculating.");
+        return;
+    }
     auto new_item = CreateWatchItem(new_expression);
     if (!new_item)
         return;

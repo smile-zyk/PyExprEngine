@@ -157,9 +157,7 @@ void ToastProgressBar::SetupUI()
     setGraphicsEffect(opacity_effect_);
 
     fade_animation_ = new QPropertyAnimation(opacity_effect_, "opacity");
-    std::cout << height() << std::endl;
     adjustSize();
-    std::cout << height() << std::endl;
 }
 
 void ToastProgressBar::SetupConnections()

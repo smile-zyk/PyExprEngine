@@ -40,15 +40,7 @@ DemoWidget::DemoWidget(QWidget *parent)
     equation_completion_model_ =
         new xequation::gui::EquationCompletionModel(QString::fromStdString(equation_manager_->language()), this);
 
-    auto eval_expr_handle = [equation_manager_ptr = equation_manager_.get()](const QString &expression) {
-        return equation_manager_ptr->Eval(expression.toStdString());
-    };
-
-    auto parse_expr_handle = [equation_manager_ptr = equation_manager_.get()](const QString &expression) {
-        return equation_manager_ptr->Parse(expression.toStdString(), ParseMode::kExpression);
-    };
-
-    expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(parse_expr_handle, eval_expr_handle, this);
+    expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(this);
 
     task_manager_ = new xequation::gui::ToastTaskManager(this, 1);
 
@@ -285,7 +277,8 @@ void DemoWidget::OnEditEquationGroupRequest(const xequation::EquationGroupId &id
         editor->setAttribute(Qt::WA_DeleteOnClose);
         editor->SetEquationGroup(equation_manager_->GetEquationGroup(id));
         connect(
-            editor, &xequation::gui::EquationGroupEditor::TextSubmitted, [this, editor, id](const QString &statement) {
+            editor, &xequation::gui::EquationGroupEditor::TextSubmitted,
+            [this, editor, id](const QString &statement) {
                 if (EditEquationGroup(id, statement.toStdString()))
                 {
                     editor->accept();
@@ -539,9 +532,9 @@ void DemoWidget::AsyncUpdateManager()
 
 void DemoWidget::AsyncUpdateEquationsAfterRemoveGroup(const std::vector<std::string> &equation_names)
 {
-    auto task = std::unique_ptr<xequation::gui::UpdateEquationsTask>(
-        new xequation::gui::UpdateEquationsTask("Update Equations After Remove Group", equation_manager_.get(), equation_names)
-    );
+    auto task = std::unique_ptr<xequation::gui::UpdateEquationsTask>(new xequation::gui::UpdateEquationsTask(
+        "Update Equations After Remove Group", equation_manager_.get(), equation_names
+    ));
 
     task_manager_->EnqueueTask(std::move(task));
 }
@@ -633,4 +626,26 @@ void DemoWidget::OnShowExpressionWatch()
     expression_watch_widget_->show();
     expression_watch_widget_->raise();
     expression_watch_widget_->activateWindow();
+}
+
+void DemoWidget::OnParseResultRequested(const QString &expression, xequation::ParseResult &result)
+{
+
+    result = equation_manager_->Parse(expression.toStdString(), xequation::ParseMode::kExpression);
+}
+
+void DemoWidget::OnEvalResultAsyncRequested(xequation::gui::ValueItem *item)
+{
+    gui::EvalExpressionTask* task = new gui::EvalExpressionTask(
+        "Evaluate Expression",  equation_manager_.get(), item->name().toStdString()
+    );
+
+    connect(
+        task, &gui::EvalExpressionTask::EvalCompleted,
+        [this, item](const InterpretResult &result) {
+            OnEvalResultSubmitted(item, result);
+        }
+    );
+
+    task_manager_->EnqueueTask(std::unique_ptr<gui::EvalExpressionTask>(task));
 }

@@ -42,6 +42,8 @@ private:
     void OnShowEquationManager();
     void OnShowEquationInspector();
     void OnShowExpressionWatch();
+    void OnParseResultRequested(const QString& expression, xequation::ParseResult &result);
+    void OnEvalResultAsyncRequested(xequation::gui::ValueItem* item);
 
     bool AddEquationGroup(const std::string& statement);
     bool EditEquationGroup(const xequation::EquationGroupId& id, const std::string& statement);
