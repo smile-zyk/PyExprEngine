@@ -9,7 +9,7 @@ namespace gui
 {
 
 static QMap<QString, QString> kLanguageDefineFileMap = {
-    {"Python", ":/languages/python.xml"},
+    {"Python", ":/code_editor/languages/python.xml"},
 };
 
 static QList<CompletionCategory> kPredefinedCategories = {

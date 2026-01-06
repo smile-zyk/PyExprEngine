@@ -1,0 +1,113 @@
+#pragma once
+
+#include "core/equation_manager.h"
+#include "task/task.h"
+#include <string>
+
+namespace xequation
+{
+namespace gui
+{
+class EquationManagerTask : public Task
+{
+    Q_OBJECT
+  public:
+    EquationManagerTask(const QString &title, EquationManager *manager) : Task(title), equation_manager_(manager) {}
+    ~EquationManagerTask() override = default;
+
+    virtual void Execute() override;
+    virtual void RequestCancel() override;
+    virtual void Cleanup() override;
+    EquationManager *equation_manager() const
+    {
+        return equation_manager_;
+    }
+
+  private:
+    EquationManager *equation_manager_;
+};
+
+class UpdateEquationGroupTask : public EquationManagerTask
+{
+    Q_OBJECT
+  public:
+    UpdateEquationGroupTask(const QString &title, EquationManager *manager, EquationGroupId group_id)
+        : EquationManagerTask(title, manager), group_id_(group_id)
+    {
+    }
+    ~UpdateEquationGroupTask() override = default;
+
+    void Execute() override;
+
+  private:
+    EquationGroupId group_id_;
+};
+
+class UpdateManagerTask : public EquationManagerTask
+{
+    Q_OBJECT
+  public:
+    UpdateManagerTask(const QString &title, EquationManager *manager) : EquationManagerTask(title, manager) {}
+    ~UpdateManagerTask() override = default;
+
+    void Execute() override;
+};
+
+class UpdateEquationsTask : public EquationManagerTask
+{
+    Q_OBJECT
+  public:
+    UpdateEquationsTask(
+        const QString &title, EquationManager *manager, const std::vector<std::string> &update_equations
+    )
+        : EquationManagerTask(title, manager), update_equations_(update_equations)
+    {
+    }
+    ~UpdateEquationsTask() override = default;
+
+    void Execute() override;
+
+  private:
+    std::vector<std::string> update_equations_;
+};
+
+class EvalExpressionTask : public EquationManagerTask
+{
+    Q_OBJECT
+  public:
+    EvalExpressionTask(const QString &title, EquationManager *manager, const std::string &expression)
+        : EquationManagerTask(title, manager), expression_(expression)
+    {
+    }
+    ~EvalExpressionTask() override = default;
+
+    void Execute() override;
+
+    const std::string &expression() const
+    {
+        return expression_;
+    }
+
+    const Value &value() const
+    {
+        return value_;
+    }
+
+    const std::string &message() const
+    {
+        return message_;
+    }
+
+    ResultStatus status() const
+    {
+        return status_;
+    }
+
+  private:
+    std::string expression_;
+    Value value_;
+    std::string message_;
+    ResultStatus status_{ResultStatus::kUnknownError};
+};
+} // namespace gui
+} // namespace xequation

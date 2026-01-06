@@ -13,8 +13,8 @@ expression_watch_widget.h
 expression_watch_widget.cc
 equation_editor.h
 equation_editor.cc
-equation_manager_task.h
-equation_manager_task.cc
+equation_manager_tasks.h
+equation_manager_tasks.cc
 equation_group_editor.h
 equation_group_editor.cc
 equation_completion_model.h
@@ -39,12 +39,19 @@ code_editor/code_highlighter.h
 code_editor/code_highlighter.cc
 code_editor/python_highlighter.h
 code_editor/python_highlighter.cc
-code_editor/resources/code_editor_resource.qrc
 task/task.h
 task/task.cc
 task/task_manager.h
 task/task_manager.cc
+task/toast_task_manager.h
+task/toast_task_manager.cc
+toast/toast_manager.h
+toast/toast_manager.cc
+toast/toast_progress_bar.h
+toast/toast_progress_bar.cc
 )
+
+qt5_add_resources(xequation_gui_SRC resources/gui_resource.qrc)
 
 add_library(xequation_gui STATIC ${xequation_gui_SRC})
 

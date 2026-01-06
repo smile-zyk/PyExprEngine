@@ -5,7 +5,6 @@
 #include "equation_signals_qt_utils.h"
 
 #include <QAction>
-#include <QDebug>
 #include <QMenu>
 #include <boost/uuid/uuid_io.hpp>
 #include <qaction.h>

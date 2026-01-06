@@ -2,7 +2,6 @@
 #include <QDateTime>
 #include <QObject>
 #include <QUuid>
-#include <QVariant>
 #include <atomic>
 
 namespace xequation
@@ -20,10 +19,11 @@ class Task : public QObject
         kPending,
         kRunning,
         kCompleted,
+        kCanceling,
         kCancelled
     };
     ~Task() = default;
-    virtual QVariant Execute() = 0;
+    virtual void Execute() = 0;
     virtual void Cleanup() = 0;
     virtual void RequestCancel();
     State state() const
@@ -50,6 +50,10 @@ class Task : public QObject
     {
         return id_;
     }
+    void set_title(const QString &title)
+    {
+        title_ = title;
+    }    
     QString title() const
     {
         return title_;
@@ -61,8 +65,8 @@ class Task : public QObject
     void ProgressUpdated(QUuid task_id, int progress, QString progress_message);
 
   protected:
-    Task(QObject *parent = nullptr)
-        : QObject(parent), state_(State::kPending) {}
+    Task(const QString& title, QObject *parent = nullptr)
+        : QObject(parent), state_(State::kPending), title_(title) {}
     Task(const Task &) = delete;
     Task &operator=(const Task &) = delete;
     Task(Task &&) noexcept = delete;

@@ -15,14 +15,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QtConcurrent/QtConcurrent>
-#include <algorithm>
 #include <memory>
 #include <quuid.h>
-#include <utility>
 
 #include "equation_editor.h"
 #include "equation_group_editor.h"
-#include "equation_manager_task.h"
+#include "equation_manager_tasks.h"
 #include "equation_signals_qt_utils.h"
 #include "python/python_qt_wrapper.h"
 
@@ -52,7 +50,7 @@ DemoWidget::DemoWidget(QWidget *parent)
 
     expression_watch_widget_ = new xequation::gui::ExpressionWatchWidget(parse_expr_handle, eval_expr_handle, this);
 
-    task_manager_ = new xequation::gui::TaskManager(this, 1);
+    task_manager_ = new xequation::gui::ToastTaskManager(this, 1);
 
     SetupUI();
     SetupConnections();
@@ -76,6 +74,7 @@ void DemoWidget::SetupConnections()
     connect(exit_action_, &QAction::triggered, qApp, &QApplication::quit);
     connect(insert_equation_action_, &QAction::triggered, this, &DemoWidget::OnInsertEquationRequest);
     connect(insert_equation_group_action_, &QAction::triggered, this, &DemoWidget::OnInsertEquationGroupRequest);
+    connect(update_all_action_, &QAction::triggered, this, &DemoWidget::AsyncUpdateManager);
     connect(show_dependency_graph_action_, &QAction::triggered, this, &DemoWidget::OnShowDependencyGraph);
     connect(show_equation_manager_action_, &QAction::triggered, this, &DemoWidget::OnShowEquationManager);
     connect(show_variable_inspector_action_, &QAction::triggered, this, &DemoWidget::OnShowEquationInspector);
@@ -119,22 +118,6 @@ void DemoWidget::SetupConnections()
         equation_browser_widget_, &xequation::gui::EquationBrowserWidget::EquationSelected, this,
         &DemoWidget::OnEquationSelected
     );
-
-    // connect to task_manager_ signals for debugging
-    connect(task_manager_, &xequation::gui::TaskManager::TaskStarted, this, [this](const QUuid &task_id) {
-        qDebug() << "Task started:" << task_id.toString();
-    });
-
-    connect(
-        task_manager_, &xequation::gui::TaskManager::TaskFinished, this,
-        [this](const QUuid &task_id, const QVariant &result) {
-            qDebug() << "Task finished:" << task_id.toString() << "Result:" << result;
-        }
-    );
-
-    connect(task_manager_, &xequation::gui::TaskManager::TaskCancelled, this, [this](const QUuid &task_id) {
-        qDebug() << "Task cancelled:" << task_id.toString();
-    });
 
     xequation::gui::ConnectEquationSignal<EquationEvent::kEquationAdded>(
         &equation_manager_->signals_manager(), equation_browser_widget_,
@@ -200,6 +183,9 @@ void DemoWidget::CreateActions()
     insert_equation_group_action_ = new QAction("Insert Equation Group", this);
     insert_equation_group_action_->setStatusTip("Insert multiple equations");
 
+    update_all_action_ = new QAction("Update All Equations", this);
+    update_all_action_->setStatusTip("Update all equations in the manager");
+
     // View menu actions
     show_dependency_graph_action_ = new QAction("Dependency Graph", this);
     show_dependency_graph_action_->setStatusTip("Show equation dependency graph");
@@ -243,6 +229,7 @@ void DemoWidget::CreateMenus()
     edit_menu_ = menuBar()->addMenu("&Edit");
     edit_menu_->addAction(insert_equation_action_);
     edit_menu_->addAction(insert_equation_group_action_);
+    edit_menu_->addAction(update_all_action_);
 
     // View menu
     view_menu_ = menuBar()->addMenu("&View");
@@ -336,14 +323,16 @@ void DemoWidget::OnUpdateEquationGroupRequest(const xequation::EquationGroupId &
     AsyncUpdateEquationGroup(id);
 }
 
-void DemoWidget::OnAddEquationGroupToExpressionWatchRequest(const xequation::EquationGroupId &id) 
+void DemoWidget::OnAddEquationGroupToExpressionWatchRequest(const xequation::EquationGroupId &id)
 {
-    const EquationGroup* group = equation_manager_->GetEquationGroup(id);
-    if (!group) {
+    const EquationGroup *group = equation_manager_->GetEquationGroup(id);
+    if (!group)
+    {
         return;
     }
 
-    for (const auto& equation_name : group->GetEquationNames()) {
+    for (const auto &equation_name : group->GetEquationNames())
+    {
         expression_watch_widget_->OnAddExpressionToWatch(QString::fromStdString(equation_name));
     }
 }
@@ -515,13 +504,7 @@ bool DemoWidget::RemoveEquationGroup(const xequation::EquationGroupId &id)
         auto equation_names = equation_manager_->GetEquationGroup(id)->GetEquationNames();
         auto update_equation_names = equation_manager_->graph().TopologicalSort(equation_names);
         equation_manager_->RemoveEquationGroup(id);
-        for (const auto &equation_name : update_equation_names)
-        {
-            if (std::find(equation_names.begin(), equation_names.end(), equation_name) == equation_names.end())
-            {
-                equation_manager_->UpdateSingleEquation(equation_name);
-            }
-        }
+        AsyncUpdateEquationsAfterRemoveGroup(update_equation_names);
         return true;
     }
     catch (const EquationException &e)
@@ -539,15 +522,25 @@ bool DemoWidget::RemoveEquationGroup(const xequation::EquationGroupId &id)
 void DemoWidget::AsyncUpdateEquationGroup(const xequation::EquationGroupId &id)
 {
     auto task = std::unique_ptr<xequation::gui::UpdateEquationGroupTask>(
-        new xequation::gui::UpdateEquationGroupTask(equation_manager_.get(), id)
+        new xequation::gui::UpdateEquationGroupTask("Update Equation Group", equation_manager_.get(), id)
     );
-    // connect task to debug output
-    connect(
-        task.get(), &xequation::gui::EquationManagerTask::ProgressUpdated, this,
-        [this](QUuid id, int progress, const QString &message) {
-            // output to console for demo purpose
-            qDebug() << "Task Progress:" << progress << "% -" << message;
-        }
+
+    task_manager_->EnqueueTask(std::move(task));
+}
+
+void DemoWidget::AsyncUpdateManager()
+{
+    auto task = std::unique_ptr<xequation::gui::UpdateManagerTask>(
+        new xequation::gui::UpdateManagerTask("Update All Equation Groups", equation_manager_.get())
+    );
+
+    task_manager_->EnqueueTask(std::move(task));
+}
+
+void DemoWidget::AsyncUpdateEquationsAfterRemoveGroup(const std::vector<std::string> &equation_names)
+{
+    auto task = std::unique_ptr<xequation::gui::UpdateEquationsTask>(
+        new xequation::gui::UpdateEquationsTask("Update Equations After Remove Group", equation_manager_.get(), equation_names)
     );
 
     task_manager_->EnqueueTask(std::move(task));

@@ -8,6 +8,7 @@ namespace gui
 void Task::RequestCancel()
 {
     cancel_requested_.store(true);
+    state_ = State::kCanceling;
 }
 
 void Task::SetProgress(int progress, const QString &message)

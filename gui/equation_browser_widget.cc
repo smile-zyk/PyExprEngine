@@ -1,7 +1,6 @@
 #include "equation_browser_widget.h"
 #include "core/equation.h"
 #include "core/equation_common.h"
-#include <QDebug>
 #include <QLayout>
 #include <QVariant>
 #include <string>

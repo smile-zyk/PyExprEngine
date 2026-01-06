@@ -1,7 +1,6 @@
 #include "value_tree_view.h"
 #include "value_tree_model.h"
 
-#include <QDebug>
 #include <QEvent>
 #include <QHeaderView>
 #include <QScrollBar>

@@ -13,7 +13,7 @@
 #include "expression_watch_widget.h"
 #include "mock_equation_group_list_widget.h"
 #include "equation_completion_model.h"
-#include "task/task_manager.h"
+#include "task/toast_task_manager.h"
 
 class QMenu;
 class QAction;
@@ -49,6 +49,8 @@ private:
     bool EditEquation(const xequation::EquationGroupId& group_id, const QString& equation_name, const QString& expression);
     bool RemoveEquationGroup(const xequation::EquationGroupId& id);
     void AsyncUpdateEquationGroup(const xequation::EquationGroupId& id);
+    void AsyncUpdateManager();
+    void AsyncUpdateEquationsAfterRemoveGroup(const std::vector<std::string>& equation_names);
     
 private:
     void SetupUI();
@@ -66,6 +68,7 @@ private:
     QAction *exit_action_;
     QAction *insert_equation_action_;
     QAction *insert_equation_group_action_;
+    QAction *update_all_action_;
     QAction *show_dependency_graph_action_;
     QAction *show_equation_manager_action_;
     QAction *show_variable_inspector_action_;
@@ -79,5 +82,5 @@ private:
     xequation::gui::VariableInspectWidget* variable_inspect_widget_;
     xequation::gui::ExpressionWatchWidget* expression_watch_widget_;
     xequation::gui::EquationCompletionModel* equation_completion_model_;
-    xequation::gui::TaskManager* task_manager_;
+    xequation::gui::ToastTaskManager* task_manager_;
 };

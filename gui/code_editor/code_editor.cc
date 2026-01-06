@@ -8,21 +8,18 @@
 #include <QShortcut>
 #include <QSyntaxStyle>
 #include <QWheelEvent>
-
-#include <QDebug>
-
 namespace xequation
 {
 namespace gui
 {
 QMap<CodeEditor::StyleMode, QString> CodeEditor::language_style_file_map_ = {
-    {CodeEditor::StyleMode::kLight, ":/styles/light_style.xml"},
-    {CodeEditor::StyleMode::kDark, ":/styles/dark_style.xml"}
+    {CodeEditor::StyleMode::kLight, ":/code_editor/styles/light_style.xml"},
+    {CodeEditor::StyleMode::kDark, ":/code_editor/styles/dark_style.xml"}
 };
 
 CodeEditor::CodeEditor(const QString &language, QWidget *parent) : QCodeEditor(parent), style_mode_(StyleMode::kLight)
 {
-    Q_INIT_RESOURCE(code_editor_resource);
+    Q_INIT_RESOURCE(gui_resource);
     SetStyleMode(style_mode_);
     base_font_size_ = font().pointSizeF();
     SetupShortcuts();

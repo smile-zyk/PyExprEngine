@@ -1,5 +1,4 @@
 #include "python_highlighter.h"
-#include <QDebug>
 #include <QSyntaxStyle>
 #include <qglobal.h>
 
