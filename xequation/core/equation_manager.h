@@ -164,6 +164,8 @@ class EquationManager
 
     void UpdateEquationStatus(const std::string &equation_name, ResultStatus status, const std::string& message = "");
 
+    void WriteDependencyGraphToDotFile(const std::string &file_path) const;
+
     const DependencyGraph &graph()
     {
         return *graph_;
@@ -207,6 +209,7 @@ class EquationManager
     void NotifyEquationDependentsUpdated(const std::string &equation_name) const;
     void NotifyEquationDependenciesUpdated(const std::string &equation_name) const;
 
+    std::string GenerateEquationDotNodeLabel(const std::string &equation_name) const;
   private:
     std::unique_ptr<DependencyGraph> graph_;
     std::unique_ptr<EquationContext> context_;

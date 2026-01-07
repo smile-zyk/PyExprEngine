@@ -20,9 +20,9 @@ endif()
 find_package(pybind11 REQUIRED)
 
 if(ENABLE_GUI_SUPPORT)
-    find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
+    find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Svg)
     add_library(qt_config INTERFACE)
-    target_link_libraries(qt_config INTERFACE Qt5::Core Qt5::Gui Qt5::Widgets)
+    target_link_libraries(qt_config INTERFACE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Svg)
 endif()
 
 set(CMAKE_CXX_STANDARD 11)

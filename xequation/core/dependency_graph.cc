@@ -650,11 +650,54 @@ bool DependencyGraph::WriteDotFile(const std::string &file_path, std::function<s
         return false;
     }
 
-    ofs << "digraph DependencyGraph {\n";
-    for (const auto &edge : edge_container_)
+    ofs << "digraph DependencyGraph \n";
+    ofs << "{\n";
+    ofs << "  rankdir=TB;\n";
+    ofs << "  \n";
+
+    // Write all nodes with their labels
+    for (const auto &node_entry : node_map_)
     {
-        ofs << "    \"" << edge.from() << "\" -> \"" << edge.to() << "\";\n";
+        const std::string &node_name = node_entry.first;
+        std::string label;
+
+        // Use the provided label handler or default to node name
+        if (node_label_handler)
+        {
+            label = node_label_handler(node_name);
+        }
+        else
+        {
+            label = node_name;
+        }
+
+        // Escape quotes in the label for graphviz
+        for (auto &c : label)
+        {
+            if (c == '"')
+            {
+                c = '\''; // Replace quotes with single quotes to avoid escaping issues
+            }
+        }
+
+        ofs << "  " << node_name << " [shape=Mrecord, label=\"" << label << "\"];\n";
     }
+
+    ofs << "  \n";
+
+    // Write all edges based on node dependents
+    for (const auto &node_entry : node_map_)
+    {
+        const std::string &node_name = node_entry.first;
+        const auto &node = node_entry.second;
+
+        // For each dependent of this node, create an edge from this node to the dependent
+        for (const auto &dependent : node->dependents())
+        {
+            ofs << "  " << node_name << " -> " << dependent << "\n";
+        }
+    }
+
     ofs << "}\n";
 
     ofs.close();

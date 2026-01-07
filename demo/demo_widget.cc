@@ -15,8 +15,13 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QtConcurrent/QtConcurrent>
-#include <memory>
-#include <quuid.h>
+#include <QFileDialog>
+#include <QDir>
+#include <QDateTime>
+#include <QProcess>
+#include <QSvgWidget>
+#include <QDialog>
+#include <QDialogButtonBox>
 
 #include "equation_editor.h"
 #include "equation_group_editor.h"
@@ -606,16 +611,80 @@ void DemoWidget::OnInsertEquationGroupRequest()
 
 void DemoWidget::OnShowDependencyGraph()
 {
-    // for test cancel running tasks
-    auto running_task_ids = task_manager_->GetRunningTaskIds();
-    if (running_task_ids.empty())
+    try
     {
-        QMessageBox::information(this, "Info", "No equation update task is running.", QMessageBox::Ok);
-        return;
+        // Create temp directory if it doesn't exist
+        QDir temp_dir("temp");
+        if (!temp_dir.exists())
+        {
+            temp_dir.mkpath(".");
+        }
+
+        // Generate timestamp-based filename
+        QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+        QString dot_file = QString("temp/%1_dependency.dot").arg(timestamp);
+        QString svg_file = QString("temp/%1_dependency.svg").arg(timestamp);
+
+        // Write DOT file
+        equation_manager_->WriteDependencyGraphToDotFile(dot_file.toStdString());
+
+        // Generate SVG using graphviz dot command
+        QProcess process;
+        process.start("dot", QStringList() << "-Tsvg" << dot_file << "-o" << svg_file);
+        
+        if (!process.waitForFinished(5000))
+        {
+            QMessageBox::warning(this, "Error", "Failed to generate SVG: Graphviz timeout or not installed.", QMessageBox::Ok);
+            return;
+        }
+
+        if (process.exitCode() != 0)
+        {
+            QString error = process.readAllStandardError();
+            QMessageBox::warning(this, "Error", QString("Failed to generate SVG: %1").arg(error), QMessageBox::Ok);
+            return;
+        }
+
+        // Clean up old files (keep only the latest 10 pairs)
+        QStringList dot_files = temp_dir.entryList(QStringList() << "*_dependency.dot", QDir::Files, QDir::Name);
+        QStringList svg_files = temp_dir.entryList(QStringList() << "*_dependency.svg", QDir::Files, QDir::Name);
+        
+        if (dot_files.size() > 10)
+        {
+            for (int i = 0; i < dot_files.size() - 10; ++i)
+            {
+                temp_dir.remove(dot_files[i]);
+            }
+        }
+        
+        if (svg_files.size() > 10)
+        {
+            for (int i = 0; i < svg_files.size() - 10; ++i)
+            {
+                temp_dir.remove(svg_files[i]);
+            }
+        }
+
+        // Display SVG in a dialog with QSvgWidget
+        QDialog *dialog = new QDialog(this);
+        dialog->setWindowTitle("Dependency Graph");
+        dialog->resize(800, 600);
+        
+        QVBoxLayout *layout = new QVBoxLayout(dialog);
+        QSvgWidget *svg_widget = new QSvgWidget(svg_file, dialog);
+        layout->addWidget(svg_widget);
+        
+        QDialogButtonBox *button_box = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+        connect(button_box, &QDialogButtonBox::rejected, dialog, &QDialog::accept);
+        layout->addWidget(button_box);
+        
+        dialog->setLayout(layout);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->show();
     }
-    for (int i = 0; i < running_task_ids.size(); ++i)
+    catch (const std::exception &e)
     {
-        task_manager_->CancelTask(running_task_ids[i]);
+        QMessageBox::warning(this, "Error", QString("Failed to show dependency graph: %1").arg(e.what()), QMessageBox::Ok);
     }
 }
 

@@ -1,4 +1,5 @@
 #include <regex>
+#include <sstream>
 #include "equation_manager.h"
 #include "equation_common.h"
 #include "core/equation_signals_manager.h"
@@ -662,6 +663,66 @@ void EquationManager::NotifyEquationDependenciesUpdated(const std::string &equat
             GetEquation(equation_name), EquationUpdateFlag::kDependencies
         );
     }
+}
+
+std::string EquationManager::GenerateEquationDotNodeLabel(const std::string &equation_name) const
+{
+    const Equation *equation = GetEquation(equation_name);
+    if (!equation)
+    {
+        return equation_name;
+    }
+
+    std::ostringstream oss;
+    oss << equation_name << "|{" << ItemTypeConverter::ToString(equation->type()) << "|";
+
+    // Truncate content if too long
+    std::string content = equation->content();
+    const size_t max_content_length = 250;
+    bool truncated = false;
+    
+    if (content.length() > max_content_length)
+    {
+        content = content.substr(0, max_content_length);
+        truncated = true;
+    }
+
+    // Escape newlines and special characters in content for graphviz
+    std::string escaped_content;
+    for (char c : content)
+    {
+        if (c == '\n')
+        {
+            escaped_content += "\\n";
+        }
+        else if (c == '"')
+        {
+            escaped_content += "'"; // Replace quotes with single quotes
+        }
+        else if (c == '\\')
+        {
+            escaped_content += "\\\\";
+        }
+        else
+        {
+            escaped_content += c;
+        }
+    }
+
+    if (truncated)
+    {
+        escaped_content += "...";
+    }
+
+    oss << escaped_content << "}";
+    return oss.str();
+}
+
+void EquationManager::WriteDependencyGraphToDotFile(const std::string &file_path) const
+{
+    graph_->WriteDotFile(file_path, [this](const std::string &node_name) {
+        return GenerateEquationDotNodeLabel(node_name);
+    });
 }
 
 } // namespace xequation
