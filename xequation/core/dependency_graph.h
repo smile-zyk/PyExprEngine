@@ -226,6 +226,9 @@ class DependencyGraph
     boost::signals2::scoped_connection ConnectNodeDependentChangedSignal(
         const boost::signals2::signal<void(const std::string &)> ::slot_type &slot);
 
+    // write graphviz dot file
+    bool WriteDotFile(const std::string &file_path, std::function<std::string(const std::string&)> node_label_handler = nullptr) const;
+
   private:
     // for rollback
     struct Operation

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <queue>
 #include <string>
+#include <fstream>
 #include <tsl/ordered_set.h>
 #include <unordered_set>
 
@@ -639,4 +640,23 @@ boost::signals2::scoped_connection DependencyGraph::ConnectNodeDependentChangedS
     const boost::signals2::signal<void(const std::string &)> ::slot_type &slot)
 {
     return node_dependent_changed_signal_.connect(slot);
+}
+
+bool DependencyGraph::WriteDotFile(const std::string &file_path, std::function<std::string(const std::string&)> node_label_handler) const
+{
+    std::ofstream ofs(file_path);
+    if (!ofs.is_open())
+    {
+        return false;
+    }
+
+    ofs << "digraph DependencyGraph {\n";
+    for (const auto &edge : edge_container_)
+    {
+        ofs << "    \"" << edge.from() << "\" -> \"" << edge.to() << "\";\n";
+    }
+    ofs << "}\n";
+
+    ofs.close();
+    return true;
 }

@@ -114,19 +114,6 @@ void ToastProgressBar::paintEvent(QPaintEvent *event)
     QPainterPath path;
     path.addRoundedRect(rect(), 10, 10);
     
-    // Draw shadow with increased opacity and blur
-    painter.setPen(Qt::NoPen);
-    for (int i = 0; i < 15; ++i)
-    {
-        int alpha = 30 - i * 2;
-        if (alpha < 0) alpha = 0;
-        QColor shadowColor(0, 0, 0, alpha);
-        painter.setBrush(shadowColor);
-        QPainterPath shadowPath;
-        shadowPath.addRoundedRect(rect().adjusted(-i, -i + 5, i, i + 5), 10 + i, 10 + i);
-        painter.drawPath(shadowPath);
-    }
-    
     // Draw white background
     painter.setBrush(Qt::white);
     painter.setPen(Qt::NoPen);
