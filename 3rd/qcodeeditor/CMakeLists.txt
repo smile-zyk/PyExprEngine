@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 11)
 
 option(BUILD_EXAMPLE "Example building required" Off)
 
-set(BUILD_EXAMPLE ON)
+set(BUILD_EXAMPLE Off)
 
 if (${BUILD_EXAMPLE})
     message(STATUS "QCodeEditor example will be built.")

@@ -30,6 +30,7 @@ TEST(PythonEquationEngine, TestParse)
 TEST(PythonEquationEngine, TestEquationManager)
 {
     auto& engine = PythonEquationEngine::GetInstance();
+    pybind11::gil_scoped_acquire acquire;
     auto equation_manager = engine.CreateEquationManager();
 
     EquationGroupId id_0 = equation_manager->AddEquationGroup(
