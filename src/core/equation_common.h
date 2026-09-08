@@ -76,6 +76,11 @@ class EquationException : public std::exception
         kEquationNotFound,
         kEquationAlreadyExists,
         kExpressionNotFound,
+        /// The name collides with a REL builtin (constant or function).  Such
+        /// a name can never be bound in the environment, so an equation with
+        /// that name is rejected up front instead of being created and then
+        /// failing on every Update().
+        kEquationNameReserved,
     };
 
     const char *what() const noexcept override
@@ -122,6 +127,11 @@ class EquationException : public std::exception
         return EquationException(ErrorCode::kExpressionNotFound, expression_id);
     }
 
+    static EquationException EquationNameReserved(const std::string &equation_name)
+    {
+        return EquationException(ErrorCode::kEquationNameReserved, equation_name);
+    }
+
   private:
     std::string GenerateErrorMessage() const
     {
@@ -146,6 +156,11 @@ class EquationException : public std::exception
 
         case ErrorCode::kExpressionNotFound:
             oss << "Expression not found. ID: '" << equation_name_ << "'";
+            break;
+
+        case ErrorCode::kEquationNameReserved:
+            oss << "Equation name is reserved by a REL builtin (constant or "
+                   "function) and cannot be defined: '" << equation_name_ << "'";
             break;
 
         default:

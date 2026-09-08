@@ -118,6 +118,12 @@ DataFrameTabWidget::DataFrameTabWidget(
     EquationManager &manager, QWidget *parent)
     : QTabWidget(parent), manager_(manager)
 {
+    SetupUI();
+    SetupConnections();
+}
+
+void DataFrameTabWidget::SetupUI()
+{
     // Built-in close buttons are disabled: pin + close are both custom and
     // share the same look (see OpenTab), packed [pin][close] on the right.
     setTabsClosable(false);
@@ -164,6 +170,28 @@ DataFrameTabWidget::DataFrameTabWidget(
     tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(tabBar(), &QTabBar::customContextMenuRequested,
             this, &DataFrameTabWidget::OnTabContextMenu);
+}
+
+void DataFrameTabWidget::SetupConnections()
+{
+    const EquationSignalsManager &sig = manager_.signals_manager();
+
+    equation_removing_conn_ =
+        sig.ConnectScoped<EquationEvent::kEquationRemoving>(
+            [this](const Equation *eq) { OnEquationRemoving(eq); });
+    equation_updated_conn_ =
+        sig.ConnectScoped<EquationEvent::kEquationUpdated>(
+            [this](const Equation *eq, bitmask::bitmask<EquationUpdateFlag> flags) {
+                OnEquationUpdated(eq, flags);
+            });
+    expression_removing_conn_ =
+        sig.ConnectScoped<EquationEvent::kExpressionRemoving>(
+            [this](const Expression *expr) { OnExpressionRemoving(expr); });
+    expression_updated_conn_ =
+        sig.ConnectScoped<EquationEvent::kExpressionUpdated>(
+            [this](const Expression *expr, bitmask::bitmask<ExpressionUpdateFlag> flags) {
+                OnExpressionUpdated(expr, flags);
+            });
 }
 
 DataFrameTabWidget::~DataFrameTabWidget()
@@ -969,46 +997,31 @@ void DataFrameTabWidget::EditTab(int index)
         return;
     }
 
-    // Register the new expression first; only on success release the old one,
-    // so a failed parse leaves the tab (and its old object) intact.  The new
-    // expression keeps the "Watch" tag so it stays editable.
-    ObjectId new_id;
+    // Edit in place: EditExpression keeps the SAME id, so the tab (and any
+    // pin / selection keyed by id) survives.  A syntax error / cycle no longer
+    // fails the edit: the new content is kept and the expression is detached
+    // from the graph (status kError) until it becomes valid again.
+    const ObjectId edited_id = tab.object_id;
     try
     {
-        new_id = manager_.AddExpression(trimmed, kWatchTagDefault);
+        manager_.EditExpression(edited_id, trimmed);
     }
     catch (const std::exception &)
     {
-        new_id = ObjectId();
+        return;   // unknown id: tab unchanged
     }
-    if (new_id.is_nil())
-    {
-        return;   // parse failed: tab unchanged
-    }
-
-    // Re-key the tab to the new expression BEFORE releasing the old one, so
-    // the kExpressionRemoving (old id) routed by the host finds no tab to
-    // close (the tab now owns the new id).
-    const ObjectId old_id = tab.object_id;
-    const bool was_expression = (tab.kind == ObjectKind::kExpression);
-    object_to_index_.erase(old_id);
 
     tab.kind = ObjectKind::kExpression;
-    tab.object_id = new_id;
+    tab.object_id = edited_id;
     tab.expression = trimmed;
 
-    object_to_index_[new_id] = index;
+    object_to_index_[edited_id] = index;
     setTabText(index, QString::fromStdString(trimmed));
-
-    if (was_expression)
-    {
-        manager_.RemoveExpression(old_id);
-    }
 
     // Trigger the first computation of the edited expression synchronously.
     try
     {
-        manager_.UpdateExpression(new_id);
+        manager_.UpdateExpression(edited_id);
     }
     catch (const std::exception &)
     {
@@ -1020,7 +1033,7 @@ void DataFrameTabWidget::EditTab(int index)
 
     // Edited expressions are auto-pinned like new ones (SetTabPinned re-orders
     // the tab into the pinned group; the index may change).
-    const int pinned_index = FindTabIndex(new_id);
+    const int pinned_index = FindTabIndex(edited_id);
     SetTabPinned(pinned_index, true);
 }
 
@@ -1051,6 +1064,9 @@ void DataFrameTabWidget::AddWatchExpression(const std::string &expression)
     {
         return;
     }
+    // AddExpression always creates the expression; a syntax error / cycle only
+    // keeps it off the dependency graph.  The tab is still opened so the user
+    // can see (and fix) what they typed.
     ObjectId id;
     try
     {

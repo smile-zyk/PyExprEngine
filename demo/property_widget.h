@@ -84,6 +84,13 @@ class PropertyWidget : public QWidget
     void OnExpressionRemoving(const xequation::Expression *expression);
 
   private:
+    /// Build the title label + field tree (called once from the ctor).
+    void SetupUI();
+    /// Connect the manager's equation/expression change signals to the
+    /// On* slots (called once from the ctor) so this widget keeps itself in
+    /// sync without external wiring.
+    void SetupConnections();
+
     /// Append a top-level row (field | value) to the tree.  When red, the
     /// value column is shown in red.  Returns the row so list values can add
     /// child entries below it.
@@ -120,6 +127,13 @@ class PropertyWidget : public QWidget
     QLabel *name_label_ = nullptr;       // title: equation name / "Expression"
     QTreeWidget *tree_ = nullptr;        // read-only two-column field tree
     xequation::ObjectId object_id_;      // displayed object (for refresh)
+
+    /// Manager signal subscriptions so the widget refreshes / clears itself
+    /// when the displayed object changes (auto-disconnected on destruction).
+    xequation::ScopedConnection equation_removing_conn_;
+    xequation::ScopedConnection equation_updated_conn_;
+    xequation::ScopedConnection expression_updated_conn_;
+    xequation::ScopedConnection expression_removing_conn_;
 };
 
 } // namespace gui

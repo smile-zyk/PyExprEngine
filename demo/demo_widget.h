@@ -48,6 +48,10 @@ class DemoWidget : public QWidget
     void OnEquationListSelectionChanged();
     void RefreshEquationList();
 
+    /// Enable / disable the Redefine / Rename / Delete buttons (both the
+    /// equation-list and manager-tree selection handlers drive these).
+    void UpdateEquationButtons(bool enabled);
+
     // ---- equation-manager tree panel ----------------------------------
 
     /// User selected a node in the manager tree (dataset / block / data array
@@ -114,25 +118,11 @@ class DemoWidget : public QWidget
     /// none).
     QString project_path_;
 
-    /// Connections to the REL manager's kEquationRemoving / kEquationUpdated
-    /// signals (auto disconnected on widget destruction); the tab widget
-    /// decides which tabs to clear / refresh.
-    xequation::ScopedConnection removing_rel_connection_;
-    xequation::ScopedConnection updated_rel_connection_;
-
     /// Connection to the REL manager's kEquationRemoved signal: an equation
     /// left the manager (Delete button, or the manager-tree context menu
     /// which calls RemoveEquation directly) -- refresh the equation list so
     /// the middle-left panel stays in sync.
     xequation::ScopedConnection equation_removed_rel_connection_;
-
-    /// Connection to the REL manager's kExpressionUpdated signal, for
-    /// auto-refresh of watch-expression tabs / property on value-ready.
-    xequation::ScopedConnection expression_updated_rel_connection_;
-    /// Connection to the REL manager's kExpressionRemoving signal: the
-    /// expression left the manager (tree-leaf Delete / env reload); close its
-    /// tab and clear the property widget.
-    xequation::ScopedConnection expression_removing_rel_connection_;
 };
 
 } // namespace gui

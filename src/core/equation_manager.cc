@@ -199,6 +199,16 @@ class RelDependencyVisitor : public rel::ExprVisitor
     std::vector<std::string> &out_;
 };
 
+// True when `name` is a REL builtin (constant or function).  Such a name can
+// never be bound in the environment (Environment::Define() throws), so an
+// equation must not be created with it -- otherwise it would exist, show up in
+// the UI, and fail on every Update().
+bool IsReservedName(const std::string &name)
+{
+    return rel::Environment::FindConstant(name) != nullptr ||
+           rel::Environment::HasFunction(name);
+}
+
 // Deduplicate preserving order.
 std::vector<std::string> Dedupe(const std::vector<std::string> &deps)
 {
@@ -373,6 +383,11 @@ bool EquationManager::IsEquationExist(const ObjectId &id) const
     return GetEquationById(id) != nullptr;
 }
 
+bool EquationManager::IsReservedName(const std::string &name)
+{
+    return ::xequation::IsReservedName(name);
+}
+
 const Equation *EquationManager::GetEquation(const std::string &equation_name) const
 {
     const auto it = equation_map_.find(equation_name);
@@ -453,15 +468,25 @@ ObjectId EquationManager::AddEquation(const std::string &equation_name, const st
         throw ParseException("Invalid equation name: " + equation_name);
     }
 
+    // A REL builtin (constant like "pi", or a function like "sin") can never
+    // be bound in the environment -- Environment::Define() rejects it.  Reject
+    // the name here instead of creating an equation that fails on every
+    // Update() (and would still show up in the UI).
+    if (IsReservedName(equation_name))
+    {
+        throw EquationException::EquationNameReserved(equation_name);
+    }
+
     // An equation is "name -> expression": parse the expression (which is the
     // content) for syntax + dependencies.  The name binding is performed by
     // Update/UpdateEquation (Eval then environment().Define).
+    //
+    // A parse error does NOT abort the creation any more: the equation is
+    // still created (so the user keeps what they typed and can fix it), but it
+    // stays out of the dependency graph -- a node with no valid dependencies
+    // has no meaning there.
     ParseResult res = Parse(expression);
-    if (res.status != ResultStatus::kSuccess)
-    {
-        throw ParseException(res.message.empty() ? "Failed to parse expression: " + expression
-                                                 : res.message);
-    }
+    const bool parse_ok = (res.status == ResultStatus::kSuccess);
 
     std::vector<std::string> dependency_updated_equation;
     ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
@@ -469,15 +494,21 @@ ObjectId EquationManager::AddEquation(const std::string &equation_name, const st
     std::vector<std::string> dependent_updated_equation;
     ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
 
-    AddNodeToGraph(equation_name, res.symbols);
-    graph_->InvalidateNode(equation_name);
+    std::string register_error;
+    const bool registered = parse_ok && TryRegisterNode(equation_name, expression, register_error);
+    if (registered)
+    {
+        graph_->InvalidateNode(equation_name);
+    }
 
     const ObjectId id = boost::uuids::random_generator()();
     EquationPtr equation(new Equation());
     equation->id = id;
     equation->name = equation_name;
     equation->content = expression;
-    equation->status = ResultStatus::kPending;
+    equation->status = registered ? ResultStatus::kPending : ResultStatus::kError;
+    equation->message = registered ? std::string()
+                                   : (parse_ok ? register_error : res.message);
     equation->parse_symbols = res.symbols;
     equation->tag = tag;   // opaque; empty stays empty (UI chooses defaults)
 
@@ -495,7 +526,22 @@ ObjectId EquationManager::AddEquation(const std::string &equation_name, const st
         NotifyEquationDependentsUpdated(equation_name_it);
     }
 
+    // A new node may unblock previously detached objects (e.g. "B=A" was
+    // unregistered because "A" did not exist yet).
+    RetryUnregisteredNodes();
+
     return id;
+}
+
+bool EquationManager::IsEquationRegistered(const std::string &equation_name) const
+{
+    return graph_->IsNodeExist(equation_name);
+}
+
+bool EquationManager::IsEquationRegistered(const ObjectId &id) const
+{
+    const std::string node_name = GraphNodeNameForObjectId(id);
+    return !node_name.empty() && graph_->IsNodeExist(node_name);
 }
 
 ObjectId EquationManager::EditEquation(const std::string &equation_name, const std::string &expression)
@@ -523,12 +569,13 @@ ObjectId EquationManager::EditEquation(const ObjectId &id, const std::string &ex
 
     // The name is already a valid identifier (it was validated when the
     // equation was added/renamed), so no re-validation is needed here.
+    //
+    // A parse error / cycle no longer aborts the edit: the new content is
+    // kept, the equation is detached from the graph (its old node is removed)
+    // and marked kError.  It re-registers automatically as soon as it becomes
+    // valid (RetryUnregisteredNodes).
     ParseResult res = Parse(expression);
-    if (res.status != ResultStatus::kSuccess)
-    {
-        throw ParseException(res.message.empty() ? "Failed to parse expression: " + expression
-                                                 : res.message);
-    }
+    const bool parse_ok = (res.status == ResultStatus::kSuccess);
 
     std::vector<std::string> dependency_updated_equation;
     ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
@@ -539,19 +586,20 @@ ObjectId EquationManager::EditEquation(const ObjectId &id, const std::string &ex
     // Update the graph: drop the old dependency edges, add the new ones.
     // Dependents that lost their dependency on this equation must be re-dirtied
     // (the edge is deactivated but the dirty flag is not touched by RemoveNode).
-    RemoveNodeInGraph(equation_name);
-    auto orphan_edge_range = graph_->GetEdgesByTo(equation_name);
-    for (auto it = orphan_edge_range.first; it != orphan_edge_range.second; it++)
+    DetachNodeFromGraph(equation_name);
+
+    std::string register_error;
+    const bool registered = parse_ok && TryRegisterNode(equation_name, expression, register_error);
+    if (registered)
     {
-        graph_->InvalidateNode(it->from());
+        graph_->InvalidateNode(equation_name);
     }
-    AddNodeToGraph(equation_name, res.symbols);
-    graph_->InvalidateNode(equation_name);
 
     equation = GetEquationInternal(equation_name);
     equation->content = expression;
-    equation->status = ResultStatus::kPending;
-    equation->message.clear();
+    equation->status = registered ? ResultStatus::kPending : ResultStatus::kError;
+    equation->message = registered ? std::string()
+                                   : (parse_ok ? register_error : res.message);
     equation->parse_symbols = res.symbols;
     env_->Remove(equation_name);
     signals_manager_->Emit<EquationEvent::kEquationUpdated>(
@@ -567,6 +615,10 @@ ObjectId EquationManager::EditEquation(const ObjectId &id, const std::string &ex
     {
         NotifyEquationDependentsUpdated(eqn_name);
     }
+
+    // Breaking an edge may unblock a previously detached object (e.g. "A=B"
+    // edited to "A=1" lets the detached "B=A" back in).
+    RetryUnregisteredNodes();
 
     return equation->id;
 }
@@ -600,14 +652,17 @@ ObjectId EquationManager::RenameEquation(const ObjectId &id, const std::string &
         throw ParseException("Invalid equation name: " + new_name);
     }
 
-    // The content (expression) is unchanged by a rename: re-parse it only to
-    // rebuild the graph edges under the new node name.
-    ParseResult res = Parse(equation->content);
-    if (res.status != ResultStatus::kSuccess)
+    // A builtin name can never be bound: reject the rename up front.
+    if (IsReservedName(new_name))
     {
-        throw ParseException(res.message.empty() ? "Failed to parse expression: " + equation->content
-                                                 : res.message);
+        throw EquationException::EquationNameReserved(new_name);
     }
+
+    // The content (expression) is unchanged by a rename: re-parse it only to
+    // rebuild the graph edges under the new node name.  A parse error / cycle
+    // keeps the rename (the equation stays, detached from the graph).
+    ParseResult res = Parse(equation->content);
+    const bool parse_ok = (res.status == ResultStatus::kSuccess);
 
     std::vector<std::string> dependency_updated_equation;
     ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
@@ -615,27 +670,29 @@ ObjectId EquationManager::RenameEquation(const ObjectId &id, const std::string &
     std::vector<std::string> dependent_updated_equation;
     ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
 
-    RemoveNodeInGraph(old_name);
-    auto orphan_edge_range = graph_->GetEdgesByTo(old_name);
-    for (auto it = orphan_edge_range.first; it != orphan_edge_range.second; it++)
+    DetachNodeFromGraph(old_name);
+
+    std::string register_error;
+    const bool registered = parse_ok && TryRegisterNode(new_name, equation->content, register_error);
+    if (registered)
     {
-        graph_->InvalidateNode(it->from());
+        graph_->InvalidateNode(new_name);
     }
-    AddNodeToGraph(new_name, res.symbols);
-    graph_->InvalidateNode(new_name);
 
     // Move the equation to its new name (same id: a rename, not a recreate).
     Equation *moved = GetEquationInternal(old_name);
     EquationPtr holder = std::move(equation_map_[old_name]);
     equation_map_.erase(old_name);
     moved->name = new_name;
-    moved->status = ResultStatus::kPending;
+    moved->status = registered ? ResultStatus::kPending : ResultStatus::kError;
+    moved->message = registered ? std::string()
+                                : (parse_ok ? register_error : res.message);
     moved->parse_symbols = res.symbols;
     env_->Remove(old_name);
     equation_map_.insert({new_name, std::move(holder)});
 
     signals_manager_->Emit<EquationEvent::kEquationUpdated>(
-        moved, EquationUpdateFlag::kName | EquationUpdateFlag::kStatus
+        moved, EquationUpdateFlag::kName | EquationUpdateFlag::kStatus | EquationUpdateFlag::kMessage
     );
 
     for (const auto &eqn_name : dependency_updated_equation)
@@ -647,6 +704,105 @@ ObjectId EquationManager::RenameEquation(const ObjectId &id, const std::string &
     {
         NotifyEquationDependentsUpdated(eqn_name);
     }
+
+    RetryUnregisteredNodes();
+
+    return id;
+}
+
+ObjectId EquationManager::EditEquation(const std::string &equation_name, const std::string &new_name,
+                                       const std::string &expression)
+{
+    Equation *equation = GetEquationInternal(equation_name);
+    if (!equation)
+    {
+        throw EquationException::EquationNotFound(equation_name);
+    }
+    return EditEquation(equation->id, new_name, expression);
+}
+
+ObjectId EquationManager::EditEquation(const ObjectId &id, const std::string &new_name,
+                                       const std::string &expression)
+{
+    Equation *equation = GetEquationInternal(id);
+    if (!equation)
+    {
+        throw EquationException::EquationNotFound(id);
+    }
+    const std::string old_name = equation->name;  // copy: name is reassigned below
+
+    // Renaming to the same name degenerates to a content-only edit; only a
+    // genuinely new name may collide with an existing equation.
+    if (new_name != old_name && IsEquationExist(new_name))
+    {
+        throw EquationException::EquationAlreadyExists(new_name);
+    }
+
+    static const std::regex name_regex("^[A-Za-z_][A-Za-z0-9_]*$");
+    if (!std::regex_match(new_name, name_regex))
+    {
+        throw ParseException("Invalid equation name: " + new_name);
+    }
+
+    // A builtin name can never be bound: reject it up front.
+    if (IsReservedName(new_name))
+    {
+        throw EquationException::EquationNameReserved(new_name);
+    }
+
+    // Re-parse the new expression: syntax + dependency extraction.  The graph
+    // edges under the (possibly new) node name are rebuilt from this result.
+    // A parse error / cycle keeps the new name + content (detached, kError).
+    ParseResult res = Parse(expression);
+    const bool parse_ok = (res.status == ResultStatus::kSuccess);
+
+    std::vector<std::string> dependency_updated_equation;
+    ScopedConnection dependency_connection = ConnectGraphDependencyUpdated(dependency_updated_equation);
+
+    std::vector<std::string> dependent_updated_equation;
+    ScopedConnection dependent_connection = ConnectGraphDependentUpdated(dependent_updated_equation);
+
+    DetachNodeFromGraph(old_name);
+
+    std::string register_error;
+    const bool registered = parse_ok && TryRegisterNode(new_name, expression, register_error);
+    if (registered)
+    {
+        graph_->InvalidateNode(new_name);
+    }
+
+    // Move the equation to its new name (same id), then update its content.
+    Equation *moved = GetEquationInternal(old_name);
+    EquationPtr holder = std::move(equation_map_[old_name]);
+    equation_map_.erase(old_name);
+    moved->name = new_name;
+    moved->content = expression;
+    moved->status = registered ? ResultStatus::kPending : ResultStatus::kError;
+    moved->message = registered ? std::string()
+                                : (parse_ok ? register_error : res.message);
+    moved->parse_symbols = res.symbols;
+    env_->Remove(old_name);
+    equation_map_.insert({new_name, std::move(holder)});
+
+    auto flags = EquationUpdateFlag::kContent | EquationUpdateFlag::kStatus
+                 | EquationUpdateFlag::kMessage;
+    if (new_name != old_name)
+    {
+        flags = flags | EquationUpdateFlag::kName;
+    }
+    signals_manager_->Emit<EquationEvent::kEquationUpdated>(moved, flags);
+
+    for (const auto &eqn_name : dependency_updated_equation)
+    {
+        NotifyEquationDependenciesUpdated(eqn_name);
+    }
+
+    for (const auto &eqn_name : dependent_updated_equation)
+    {
+        NotifyEquationDependentsUpdated(eqn_name);
+    }
+
+    RetryUnregisteredNodes();
 
     return id;
 }
@@ -689,6 +845,9 @@ void EquationManager::RemoveEquation(const std::string &equation_name)
     {
         NotifyEquationDependentsUpdated(eqn_name);
     }
+
+    // Removing a node can break a cycle, unblocking a detached object.
+    RetryUnregisteredNodes();
 }
 
 void EquationManager::RemoveEquation(const ObjectId &id)
@@ -829,8 +988,173 @@ void EquationManager::RemoveNodeInGraph(const std::string &node_name)
     graph_->RemoveEdges(edges_to_remove);
 }
 
+void EquationManager::DetachNodeFromGraph(const std::string &node_name)
+{
+    // Remove the node (and its outgoing edges).  Dependents that lost their
+    // dependency on this object must be re-dirtied: the edge is deactivated
+    // but RemoveNode does not touch the dirty flag, so without this they would
+    // keep a stale value/status forever.
+    RemoveNodeInGraph(node_name);
+    auto orphan_edge_range = graph_->GetEdgesByTo(node_name);
+    for (auto it = orphan_edge_range.first; it != orphan_edge_range.second; it++)
+    {
+        graph_->InvalidateNode(it->from());
+    }
+}
+
+bool EquationManager::TryRegisterNode(const std::string &node_name, const std::string &content,
+                                      std::string &error_message)
+{
+    ParseResult res = Parse(content);
+    if (res.status != ResultStatus::kSuccess)
+    {
+        error_message = res.message.empty() ? "Failed to parse expression: " + content : res.message;
+        return false;
+    }
+
+    try
+    {
+        AddNodeToGraph(node_name, res.symbols);
+    }
+    catch (const DependencyCycleException &e)
+    {
+        // AddNodeToGraph rolls its own batch back, so the graph is unchanged.
+        error_message = e.what();
+        return false;
+    }
+    catch (const std::exception &e)
+    {
+        error_message = e.what();
+        return false;
+    }
+
+    error_message.clear();
+    return true;
+}
+
+bool EquationManager::RetryEquationNode(const std::string &equation_name)
+{
+    if (graph_->IsNodeExist(equation_name))
+    {
+        return false;   // already registered
+    }
+    Equation *equation = GetEquationInternal(equation_name);
+    if (!equation)
+    {
+        return false;
+    }
+
+    std::string error_message;
+    if (!TryRegisterNode(equation_name, equation->content, error_message))
+    {
+        // Still broken: keep the reason fresh (it may have changed, e.g. the
+        // cycle now runs through a different node).
+        if (equation->message != error_message)
+        {
+            equation->message = error_message;
+            signals_manager_->Emit<EquationEvent::kEquationUpdated>(
+                equation, EquationUpdateFlag::kMessage
+            );
+        }
+        return false;
+    }
+
+    graph_->InvalidateNode(equation_name);
+    equation->status = ResultStatus::kPending;
+    equation->message.clear();
+    signals_manager_->Emit<EquationEvent::kEquationUpdated>(
+        equation, EquationUpdateFlag::kStatus | EquationUpdateFlag::kMessage
+    );
+    return true;
+}
+
+bool EquationManager::RetryExpressionNode(const std::string &node_name) 
+{
+    if (graph_->IsNodeExist(node_name))
+    {
+        return false;   // already registered
+    }
+    auto expr_it = expression_map_.find(node_name);
+    if (expr_it == expression_map_.end())
+    {
+        return false;
+    }
+    Expression *expr = const_cast<Expression *>(&expr_it->second);
+
+    std::string error_message;
+    if (!TryRegisterNode(node_name, expr->content, error_message))
+    {
+        if (expr->result.message != error_message)
+        {
+            expr->result.message = error_message;
+            signals_manager_->Emit<EquationEvent::kExpressionUpdated>(
+                expr, ExpressionUpdateFlag::kMessage
+            );
+        }
+        return false;
+    }
+
+    graph_->InvalidateNode(node_name);
+    expr->result.status = ResultStatus::kPending;
+    expr->result.message.clear();
+    signals_manager_->Emit<EquationEvent::kExpressionUpdated>(
+        expr, ExpressionUpdateFlag::kStatus | ExpressionUpdateFlag::kMessage
+    );
+    return true;
+}
+
+std::size_t EquationManager::RetryUnregisteredNodes()
+{
+    // A detached object may depend on another detached object, so one pass is
+    // not enough: loop until a full pass registers nothing new.  The loop is
+    // bounded by the number of objects (each pass either registers at least
+    // one or makes no progress).
+    std::size_t total = 0;
+    bool progress = true;
+    while (progress)
+    {
+        progress = false;
+
+        // Snapshot the names: registering a node does not mutate these maps,
+        // but the signal handlers a host connected may (defensive copy).
+        std::vector<std::string> equation_names;
+        equation_names.reserve(equation_map_.size());
+        for (const auto &entry : equation_map_)
+        {
+            equation_names.push_back(entry.first);
+        }
+        for (const std::string &name : equation_names)
+        {
+            if (RetryEquationNode(name))
+            {
+                ++total;
+                progress = true;
+            }
+        }
+
+        std::vector<std::string> expression_names;
+        expression_names.reserve(expression_map_.size());
+        for (const auto &entry : expression_map_)
+        {
+            expression_names.push_back(entry.first);
+        }
+        for (const std::string &name : expression_names)
+        {
+            if (RetryExpressionNode(name))
+            {
+                ++total;
+                progress = true;
+            }
+        }
+    }
+    return total;
+}
+
 void EquationManager::Update()
 {
+    // Heal first: an object that was detached (syntax error / cycle) may have
+    // become valid since the last graph change.
+    RetryUnregisteredNodes();
     graph_->Traversal([&](const std::string &node_name) { UpdateNode(node_name); });
 }
 
@@ -858,6 +1182,16 @@ void EquationManager::UpdateEquation(const std::string &equation_name)
     }
 }
 
+void EquationManager::UpdateEquation(const ObjectId &id)
+{
+    const Equation *equation = GetEquationById(id);
+    if (!equation)
+    {
+        throw EquationException::EquationNotFound(id);
+    }
+    UpdateEquation(equation->name);
+}
+
 std::vector<std::string> EquationManager::GetEquationsToUpdate(const std::string &equation_name) const
 {
     if (!IsEquationExist(equation_name))
@@ -879,30 +1213,85 @@ ObjectId EquationManager::AddExpression(const std::string &expression, const std
     static boost::uuids::random_generator rgen;
 
     ParseResult parse_result = Parse(expression);
+    const bool parse_ok = (parse_result.status == ResultStatus::kSuccess);
 
     Expression expr;
     expr.id = rgen();
     const std::string name = "expr_" + boost::uuids::to_string(expr.id);
     expr.content = expression;
     expr.tag = tag;   // opaque; empty stays empty (UI chooses defaults)
-    // Register even on syntax errors: status/message are recorded on the
-    // expression, and Update recomputes (and keeps it dirty) on failure.
-    expr.result.status = parse_result.status;
-    expr.result.message = parse_result.message;
     expr.parse_symbols = parse_result.symbols;
 
     // The expression node + its dependency edges (dependencies may not have graph
     // nodes yet -- e.g. an equation defined by a later AddEquation; edges stay
-    // inactive until both endpoints exist).
-    AddNodeToGraph(name, expr.parse_symbols);
-    // Dirty the expression so it is computed on the next Update/UpdateExpression.
-    graph_->InvalidateNode(name);
+    // inactive until both endpoints exist).  On a syntax error / cycle the
+    // expression is created but stays out of the graph (kError + message); it
+    // re-registers automatically once it becomes valid.
+    std::string register_error;
+    const bool registered = parse_ok && TryRegisterNode(name, expression, register_error);
+    if (registered)
+    {
+        // Dirty the expression so it is computed on the next Update/UpdateExpression.
+        graph_->InvalidateNode(name);
+    }
+
+    expr.result.status = registered ? ResultStatus::kPending : ResultStatus::kError;
+    expr.result.message = registered ? std::string()
+                                     : (parse_ok ? register_error : parse_result.message);
 
     const ObjectId id = expr.id;
     expression_map_.insert({name, std::move(expr)});
     expression_id_to_name_map_.insert({id, name});
     const Expression *added = &expression_map_.at(name);
     signals_manager_->Emit<EquationEvent::kExpressionAdded>(added);
+
+    RetryUnregisteredNodes();
+    return id;
+}
+
+ObjectId EquationManager::EditExpression(const ObjectId &id, const std::string &expression)
+{
+    const auto it = expression_id_to_name_map_.find(id);
+    if (it == expression_id_to_name_map_.end())
+    {
+        throw EquationException::ExpressionNotFound(boost::uuids::to_string(id));
+    }
+    const std::string &name = it->second;
+    Expression *expr = &expression_map_.at(name);
+    if (expr->content == expression)
+    {
+        return id;
+    }
+
+    ParseResult parse_result = Parse(expression);
+    const bool parse_ok = (parse_result.status == ResultStatus::kSuccess);
+
+    // Drop the old node first (an edit must not leave the previous edges
+    // behind), then try to register the new content.  On a parse error / cycle
+    // the new content is kept and the expression stays detached (kError).
+    DetachNodeFromGraph(name);
+
+    std::string register_error;
+    const bool registered = parse_ok && TryRegisterNode(name, expression, register_error);
+    if (registered)
+    {
+        graph_->InvalidateNode(name);
+    }
+
+    expr = &expression_map_.at(name);   // re-lookup: the map may have rehashed
+    expr->content = expression;
+    expr->parse_symbols = parse_result.symbols;
+    expr->result.status = registered ? ResultStatus::kPending : ResultStatus::kError;
+    expr->result.message = registered ? std::string()
+                                      : (parse_ok ? register_error : parse_result.message);
+    expr->result.value = EquationValue();
+
+    signals_manager_->Emit<EquationEvent::kExpressionUpdated>(
+        expr, ExpressionUpdateFlag::kContent | ExpressionUpdateFlag::kStatus
+                 | ExpressionUpdateFlag::kMessage | ExpressionUpdateFlag::kValue
+    );
+
+    RetryUnregisteredNodes();
     return id;
 }
 
@@ -913,13 +1302,15 @@ void EquationManager::RemoveExpression(const ObjectId &id)
     {
         return;
     }
-    const std::string &name = it->second;
+    const std::string name = it->second;   // copy: erased below
     RemoveNodeInGraph(name);
     const Expression *removing = &expression_map_.at(name);
     signals_manager_->Emit<EquationEvent::kExpressionRemoving>(removing);
     expression_map_.erase(name);
     expression_id_to_name_map_.erase(it);
     signals_manager_->Emit<EquationEvent::kExpressionRemoved>(boost::uuids::to_string(id));
+
+    RetryUnregisteredNodes();
 }
 
 const Expression *EquationManager::GetExpression(const ObjectId &id) const
@@ -940,6 +1331,16 @@ const Expression *EquationManager::GetExpression(const ObjectId &id) const
 bool EquationManager::IsExpressionExist(const ObjectId &id) const
 {
     return expression_id_to_name_map_.count(id) != 0;
+}
+
+bool EquationManager::IsExpressionRegistered(const ObjectId &id) const
+{
+    const auto it = expression_id_to_name_map_.find(id);
+    if (it == expression_id_to_name_map_.end())
+    {
+        return false;
+    }
+    return graph_->IsNodeExist(it->second);
 }
 
 bool EquationManager::IsExpressionNode(const std::string &name) const

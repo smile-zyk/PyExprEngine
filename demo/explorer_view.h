@@ -3,6 +3,7 @@
 #include <QTreeView>
 
 #include <map>
+#include <set>
 #include <tuple>
 #include <vector>
 
@@ -86,12 +87,12 @@ class ExplorerView : public QTreeView
     /// Payload of an arbitrary item.
     static SelectionInfo ItemInfo(const QStandardItem *item);
 
-    /// Replace the entire tree selection with exactly the given equation
-    /// leaves (multi-select friendly; tag groups of selected leaves are
-    /// expanded).  Used when the equation LIST is the last-clicked panel: the
-    /// tree then mirrors only the list's equation selection, so any stale
+    /// Replace the entire tree selection with exactly the given equation /
+    /// expression leaves (matched by ObjectId; multi-select friendly; tag
+    /// groups of selected leaves are expanded).  Used when a host mirrors a
+    /// selection (e.g. the equation LIST) into the tree, so any stale
     /// dataset / data-array selection is dropped.
-    void SetEquationSelection(const std::vector<QString> &equation_names);
+    void SetObjectSelection(const std::vector<xequation::ObjectId> &object_ids);
 
     /// Returns (creating + registering on first use, then caching on the node)
     /// the hidden "DataArray access" expression id for a DataArray.  The
@@ -106,6 +107,18 @@ class ExplorerView : public QTreeView
     QStandardItem *AddGroupChild(QStandardItem *parent, NodeKind kind,
                                  const QString &text);
     void AddTaggedItems();
+    /// Build the QStandardItemModel + view config (called once from the ctor).
+    void SetupUI();
+    /// Connect the manager's equation/expression change signals to refresh the
+    /// tree, and wire the shared context menu (called once from the ctor).
+    void SetupConnections();
+
+    /// Collect the visual path of every currently-expanded node, so a rebuild
+    /// (Refresh) can restore the expand/collapse state.
+    std::set<QString> CollectExpandedKeys() const;
+    /// Re-apply a previously captured set of expanded paths onto the freshly
+    /// rebuilt model (nodes whose paths no longer exist are skipped).
+    void RestoreExpandedKeys(const std::set<QString> &keys);
     /// Find the DataArray node for (dataset, block path, data array), if shown.
     QStandardItem *FindDataArrayItem(const QString &dataset,
                                      const QString &block_path,

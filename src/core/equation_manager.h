@@ -72,6 +72,12 @@ class EquationManager
     /// True when an equation with this id exists.
     bool IsEquationExist(const ObjectId &id) const;
 
+    /// True when `name` is reserved by a REL builtin (constant or function).
+    /// Such a name can never be bound in the environment, so no equation may
+    /// be created / renamed to it.  Hosts can use this to reject the name in
+    /// their own input validation (before calling AddEquation / RenameEquation).
+    static bool IsReservedName(const std::string &name);
+
     /// Value currently bound to the equation's name in the env
     /// (null EquationValue when the equation has not (successfully)
     /// computed, or its name is not bound).
@@ -89,12 +95,34 @@ class EquationManager
     /// out.  Empty when the id is unknown.
     std::vector<std::string> GetDependents(const ObjectId &object_id) const;
 
+    /// True when the equation has a live node in the dependency graph.
+    /// An equation is always CREATED (and listed / persisted) even when its
+    /// content cannot be used -- a syntax error or a dependency cycle only
+    /// keeps it OUT of the graph (status kError + message).  Such an equation
+    /// is re-registered automatically as soon as the graph changes enough for
+    /// it to become valid (see RetryUnregisteredNodes()).
+    bool IsEquationRegistered(const std::string &equation_name) const;
+
+    /// True when the equation identified by id has a live graph node.
+    bool IsEquationRegistered(const ObjectId &id) const;
+
     /// Adds a single equation "name = expression".  Returns its id.
+    ///
+    /// The equation is always created.  When the expression does not parse, or
+    /// when registering it would create a dependency cycle, the equation is
+    /// created with status kError (message = the parse / cycle error) and is
+    /// NOT added to the dependency graph -- a broken node has no meaning there
+    /// and a cycle would break topological sorting for every other node.
+    /// Throws only for name problems (duplicate / invalid identifier).
     ObjectId AddEquation(const std::string &equation_name, const std::string &expression,
                          const std::string &tag = std::string());
 
     /// Replaces the content of an existing equation (name unchanged).
     /// Throws when the name is not found.
+    ///
+    /// On a parse error / cycle the new content is kept, the equation is
+    /// detached from the graph (its previous node is removed) and it is marked
+    /// kError; it re-registers automatically once it becomes valid.
     ObjectId EditEquation(const std::string &equation_name, const std::string &expression);
 
     /// Replaces the content of an existing equation (name unchanged).
@@ -108,6 +136,22 @@ class EquationManager
     /// Renames the equation identified by id (removes the old name, defines
     /// the new one). Throws when the id is not found or the new name exists.
     ObjectId RenameEquation(const ObjectId &id, const std::string &new_name);
+
+    /// Replaces the content of an existing equation AND renames it in one
+    /// operation (name + expression changed atomically).  Throws when the
+    /// name is not found or the new name already exists.  A parse error /
+    /// cycle keeps the new name + content and detaches the equation from the
+    /// graph (status kError).
+    ObjectId EditEquation(const std::string &equation_name, const std::string &new_name,
+                          const std::string &expression);
+
+    /// Replaces the content of an existing equation AND renames it in one
+    /// operation (name + expression changed atomically).  Throws when the
+    /// id is not found or the new name already exists.  A parse error / cycle
+    /// keeps the new name + content and detaches the equation from the graph
+    /// (status kError).
+    ObjectId EditEquation(const ObjectId &id, const std::string &new_name,
+                          const std::string &expression);
 
     /// Removes an equation by name.  No-op when it does not exist.
     void RemoveEquation(const std::string &equation_name);
@@ -131,9 +175,21 @@ class EquationManager
 
     void ResetContext();
 
+    /// Re-tries to register every equation / expression that is currently
+    /// detached from the graph (syntax error or dependency cycle).  Called
+    /// automatically after every graph-changing operation and at the start of
+    /// Update(), so an object heals as soon as the graph allows it (e.g. "B=A"
+    /// unregistered because "A=B" -- fixing A re-registers B).  Returns the
+    /// number of objects that (re-)joined the graph.
+    std::size_t RetryUnregisteredNodes();
+
     void Update();
 
     void UpdateEquation(const std::string &equation_name);
+
+    /// Recomputes a single equation (and its dependents, plus dirty nodes)
+    /// identified by id.  Throws when the id is not found.
+    void UpdateEquation(const ObjectId &id);
 
     // Recomputes a single graph node without propagating to dependents
     // (dispatches equations / expressions by node kind).
@@ -152,8 +208,19 @@ class EquationManager
     // =========================================================================
 
     // Registers an expression; returns its id.
+    //
+    // The expression is always created.  On a syntax error / cycle it is
+    // created with result.status kError (message = the error) and is NOT added
+    // to the dependency graph; it re-registers automatically once it becomes
+    // valid (see RetryUnregisteredNodes()).
     ObjectId AddExpression(const std::string &expression,
                            const std::string &tag = std::string());
+
+    // Replaces the content of a registered expression, keeping its id.
+    // Throws EquationException when the id is not found.  On a parse error /
+    // cycle the new content is kept, the expression is detached from the graph
+    // and marked kError (it re-registers automatically once valid).
+    ObjectId EditExpression(const ObjectId &id, const std::string &expression);
 
     // Removes a registered expression (and its graph node).
     void RemoveExpression(const ObjectId &id);
@@ -163,6 +230,10 @@ class EquationManager
 
     // Returns true when a registered expression with this id exists.
     bool IsExpressionExist(const ObjectId &id) const;
+
+    // True when the expression has a live node in the dependency graph.
+    // False when it exists but is currently detached (syntax error / cycle).
+    bool IsExpressionRegistered(const ObjectId &id) const;
 
     // Returns true when the given name is the internal graph-node slot of a
     // registered expression (i.e. "expr_<uuid>").  Hosts can use this to hide
@@ -257,6 +328,27 @@ class EquationManager
 
     void AddNodeToGraph(const std::string &node_name, const std::vector<std::string> &dependencies);
     void RemoveNodeInGraph(const std::string &node_name);
+
+    /// Detaches an object from the graph: removes its node (if any) and
+    /// re-dirties the dependents that lost their edge.  Used when an object
+    /// becomes invalid (parse error / cycle) so it never blocks topological
+    /// sorting.  `node_name` is the graph slot (equation name / "expr_<uuid>").
+    void DetachNodeFromGraph(const std::string &node_name);
+
+    /// Tries to (re-)register one object into the graph.  Returns false (and
+    /// fills `error_message`) when the content does not parse or when the
+    /// registration would create a cycle -- the graph is left untouched in
+    /// that case (AddNodeToGraph rolls back its own batch).
+    bool TryRegisterNode(const std::string &node_name, const std::string &content,
+                         std::string &error_message);
+
+    /// Shared tail of RetryUnregisteredNodes(): re-registers one equation
+    /// (by name) if it is currently detached.  Returns true when it joined.
+    bool RetryEquationNode(const std::string &equation_name);
+
+    /// Shared tail of RetryUnregisteredNodes(): re-registers one expression
+    /// (by graph slot) if it is currently detached.  Returns true when joined.
+    bool RetryExpressionNode(const std::string &node_name);
 
     // Appends every dirty node in the graph to update_names (may duplicate; the caller
     // deduplicates with TopologicalSort).

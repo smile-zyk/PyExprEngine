@@ -65,6 +65,13 @@ bool IsDeletableNodeKind(ExplorerView::NodeKind kind)
 ExplorerView::ExplorerView(EquationManager &manager, QWidget *parent)
     : QTreeView(parent), manager_(manager)
 {
+    SetupUI();
+    SetupConnections();
+    Refresh();
+}
+
+void ExplorerView::SetupUI()
+{
     model_ = new QStandardItemModel(this);
     setModel(model_);
     setHeaderHidden(true);
@@ -73,7 +80,10 @@ ExplorerView::ExplorerView(EquationManager &manager, QWidget *parent)
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setUniformRowHeights(true);
     setAnimated(true);
+}
 
+void ExplorerView::SetupConnections()
+{
     // Live refresh: equation/expression structure changes rebuild the tree.
     auto refresh = [this]() { Refresh(); };
     eq_added_conn_ = manager_.signals_manager().ConnectScoped<EquationEvent::kEquationAdded>(
@@ -145,8 +155,6 @@ ExplorerView::ExplorerView(EquationManager &manager, QWidget *parent)
     setContextMenuPolicy(Qt::CustomContextMenu);
     connect(this, &QWidget::customContextMenuRequested,
             this, &ExplorerView::OnShowContextMenu);
-
-    Refresh();
 }
 
 ExplorerView::~ExplorerView() = default;
@@ -184,20 +192,9 @@ void ExplorerView::Refresh()
     }
     refreshing_ = true;
 
-    // Preserve the expanded path of the datasets group across refreshes (only
-    // meaningful when a datasets group is currently present).
-    bool datasets_expanded = true;
-    {
-        QStandardItem *root = model_->invisibleRootItem();
-        if (root->hasChildren())
-        {
-            QStandardItem *first = root->child(0);
-            if (first && ItemInfo(first).kind == NodeKind::kGroupDatasets)
-            {
-                datasets_expanded = isExpanded(first->index());
-            }
-        }
-    }
+    // Capture the expand/collapse state so a rebuild can restore it (a full
+    // model reconstruction makes every old QStandardItem a fresh object).
+    const std::set<QString> expanded_keys = CollectExpandedKeys();
 
     // Rebuilding the model clears the selection; that is a programmatic reset
     // (manager change / env reload), NOT a user deselection -- suppress the
@@ -270,15 +267,119 @@ void ExplorerView::Refresh()
     // drop (unregister) entries whose array no longer exists in the env.
     CleanupDataArrayExpressions();
 
-    if (datasets_group)
+    // Restore the captured expand/collapse state.  The datasets group defaults
+    // to expanded only on a build where nothing was previously expanded (e.g.
+    // the very first load); otherwise the exact prior state is re-applied, so
+    // switching datasets keeps the tree as the user left it.
+    if (datasets_group && expanded_keys.empty())
     {
         expand(datasets_group->index());
-        if (!datasets_expanded)
+    }
+    RestoreExpandedKeys(expanded_keys);
+    refreshing_ = false;
+}
+
+std::set<QString> ExplorerView::CollectExpandedKeys() const
+{
+    std::set<QString> keys;
+
+    // Depth-first walk over the model; an item's key is the /-joined chain of
+    // {kind,text} from the root, so it survives a rebuild that recreates the
+    // same hierarchy.  text (the display string) uniquely identifies a node
+    // among its siblings (unique dataset / block / array / equation / tag).
+    struct Frame
+    {
+        const QStandardItem *item;
+        int child;
+    };
+    std::vector<Frame> stack;
+    stack.push_back({model_->invisibleRootItem(), 0});
+    while (!stack.empty())
+    {
+        Frame &frame = stack.back();
+        const QStandardItem *item = frame.item;
+        if (item != model_->invisibleRootItem())
         {
-            collapse(datasets_group->index());
+            const SelectionInfo info = ExplorerView::ItemInfo(item);
+            const QStandardItem *walk = item;
+            std::string path;
+            while (walk && walk != model_->invisibleRootItem())
+            {
+                const SelectionInfo wi = ExplorerView::ItemInfo(walk);
+                std::string seg =
+                    std::to_string(static_cast<int>(wi.kind)) + ":" +
+                    walk->text().toStdString();
+                path = path.empty() ? seg : seg + "/" + path;
+                walk = walk->parent();
+            }
+            if (isExpanded(item->index()))
+            {
+                keys.insert(QString::fromStdString(path));
+            }
+        }
+
+        if (frame.child < item->rowCount())
+        {
+            const QStandardItem *next = item->child(frame.child++);
+            stack.push_back({next, 0});
+        }
+        else
+        {
+            stack.pop_back();
         }
     }
-    refreshing_ = false;
+    return keys;
+}
+
+void ExplorerView::RestoreExpandedKeys(const std::set<QString> &keys)
+{
+    if (keys.empty())
+    {
+        return;
+    }
+    // Re-walk the rebuilt model; if an item's key is in the set, expand it.
+    // Nodes whose path no longer exists (removed dataset / block / renamed
+    // equation) are simply skipped.
+    struct Frame
+    {
+        QStandardItem *item;
+        int child;
+    };
+    std::vector<Frame> stack;
+    stack.push_back({model_->invisibleRootItem(), 0});
+    while (!stack.empty())
+    {
+        Frame &frame = stack.back();
+        QStandardItem *item = frame.item;
+        if (item != model_->invisibleRootItem())
+        {
+            const QStandardItem *walk = item;
+            std::string path;
+            while (walk && walk != model_->invisibleRootItem())
+            {
+                const SelectionInfo wi = ExplorerView::ItemInfo(walk);
+                std::string seg =
+                    std::to_string(static_cast<int>(wi.kind)) + ":" +
+                    walk->text().toStdString();
+                path = path.empty() ? seg : seg + "/" + path;
+                walk = walk->parent();
+            }
+            if (keys.count(QString::fromStdString(path)))
+            {
+                expand(item->index());
+            }
+        }
+
+        if (frame.child < item->rowCount())
+        {
+            QStandardItem *next = item->child(frame.child++);
+            stack.push_back({next, 0});
+        }
+        else
+        {
+            stack.pop_back();
+        }
+    }
 }
 
 void ExplorerView::AddTaggedItems()
@@ -438,11 +539,11 @@ ExplorerView::SelectionInfo ExplorerView::ItemInfo(const QStandardItem *item)
     return info;
 }
 
-void ExplorerView::SetEquationSelection(
-    const std::vector<QString> &equation_names)
-{    // Desired equation leaves (search the tag groups).
-    QItemSelection eq_selection;
-    QModelIndex first_equation;
+void ExplorerView::SetObjectSelection(
+    const std::vector<xequation::ObjectId> &object_ids)
+{    // Desired leaves (equations + expressions) searched in the tag groups.
+    QItemSelection obj_selection;
+    QModelIndex first_object;
     for (int row = 0; row < model_->rowCount(); ++row)
     {
         QStandardItem *item = model_->item(row);
@@ -457,13 +558,15 @@ void ExplorerView::SetEquationSelection(
             {
                 continue;
             }
-            if (ItemInfo(leaf).kind != NodeKind::kEquation)
+            const NodeKind kind = ItemInfo(leaf).kind;
+            if (kind != NodeKind::kEquation && kind != NodeKind::kExpression)
             {
                 continue;
             }
-            const QString leaf_name = leaf->data(kRoleName).toString();
-            const bool wanted = std::find(equation_names.begin(), equation_names.end(),
-                                          leaf_name) != equation_names.end();
+            const xequation::ObjectId leaf_id =
+                leaf->data(kRoleObjectId).value<xequation::ObjectId>();
+            const bool wanted = std::find(object_ids.begin(), object_ids.end(),
+                                          leaf_id) != object_ids.end();
             if (!wanted)
             {
                 continue;
@@ -474,21 +577,21 @@ void ExplorerView::SetEquationSelection(
                 expand(tag_item->index());
             }
             const QModelIndex idx = leaf->index();
-            eq_selection.select(idx, idx);
-            if (!first_equation.isValid())
+            obj_selection.select(idx, idx);
+            if (!first_object.isValid())
             {
-                first_equation = idx;
+                first_object = idx;
             }
         }
     }
 
-    // Replace the whole selection with the equation leaves.
-    selectionModel()->select(eq_selection, QItemSelectionModel::ClearAndSelect);
+    // Replace the whole selection with the matched leaves.
+    selectionModel()->select(obj_selection, QItemSelectionModel::ClearAndSelect);
 
-    if (first_equation.isValid())
+    if (first_object.isValid())
     {
-        setCurrentIndex(first_equation);
-        scrollTo(first_equation);
+        setCurrentIndex(first_object);
+        scrollTo(first_object);
     }
     else
     {

@@ -82,6 +82,62 @@ TEST_F(EquationManagerTest, EquationAddRemoveEditGet)
     EXPECT_TRUE(manager_.GetEquationIds().empty());
 }
 
+TEST_F(EquationManagerTest, EquationEditNameAndContent)
+{
+    // Combined edit: rename + change content atomically (same id).
+    ObjectId id_a = manager_.AddEquation("A", "1");
+    EXPECT_EQ(manager_.GetEquation("A")->content, "1");
+
+    ObjectId id_b = manager_.EditEquation(id_a, "B", "2");
+    EXPECT_EQ(id_b, id_a);  // identity preserved
+    EXPECT_FALSE(manager_.IsEquationExist("A"));
+    EXPECT_TRUE(manager_.IsEquationExist("B"));
+    EXPECT_EQ(manager_.GetEquation("B")->name, "B");
+    EXPECT_EQ(manager_.GetEquation("B")->content, "2");
+    EXPECT_EQ(manager_.GetEquation("B")->id, id_a);
+
+    // Same new name -> degenerate to a content-only edit.
+    manager_.EditEquation(id_a, "B", "3");
+    EXPECT_TRUE(manager_.IsEquationExist("B"));
+    EXPECT_EQ(manager_.GetEquation("B")->content, "3");
+
+    // Rename onto an existing name.
+    manager_.AddEquation("C", "9");
+    try
+    {
+        manager_.EditEquation(id_a, "C", "4");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationAlreadyExists);
+        EXPECT_EQ(e.equation_name(), "C");
+    }
+
+    // Invalid new name.
+    try
+    {
+        manager_.EditEquation(id_a, "1x", "4");
+        FAIL();
+    }
+    catch (const ParseException &)
+    {
+    }
+
+    // Missing equation (by id).
+    const ObjectId missing_id = boost::uuids::random_generator()();
+    try
+    {
+        manager_.EditEquation(missing_id, "Z", "4");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationNotFound);
+        EXPECT_EQ(e.id(), missing_id);
+    }
+}
+
 TEST_F(EquationManagerTest, EquationTagDefaultsAndCustom)
 {
     // No tag supplied -> empty tag (identity defaults are a UI concern).
@@ -556,4 +612,318 @@ TEST_F(EquationManagerTest, ExternalInputPropagatesToExpressions)
     manager_.InvalidateExternalInputs({"c"});
     EXPECT_EQ(GetInt(manager_, "x"), 5);
     EXPECT_EQ(AsScalar<int>(manager_.GetExpressionValue(expr_id)), 10);
+}
+
+// ============================================================================
+// Broken objects: created, but NOT registered on the dependency graph
+// ============================================================================
+
+TEST_F(EquationManagerTest, AddEquationWithSyntaxErrorIsCreatedButNotRegistered)
+{
+    // A syntax error no longer throws: the equation is created (so the user
+    // keeps what they typed) but stays out of the graph.
+    const ObjectId id = manager_.AddEquation("A", "1 +");
+
+    EXPECT_TRUE(manager_.IsEquationExist("A"));
+    EXPECT_EQ(manager_.GetEquation("A")->content, "1 +");
+    EXPECT_EQ(manager_.GetEquation("A")->status, ResultStatus::kError);
+    EXPECT_FALSE(manager_.GetEquation("A")->message.empty());
+
+    EXPECT_FALSE(manager_.IsEquationRegistered("A"));
+    EXPECT_FALSE(manager_.IsEquationRegistered(id));
+    EXPECT_EQ(manager_.graph().GetNode("A"), nullptr);
+
+    // The graph stays sortable (a broken node would break topological order).
+    manager_.Update();
+    EXPECT_FALSE(manager_.HasVariable("A"));
+}
+
+TEST_F(EquationManagerTest, AddEquationWithCycleIsCreatedButNotRegistered)
+{
+    manager_.AddEquation("A", "B");
+    // "B = A" closes a cycle: B is created but not put on the graph, so A
+    // (and everything else) stays topologically sortable.
+    const ObjectId id_b = manager_.AddEquation("B", "A");
+
+    EXPECT_TRUE(manager_.IsEquationExist("B"));
+    EXPECT_EQ(manager_.GetEquation("B")->content, "A");
+    EXPECT_EQ(manager_.GetEquation("B")->status, ResultStatus::kError);
+    EXPECT_FALSE(manager_.IsEquationRegistered(id_b));
+
+    // A is untouched and still registered.
+    EXPECT_TRUE(manager_.IsEquationRegistered("A"));
+    EXPECT_FALSE(manager_.graph().TopologicalSort().empty());
+
+    manager_.Update();
+    EXPECT_EQ(manager_.GetEquation("A")->status, ResultStatus::kError);  // B unbound
+    EXPECT_EQ(manager_.GetEquation("B")->status, ResultStatus::kError);
+}
+
+TEST_F(EquationManagerTest, EditEquationToCycleDetachesAndHeals)
+{
+    manager_.AddEquation("A", "1");
+    const ObjectId id_b = manager_.AddEquation("B", "A");
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "B"), 1);
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_b));
+
+    // "A = B" would close the cycle -> A keeps the new content but is detached.
+    manager_.EditEquation(manager_.GetEquation("A")->id, "B");
+    EXPECT_EQ(manager_.GetEquation("A")->content, "B");
+    EXPECT_EQ(manager_.GetEquation("A")->status, ResultStatus::kError);
+    EXPECT_FALSE(manager_.IsEquationRegistered("A"));
+    // B is still registered (it was never the problem).
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_b));
+
+    // Heal: editing A back to a literal re-registers it automatically.
+    manager_.EditEquation(manager_.GetEquation("A")->id, "7");
+    EXPECT_TRUE(manager_.IsEquationRegistered("A"));
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "A"), 7);
+    EXPECT_EQ(GetInt(manager_, "B"), 7);
+}
+
+TEST_F(EquationManagerTest, EditEquationToSyntaxErrorDetachesPreviousNode)
+{
+    manager_.AddEquation("A", "1");
+    manager_.AddEquation("B", "A");
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "B"), 1);
+
+    // Editing B to garbage must remove B's OLD graph node (not keep it).
+    manager_.EditEquation(manager_.GetEquation("B")->id, "A +");
+    EXPECT_EQ(manager_.GetEquation("B")->content, "A +");
+    EXPECT_EQ(manager_.GetEquation("B")->status, ResultStatus::kError);
+    EXPECT_FALSE(manager_.IsEquationRegistered("B"));
+    EXPECT_FALSE(manager_.HasVariable("B"));
+
+    // Fixing it re-registers B and it computes again.
+    manager_.EditEquation(manager_.GetEquation("B")->id, "A * 3");
+    EXPECT_TRUE(manager_.IsEquationRegistered("B"));
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "B"), 3);
+}
+
+TEST_F(EquationManagerTest, DetachedEquationHealsWhenDependencyAppears)
+{
+    // "B = A" with A missing: B is created but detached (A is not a node yet,
+    // so this is not a cycle -- it registers fine).  Use a real cycle instead:
+    manager_.AddEquation("A", "B");
+    const ObjectId id_b = manager_.AddEquation("B", "A");
+    EXPECT_FALSE(manager_.IsEquationRegistered(id_b));
+
+    // Breaking the cycle from the other side heals B automatically.
+    manager_.EditEquation(manager_.GetEquation("A")->id, "5");
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_b));
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "A"), 5);
+    EXPECT_EQ(GetInt(manager_, "B"), 5);
+}
+
+TEST_F(EquationManagerTest, DetachedEquationHealsOnRemoveAndOnUpdate)
+{
+    manager_.AddEquation("A", "B");
+    const ObjectId id_b = manager_.AddEquation("B", "A");
+    EXPECT_FALSE(manager_.IsEquationRegistered(id_b));
+
+    // Removing A breaks the cycle -> B heals.
+    manager_.RemoveEquation("A");
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_b));
+
+    // Re-create the cycle: now A is the one that cannot join.
+    const ObjectId id_a = manager_.AddEquation("A", "B");
+    EXPECT_FALSE(manager_.IsEquationRegistered(id_a));
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_b));
+
+    // Heal A -> both are on the graph again.
+    manager_.EditEquation(id_a, "2");
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_a));
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "A"), 2);
+    EXPECT_EQ(GetInt(manager_, "B"), 2);
+}
+
+TEST_F(EquationManagerTest, RenameKeepsDetachedEquationDetached)
+{
+    manager_.AddEquation("A", "1");
+    const ObjectId id_b = manager_.AddEquation("B", "A");
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "B"), 1);
+
+    // Break B with a syntax error: it keeps the content but is detached.
+    manager_.EditEquation(id_b, "A +");
+    EXPECT_FALSE(manager_.IsEquationRegistered(id_b));
+
+    // Renaming a detached equation works and keeps it detached (the content
+    // is unchanged, so it is still broken).
+    manager_.RenameEquation(id_b, "C");
+    EXPECT_TRUE(manager_.IsEquationExist("C"));
+    EXPECT_FALSE(manager_.IsEquationExist("B"));
+    EXPECT_EQ(manager_.GetEquation("C")->id, id_b);   // same identity
+    EXPECT_FALSE(manager_.IsEquationRegistered("C"));
+
+    // Heal: C becomes valid -> registered again.
+    manager_.EditEquation(manager_.GetEquation("C")->id, "9");
+    EXPECT_TRUE(manager_.IsEquationRegistered("C"));
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "C"), 9);
+}
+
+TEST_F(EquationManagerTest, RenameBreakingACycleHealsTheOtherSide)
+{
+    // A = B, B = A: B cannot join the graph (cycle).
+    manager_.AddEquation("A", "B");
+    const ObjectId id_b = manager_.AddEquation("B", "A");
+    EXPECT_FALSE(manager_.IsEquationRegistered(id_b));
+
+    // Renaming A drops the "A" name out of B's content's reach, so the cycle
+    // is gone and B heals automatically.
+    manager_.RenameEquation(manager_.GetEquation("A")->id, "C");
+    EXPECT_TRUE(manager_.IsEquationRegistered(id_b));
+}
+
+TEST_F(EquationManagerTest, AddExpressionWithSyntaxErrorIsCreatedButNotRegistered)
+{
+    const ObjectId id = manager_.AddExpression("1 +");
+
+    EXPECT_TRUE(manager_.IsExpressionExist(id));
+    EXPECT_EQ(manager_.GetExpression(id)->content, "1 +");
+    EXPECT_EQ(manager_.GetExpression(id)->result.status, ResultStatus::kError);
+    EXPECT_FALSE(manager_.GetExpression(id)->result.message.empty());
+    EXPECT_FALSE(manager_.IsExpressionRegistered(id));
+
+    // The graph stays empty / sortable.
+    EXPECT_TRUE(manager_.graph().TopologicalSort().empty());
+}
+
+TEST_F(EquationManagerTest, EditExpressionKeepsIdAndDetachesOnError)
+{
+    manager_.AddEquation("A", "1");
+    manager_.Update();
+
+    const ObjectId id = manager_.AddExpression("A + 1");
+    manager_.UpdateExpression(id);
+    EXPECT_EQ(AsScalar<int>(manager_.GetExpressionValue(id)), 2);
+    EXPECT_TRUE(manager_.IsExpressionRegistered(id));
+
+    // Edit in place: same id, new content.
+    manager_.EditExpression(id, "A * 10");
+    EXPECT_TRUE(manager_.IsExpressionExist(id));
+    EXPECT_EQ(manager_.GetExpression(id)->content, "A * 10");
+    manager_.UpdateExpression(id);
+    EXPECT_EQ(AsScalar<int>(manager_.GetExpressionValue(id)), 10);
+
+    // Edit to garbage: id and content are kept, the node is detached.
+    manager_.EditExpression(id, "A *");
+    EXPECT_TRUE(manager_.IsExpressionExist(id));
+    EXPECT_EQ(manager_.GetExpression(id)->content, "A *");
+    EXPECT_EQ(manager_.GetExpression(id)->result.status, ResultStatus::kError);
+    EXPECT_FALSE(manager_.IsExpressionRegistered(id));
+
+    // Fixing it re-registers the expression (same id).
+    manager_.EditExpression(id, "A * 3");
+    EXPECT_TRUE(manager_.IsExpressionRegistered(id));
+    manager_.UpdateExpression(id);
+    EXPECT_EQ(AsScalar<int>(manager_.GetExpressionValue(id)), 3);
+}
+
+TEST_F(EquationManagerTest, EditExpressionUnknownIdThrows)
+{
+    const ObjectId bogus = boost::uuids::random_generator()();
+    EXPECT_THROW(manager_.EditExpression(bogus, "1"), EquationException);
+}
+
+TEST_F(EquationManagerTest, ReservedBuiltinNameIsRejected)
+{
+    // A REL builtin constant / function can never be bound in the environment
+    // (Environment::Define() throws), so the equation must be rejected up
+    // front -- not created and then fail on every Update().
+    EXPECT_TRUE(EquationManager::IsReservedName("pi"));
+    EXPECT_TRUE(EquationManager::IsReservedName("PI"));
+    EXPECT_TRUE(EquationManager::IsReservedName("e"));
+    EXPECT_TRUE(EquationManager::IsReservedName("sin"));
+    EXPECT_FALSE(EquationManager::IsReservedName("my_pi"));
+    EXPECT_FALSE(EquationManager::IsReservedName("x"));
+
+    try
+    {
+        manager_.AddEquation("pi", "3");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationNameReserved);
+        EXPECT_EQ(e.equation_name(), "pi");
+    }
+    // Nothing was created, so nothing shows up anywhere.
+    EXPECT_FALSE(manager_.IsEquationExist("pi"));
+    EXPECT_TRUE(manager_.GetEquationNames().empty());
+    EXPECT_TRUE(manager_.graph().TopologicalSort().empty());
+
+    // A function name is reserved too.
+    try
+    {
+        manager_.AddEquation("sin", "1");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationNameReserved);
+    }
+    EXPECT_FALSE(manager_.IsEquationExist("sin"));
+}
+
+TEST_F(EquationManagerTest, RenameToReservedBuiltinNameIsRejected)
+{
+    const ObjectId id = manager_.AddEquation("A", "1");
+    manager_.Update();
+    EXPECT_EQ(GetInt(manager_, "A"), 1);
+
+    try
+    {
+        manager_.RenameEquation(id, "pi");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationNameReserved);
+    }
+    // The rename was rejected as a whole: A is untouched and still bound.
+    EXPECT_TRUE(manager_.IsEquationExist("A"));
+    EXPECT_FALSE(manager_.IsEquationExist("pi"));
+    EXPECT_EQ(manager_.GetEquation("A")->id, id);
+    EXPECT_TRUE(manager_.IsEquationRegistered("A"));
+    EXPECT_EQ(GetInt(manager_, "A"), 1);
+
+    // Same for the combined edit (name + content).
+    try
+    {
+        manager_.EditEquation(id, "e", "2");
+        FAIL();
+    }
+    catch (const EquationException &e)
+    {
+        EXPECT_EQ(e.error_code(), EquationException::ErrorCode::kEquationNameReserved);
+    }
+    EXPECT_TRUE(manager_.IsEquationExist("A"));
+    EXPECT_EQ(manager_.GetEquation("A")->content, "1");
+}
+
+TEST_F(EquationManagerTest, DetachedObjectsArePersisted)
+{
+    // A broken equation is still part of the project state (so the user does
+    // not lose it on save/reload).
+    manager_.AddEquation("A", "1 +");
+    manager_.AddExpression("2 *");
+
+    const std::string path = "detached_state_test.json";
+    manager_.SaveToFile(path);
+    manager_.Reset();
+    manager_.LoadFromFile(path);
+    std::remove(path.c_str());
+
+    EXPECT_TRUE(manager_.IsEquationExist("A"));
+    EXPECT_EQ(manager_.GetEquation("A")->content, "1 +");
+    EXPECT_FALSE(manager_.IsEquationRegistered("A"));
+    EXPECT_EQ(manager_.GetExpressionIds().size(), 1u);
 }

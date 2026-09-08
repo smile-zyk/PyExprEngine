@@ -128,6 +128,14 @@ class DataFrameTabWidget : public QTabWidget
                              bitmask::bitmask<xequation::ExpressionUpdateFlag> flags);
 
   private:
+    /// Build the tab widget chrome + shared context menu (called once from
+    /// the ctor).
+    void SetupUI();
+    /// Connect the manager's equation/expression change signals to the On*
+    /// slots (called once from the ctor) so this widget keeps itself in sync
+    /// without external wiring.
+    void SetupConnections();
+
     /// What an ObjectId in a tab refers to.
     enum class ObjectKind
     {
@@ -135,7 +143,6 @@ class DataFrameTabWidget : public QTabWidget
         kExpression,
         kBlock,   // tab shows a Block's DataFrame (no ObjectId)
     };
-
     /// A tab's identity + source descriptor.
     struct TabData
     {
@@ -224,6 +231,13 @@ class DataFrameTabWidget : public QTabWidget
     /// ObjectId, so its tabs are NOT in object_to_index_.  Maps to a tab index
     /// in tabs_.
     std::map<std::pair<QString, QString>, int> block_to_index_;
+
+    /// Manager signal subscriptions so the tabs refresh / close themselves
+    /// when objects change (auto-disconnected on destruction).
+    xequation::ScopedConnection equation_removing_conn_;
+    xequation::ScopedConnection equation_updated_conn_;
+    xequation::ScopedConnection expression_removing_conn_;
+    xequation::ScopedConnection expression_updated_conn_;
 };
 
 } // namespace gui

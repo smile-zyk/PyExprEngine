@@ -18,7 +18,6 @@
 #include "block.h"       // xdataset::Block
 #include "environment.h" // rel::Environment (dataset registry)
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -34,7 +33,13 @@ PropertyWidget::PropertyWidget(const EquationManager &manager,
     : QWidget(parent), manager_(manager)
 {
     setWindowTitle("Properties");
+    SetupUI();
+    SetupConnections();
+    SetObject(ObjectId());
+}
 
+void PropertyWidget::SetupUI()
+{
     // ---- title label: object name (Equation name / "Expression") ---------
     name_label_ = new QLabel(this);
     // Compact subtitle-like title: smaller than the default body font.
@@ -61,9 +66,28 @@ PropertyWidget::PropertyWidget(const EquationManager &manager,
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(name_label_);
     layout->addWidget(tree_, 1);
+}
 
-    // Initially empty (no selected object); filled by SetObject.
-    SetObject(ObjectId());
+void PropertyWidget::SetupConnections()
+{
+    const EquationSignalsManager &sig = manager_.signals_manager();
+
+    equation_removing_conn_ =
+        sig.ConnectScoped<EquationEvent::kEquationRemoving>(
+            [this](const Equation *eq) { OnEquationRemoving(eq); });
+    equation_updated_conn_ =
+        sig.ConnectScoped<EquationEvent::kEquationUpdated>(
+            [this](const Equation *eq, bitmask::bitmask<EquationUpdateFlag> flags) {
+                OnEquationUpdated(eq, flags);
+            });
+    expression_updated_conn_ =
+        sig.ConnectScoped<EquationEvent::kExpressionUpdated>(
+            [this](const Expression *expr, bitmask::bitmask<ExpressionUpdateFlag> flags) {
+                OnExpressionUpdated(expr, flags);
+            });
+    expression_removing_conn_ =
+        sig.ConnectScoped<EquationEvent::kExpressionRemoving>(
+            [this](const Expression *expr) { OnExpressionRemoving(expr); });
 }
 
 PropertyWidget::~PropertyWidget() = default;
