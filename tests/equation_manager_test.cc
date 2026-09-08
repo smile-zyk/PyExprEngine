@@ -833,6 +833,53 @@ TEST_F(EquationManagerTest, EditExpressionUnknownIdThrows)
     EXPECT_THROW(manager_.EditExpression(bogus, "1"), EquationException);
 }
 
+TEST_F(EquationManagerTest, IsValidEquationIdentifier)
+{
+    // Identifier syntax: letter / underscore first, then alphanumeric / underscore.
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("x"));
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("A"));
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("_x"));
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("x1"));
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("x_1"));
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("snr_out"));
+
+    // Does not start with a letter / underscore.
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("1x"));
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("1"));
+
+    // Contains characters outside [A-Za-z0-9_].
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("a b"));
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("a-b"));
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("a.b"));
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("a+b"));
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier(""));
+
+    // REL builtin (constant / function) names are not usable.
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("pi"));
+    EXPECT_FALSE(EquationManager::IsValidEquationIdentifier("sin"));
+}
+
+TEST_F(EquationManagerTest, IsValidEquationName)
+{
+    // Available: valid identifier, not reserved, not taken.
+    EXPECT_TRUE(manager_.IsValidEquationName("x"));
+    EXPECT_TRUE(manager_.IsValidEquationName("_x"));
+
+    // Invalid identifier / reserved name.
+    EXPECT_FALSE(manager_.IsValidEquationName("1x"));
+    EXPECT_FALSE(manager_.IsValidEquationName("a b"));
+    EXPECT_FALSE(manager_.IsValidEquationName("pi"));
+
+    // Taken by an existing equation.
+    manager_.AddEquation("A", "1");
+    EXPECT_FALSE(manager_.IsValidEquationName("A"));
+    EXPECT_TRUE(manager_.IsValidEquationName("B"));
+
+    // The identifier remains valid even when the name is taken -- the
+    // two checks are independent.
+    EXPECT_TRUE(EquationManager::IsValidEquationIdentifier("A"));
+}
+
 TEST_F(EquationManagerTest, ReservedBuiltinNameIsRejected)
 {
     // A REL builtin constant / function can never be bound in the environment

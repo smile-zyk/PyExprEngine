@@ -78,6 +78,20 @@ class EquationManager
     /// their own input validation (before calling AddEquation / RenameEquation).
     static bool IsReservedName(const std::string &name);
 
+    /// True when `name` satisfies the equation-name identifier rules AND is
+    /// not reserved by a REL builtin -- i.e. it could be used as the name of
+    /// a new / renamed equation, ignoring whether that name is already taken.
+    /// This is a pure static check (no manager state is consulted): hosts can
+    /// call it anywhere, e.g. to validate an input field on every keystroke.
+    static bool IsValidEquationIdentifier(const std::string &name);
+
+    /// True when `name` is a fully usable equation name: a valid identifier,
+    /// not reserved by a REL builtin, AND not already used by an existing
+    /// equation.  This is the all-in-one pre-check for AddEquation /
+    /// RenameEquation / EditEquation: false when the name is invalid
+    /// (identifier / reserved) or taken (duplicate).
+    bool IsValidEquationName(const std::string &name) const;
+
     /// Value currently bound to the equation's name in the env
     /// (null EquationValue when the equation has not (successfully)
     /// computed, or its name is not bound).

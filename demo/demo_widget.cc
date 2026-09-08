@@ -332,24 +332,35 @@ void DemoWidget::OnInsertEquation()
 
     EquationManager &mgr = EquationManager::GetInstance();
 
-    if (mgr.IsEquationExist(name_std))
+    // 全面预检：identifier 语法 + REL 保留名 + 重名。名字通过后
+    // AddEquation 不会因名字问题抛异常（parse / cycle 仍会创建方程并以
+    // 红色错误状态显示，由用户就地修复）。
+    if (!mgr.IsValidEquationName(name_std))
     {
+        if (mgr.IsEquationExist(name_std))
+        {
+            QMessageBox::warning(
+                this, "Duplicate Equation",
+                "An equation with this name already exists: " + name
+            );
+            return;
+        }
+        // A REL builtin (constant like "pi", function like "sin") can never
+        // be bound in the environment -- reject it here with a clear message
+        // instead of creating an equation that fails on every Update().
+        if (EquationManager::IsReservedName(name_std))
+        {
+            QMessageBox::warning(
+                this, "Reserved Name",
+                "'" + name + "' is a REL builtin (constant or function) and "
+                "cannot be used as an equation name."
+            );
+            return;
+        }
         QMessageBox::warning(
-            this, "Duplicate Equation",
-            "An equation with this name already exists: " + name
-        );
-        return;
-    }
-
-    // A REL builtin (constant like "pi", function like "sin") can never be
-    // bound in the environment -- reject it here with a clear message instead
-    // of creating an equation that fails on every Update().
-    if (EquationManager::IsReservedName(name_std))
-    {
-        QMessageBox::warning(
-            this, "Reserved Name",
-            "'" + name + "' is a REL builtin (constant or function) and "
-            "cannot be used as an equation name."
+            this, "Invalid Name",
+            "Name must be a valid identifier:\n"
+            "letters / digits / underscore, not starting with a digit."
         );
         return;
     }
@@ -486,22 +497,35 @@ void DemoWidget::OnRenameEquation()
 
     EquationManager &mgr = EquationManager::GetInstance();
 
-    if (mgr.IsEquationExist(trimmed_new.toStdString()))
+    // 全面预检：identifier 语法 + REL 保留名 + 重名（名字未变的情形已在
+    // 上面提前 return，不会误报重名）。RenameEquation 随后不会因名字问题
+    // 抛异常。
+    if (!mgr.IsValidEquationName(trimmed_new.toStdString()))
     {
+        if (mgr.IsEquationExist(trimmed_new.toStdString()))
+        {
+            QMessageBox::warning(
+                this, "Duplicate Equation",
+                "An equation with this name already exists: " + trimmed_new
+            );
+            return;
+        }
+        // Same reserved-name guard as Insert: a builtin name can never be
+        // bound.
+        if (EquationManager::IsReservedName(trimmed_new.toStdString()))
+        {
+            QMessageBox::warning(
+                this, "Reserved Name",
+                "'" + trimmed_new + "' is a REL builtin (constant or function) and "
+                "cannot be used as an equation name."
+            );
+            return;
+        }
+        // 兜底（前面对 IsValidIdentifier 的检查已覆盖大部分情形）。
         QMessageBox::warning(
-            this, "Duplicate Equation",
-            "An equation with this name already exists: " + trimmed_new
-        );
-        return;
-    }
-
-    // Same reserved-name guard as Insert: a builtin name can never be bound.
-    if (EquationManager::IsReservedName(trimmed_new.toStdString()))
-    {
-        QMessageBox::warning(
-            this, "Reserved Name",
-            "'" + trimmed_new + "' is a REL builtin (constant or function) and "
-            "cannot be used as an equation name."
+            this, "Invalid Name",
+            "Name must be a valid identifier:\n"
+            "letters / digits / underscore, not starting with a digit."
         );
         return;
     }

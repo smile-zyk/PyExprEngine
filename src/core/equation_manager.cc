@@ -209,6 +209,23 @@ bool IsReservedName(const std::string &name)
            rel::Environment::HasFunction(name);
 }
 
+// Identifier syntax for equation names: letter / underscore first, then
+// letters / digits / underscores.  Shared by every CRUD entry point and by the
+// public IsValidEquationIdentifier() pre-check.
+const std::regex &EquationNameRegex()
+{
+    static const std::regex name_regex("^[A-Za-z_][A-Za-z0-9_]*$");
+    return name_regex;
+}
+
+// True when `name` satisfies the equation-name identifier rules and is not a
+// REL builtin.  This is the single source of truth for "could this name be
+// used for a new / renamed equation".
+bool IsValidEquationIdentifier(const std::string &name)
+{
+    return std::regex_match(name, EquationNameRegex()) && !IsReservedName(name);
+}
+
 // Deduplicate preserving order.
 std::vector<std::string> Dedupe(const std::vector<std::string> &deps)
 {
@@ -388,6 +405,16 @@ bool EquationManager::IsReservedName(const std::string &name)
     return ::xequation::IsReservedName(name);
 }
 
+bool EquationManager::IsValidEquationIdentifier(const std::string &name)
+{
+    return ::xequation::IsValidEquationIdentifier(name);
+}
+
+bool EquationManager::IsValidEquationName(const std::string &name) const
+{
+    return IsValidEquationIdentifier(name) && !IsEquationExist(name);
+}
+
 const Equation *EquationManager::GetEquation(const std::string &equation_name) const
 {
     const auto it = equation_map_.find(equation_name);
@@ -462,19 +489,17 @@ ObjectId EquationManager::AddEquation(const std::string &equation_name, const st
         throw EquationException::EquationAlreadyExists(equation_name);
     }
 
-    static const std::regex name_regex("^[A-Za-z_][A-Za-z0-9_]*$");
-    if (!std::regex_match(equation_name, name_regex))
+    // Identifier syntax + REL builtin (constant like "pi", or a function like
+    // "sin") can never be bound in the environment -- Environment::Define()
+    // rejects it.  Reject the name here instead of creating an equation that
+    // fails on every Update() (and would still show up in the UI).
+    if (!IsValidEquationIdentifier(equation_name))
     {
+        if (IsReservedName(equation_name))
+        {
+            throw EquationException::EquationNameReserved(equation_name);
+        }
         throw ParseException("Invalid equation name: " + equation_name);
-    }
-
-    // A REL builtin (constant like "pi", or a function like "sin") can never
-    // be bound in the environment -- Environment::Define() rejects it.  Reject
-    // the name here instead of creating an equation that fails on every
-    // Update() (and would still show up in the UI).
-    if (IsReservedName(equation_name))
-    {
-        throw EquationException::EquationNameReserved(equation_name);
     }
 
     // An equation is "name -> expression": parse the expression (which is the
@@ -646,16 +671,15 @@ ObjectId EquationManager::RenameEquation(const ObjectId &id, const std::string &
         throw EquationException::EquationAlreadyExists(new_name);
     }
 
-    static const std::regex name_regex("^[A-Za-z_][A-Za-z0-9_]*$");
-    if (!std::regex_match(new_name, name_regex))
+    // A builtin name can never be bound: reject the rename up front.  An
+    // invalid identifier is rejected the same way as AddEquation.
+    if (!IsValidEquationIdentifier(new_name))
     {
+        if (IsReservedName(new_name))
+        {
+            throw EquationException::EquationNameReserved(new_name);
+        }
         throw ParseException("Invalid equation name: " + new_name);
-    }
-
-    // A builtin name can never be bound: reject the rename up front.
-    if (IsReservedName(new_name))
-    {
-        throw EquationException::EquationNameReserved(new_name);
     }
 
     // The content (expression) is unchanged by a rename: re-parse it only to
@@ -738,16 +762,15 @@ ObjectId EquationManager::EditEquation(const ObjectId &id, const std::string &ne
         throw EquationException::EquationAlreadyExists(new_name);
     }
 
-    static const std::regex name_regex("^[A-Za-z_][A-Za-z0-9_]*$");
-    if (!std::regex_match(new_name, name_regex))
+    // A builtin name can never be bound: reject it up front.  An invalid
+    // identifier is rejected the same way as AddEquation.
+    if (!IsValidEquationIdentifier(new_name))
     {
+        if (IsReservedName(new_name))
+        {
+            throw EquationException::EquationNameReserved(new_name);
+        }
         throw ParseException("Invalid equation name: " + new_name);
-    }
-
-    // A builtin name can never be bound: reject it up front.
-    if (IsReservedName(new_name))
-    {
-        throw EquationException::EquationNameReserved(new_name);
     }
 
     // Re-parse the new expression: syntax + dependency extraction.  The graph
