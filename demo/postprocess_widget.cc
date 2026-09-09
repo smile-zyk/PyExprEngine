@@ -1,4 +1,4 @@
-﻿#include "demo_widget.h"
+#include "postprocess_widget.h"
 
 #include "explorer_view.h"
 #include "data_frame_tab_widget.h"
@@ -8,13 +8,18 @@
 #include "core/equation_manager.h"
 
 #include "environment.h"   // rel::Environment / rel::EnvironmentConfig
+#include "dataset.h"       // xdataset::Dataset
+#include "dataset_io.h"    // xdataset::DatasetIO::Load
 
+#include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QInputDialog>
 #include <QItemSelectionModel>
 #include <QLabel>
@@ -30,6 +35,8 @@
 #include <boost/uuid/string_generator.hpp>
 
 #include <algorithm>
+#include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -76,7 +83,7 @@ QString SampleProjectPath()
 }
 } // namespace
 
-DemoWidget::DemoWidget(QWidget *parent) : QWidget(parent)
+PostprocessWidget::PostprocessWidget(QWidget *parent) : QWidget(parent)
 {
     SetupUI();
     SetupConnections();
@@ -84,9 +91,9 @@ DemoWidget::DemoWidget(QWidget *parent) : QWidget(parent)
     RefreshEquationList();
 }
 
-DemoWidget::~DemoWidget() = default;
+PostprocessWidget::~PostprocessWidget() = default;
 
-void DemoWidget::SetupUI()
+void PostprocessWidget::SetupUI()
 {
     setWindowTitle("XEquation Demo");
     setMinimumSize(900, 600);
@@ -186,29 +193,29 @@ void DemoWidget::SetupUI()
     setLayout(main_layout);
 }
 
-void DemoWidget::SetupConnections()
+void PostprocessWidget::SetupConnections()
 {
-    connect(insert_button_, &QPushButton::clicked, this, &DemoWidget::OnInsertEquation);
+    connect(insert_button_, &QPushButton::clicked, this, &PostprocessWidget::OnInsertEquation);
     connect(
-        statement_edit_, &QLineEdit::returnPressed, this, &DemoWidget::OnInsertEquation
+        statement_edit_, &QLineEdit::returnPressed, this, &PostprocessWidget::OnInsertEquation
     );
-    connect(redefine_button_, &QPushButton::clicked, this, &DemoWidget::OnRedefineEquation);
-    connect(rename_button_, &QPushButton::clicked, this, &DemoWidget::OnRenameEquation);
-    connect(delete_button_, &QPushButton::clicked, this, &DemoWidget::OnDeleteEquation);
-    connect(watch_button_, &QPushButton::clicked, this, &DemoWidget::OnAddWatchExpression);
+    connect(redefine_button_, &QPushButton::clicked, this, &PostprocessWidget::OnRedefineEquation);
+    connect(rename_button_, &QPushButton::clicked, this, &PostprocessWidget::OnRenameEquation);
+    connect(delete_button_, &QPushButton::clicked, this, &PostprocessWidget::OnDeleteEquation);
+    connect(watch_button_, &QPushButton::clicked, this, &PostprocessWidget::OnAddWatchExpression);
     connect(
-        open_env_button_, &QPushButton::clicked, this, &DemoWidget::OnOpenProject
+        open_env_button_, &QPushButton::clicked, this, &PostprocessWidget::OnOpenProject
     );
     connect(
-        save_project_button_, &QPushButton::clicked, this, &DemoWidget::OnSaveProject
+        save_project_button_, &QPushButton::clicked, this, &PostprocessWidget::OnSaveProject
     );
     connect(
         dataset_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-        &DemoWidget::OnDatasetSelectionChanged
+        &PostprocessWidget::OnDatasetSelectionChanged
     );
     connect(
         equation_list_, &QListWidget::itemSelectionChanged, this,
-        &DemoWidget::OnEquationListSelectionChanged
+        &PostprocessWidget::OnEquationListSelectionChanged
     );
     // Clicking a row re-runs the list-driven sync even when the selection did
     // not change (e.g. re-clicking the already-selected row after the tree was
@@ -220,7 +227,7 @@ void DemoWidget::SetupConnections()
     // Manager tree: selection change (keyboard + click) drives the property /
     // DataFrame panels.  Clicking also focuses (see OnManagerTreeClicked).
     connect(
-        manager_tree_, &QTreeView::clicked, this, &DemoWidget::OnManagerTreeClicked
+        manager_tree_, &QTreeView::clicked, this, &PostprocessWidget::OnManagerTreeClicked
     );
     connect(
         manager_tree_->selectionModel(), &QItemSelectionModel::selectionChanged, this,
@@ -245,7 +252,7 @@ void DemoWidget::SetupConnections()
             );
 }
 
-bool DemoWidget::SplitStatement(
+bool PostprocessWidget::SplitStatement(
     const QString &statement, QString *name, QString *expr
 )
 {
@@ -291,7 +298,7 @@ bool DemoWidget::SplitStatement(
     return true;
 }
 
-bool DemoWidget::IsValidIdentifier(const QString &name)
+bool PostprocessWidget::IsValidIdentifier(const QString &name)
 {
     if (name.isEmpty())
     {
@@ -314,7 +321,7 @@ bool DemoWidget::IsValidIdentifier(const QString &name)
     return true;
 }
 
-void DemoWidget::OnInsertEquation()
+void PostprocessWidget::OnInsertEquation()
 {
     QString name;
     QString expr;
@@ -332,9 +339,9 @@ void DemoWidget::OnInsertEquation()
 
     EquationManager &mgr = EquationManager::GetInstance();
 
-    // 全面预检：identifier 语法 + REL 保留名 + 重名。名字通过后
-    // AddEquation 不会因名字问题抛异常（parse / cycle 仍会创建方程并以
-    // 红色错误状态显示，由用户就地修复）。
+    // ȫ��Ԥ�죺identifier �﷨ + REL ������ + ����������ͨ����
+    // AddEquation �����������������쳣��parse / cycle �Իᴴ�����̲���
+    // ��ɫ����״̬��ʾ�����û��͵��޸�����
     if (!mgr.IsValidEquationName(name_std))
     {
         if (mgr.IsEquationExist(name_std))
@@ -399,7 +406,7 @@ void DemoWidget::OnInsertEquation()
     }
 }
 
-void DemoWidget::OnRedefineEquation()
+void PostprocessWidget::OnRedefineEquation()
 {
     const QString current_name = CurrentSelectedEquationName();
     if (current_name.isEmpty())
@@ -460,7 +467,7 @@ void DemoWidget::OnRedefineEquation()
     SelectEquationByName(current_name);
 }
 
-void DemoWidget::OnRenameEquation()
+void PostprocessWidget::OnRenameEquation()
 {
     const QString current_name = CurrentSelectedEquationName();
     if (current_name.isEmpty())
@@ -497,9 +504,9 @@ void DemoWidget::OnRenameEquation()
 
     EquationManager &mgr = EquationManager::GetInstance();
 
-    // 全面预检：identifier 语法 + REL 保留名 + 重名（名字未变的情形已在
-    // 上面提前 return，不会误报重名）。RenameEquation 随后不会因名字问题
-    // 抛异常。
+    // ȫ��Ԥ�죺identifier �﷨ + REL ������ + ����������δ�����������
+    // ������ǰ return����������������RenameEquation ��󲻻�����������
+    // ���쳣��
     if (!mgr.IsValidEquationName(trimmed_new.toStdString()))
     {
         if (mgr.IsEquationExist(trimmed_new.toStdString()))
@@ -521,7 +528,7 @@ void DemoWidget::OnRenameEquation()
             );
             return;
         }
-        // 兜底（前面对 IsValidIdentifier 的检查已覆盖大部分情形）。
+        // ���ף�ǰ��� IsValidIdentifier �ļ���Ѹ��Ǵ󲿷����Σ���
         QMessageBox::warning(
             this, "Invalid Name",
             "Name must be a valid identifier:\n"
@@ -561,7 +568,7 @@ void DemoWidget::OnRenameEquation()
     SelectEquationByName(trimmed_new);
 }
 
-void DemoWidget::OnDeleteEquation()
+void PostprocessWidget::OnDeleteEquation()
 {
     const QString current_name = CurrentSelectedEquationName();
     if (current_name.isEmpty())
@@ -613,7 +620,7 @@ void DemoWidget::OnDeleteEquation()
     RefreshEquationList();
 }
 
-void DemoWidget::OnAddWatchExpression()
+void PostprocessWidget::OnAddWatchExpression()
 {
     bool ok = false;
     const QString expression = QInputDialog::getText(
@@ -626,47 +633,25 @@ void DemoWidget::OnAddWatchExpression()
         return;
     }
 
-    const std::string trimmed = expression.trimmed().toStdString();
-    if (trimmed.empty())
-    {
-        QMessageBox::warning(this, "Invalid Expression", "Expression must not be empty.");
-        return;
-    }
-
-    // Add a watch tab that is NOT bound to any equation.  The host registers
-    // the expression with the manager (AddExpression) to get its id, then
-    // hands the id to the tab widget -- the tab widget itself never inspects
-    // expression strings.  (DataFrame views are REL-only; the tab widget uses
-    // the REL engine.)
-    EquationManager &mgr = EquationManager::GetInstance();
-
-    // AddExpression always creates the expression; a syntax error / cycle only
-    // keeps it off the dependency graph (status kError + message).  The tab is
-    // still opened so the user can see (and fix) what they typed.
-    ObjectId expr_id;
+    // Add a watch tab that is NOT bound to any equation.  AddExpression()
+    // registers the expression with the manager and opens its tab; a syntax
+    // error / cycle only keeps it off the dependency graph (status kError), so
+    // the tab still opens and shows the reason.
     try
     {
-        expr_id = mgr.AddExpression(trimmed, kWatchTagDefault);
+        AddExpression(expression, QString());
     }
     catch (const std::exception &e)
     {
         QMessageBox::warning(this, "Add Expression Failed", e.what());
-        return;
     }
-    if (expr_id.is_nil())
-    {
-        return;
-    }
-    // A broken expression is still opened as a tab (it renders its own error
-    // state); nothing is reported in the status bar.
-    data_frame_view_->AddExpression(expr_id);
 }
 
 // =========================================================================
 // Project file support
 // =========================================================================
 
-void DemoWidget::OnOpenProject()
+void PostprocessWidget::OnOpenProject()
 {
     // Suggest the bundled sample (<repo>/demo/demo_project.json) when it can
     // be located next to the executable / in the working directory.
@@ -686,7 +671,7 @@ void DemoWidget::OnOpenProject()
     LoadProject(path);
 }
 
-void DemoWidget::OnSaveProject()
+void PostprocessWidget::OnSaveProject()
 {
     // Default to the currently loaded project (if any), else the sample dir.
     QString start_dir = !project_path_.isEmpty()
@@ -719,48 +704,13 @@ void DemoWidget::OnSaveProject()
     }
 }
 
-void DemoWidget::LoadProject(const QString &path)
+void PostprocessWidget::LoadProject(const QString &path)
 {
+    // Interactive wrapper: same work as the RPC entry point, failures become
+    // a dialog instead of a JSON-RPC error.
     try
     {
-        // Drop the datasets of a previously loaded project so re-opening
-        // REPLACES the active set (rel::Environment::LoadFromConfig itself
-        // preserves existing registries).  A Block tab's frame is owned and
-        // cached by the Block, which RemoveDataset destroys -- close any open
-        // block tabs first so they do not dangle.
-        data_frame_view_->ClearBlockTabs();
-        for (const std::string &name : rel::Environment::DatasetNames())
-        {
-            rel::Environment::RemoveDataset(name);
-        }
-
-        // EquationManager::LoadFromFile clears equations/expressions, loads
-        // the referenced datasets (relative dataset paths are resolved against
-        // the project file's directory), restores equations/expressions, then
-        // Update()s to recompute all values.  Host signal connections survive
-        // (LoadFromFile does not disconnect external observers).
-        EquationManager::GetInstance().LoadFromFile(path.toStdString());
-
-        project_path_ = path;
-        RefreshDatasetCombo();
-        RefreshEquationList();
-        manager_tree_->Refresh();   // dataset tree changed
-
-        const std::vector<std::string> names = rel::Environment::DatasetNames();
-        QString status = QString("Loaded %1: %2 dataset(s)")
-                             .arg(QFileInfo(path).fileName())
-                             .arg(static_cast<int>(names.size()));
-        if (xdataset::Dataset *default_ds = rel::Environment::DefaultDataset())
-        {
-            status += QString(", default: %1")
-                          .arg(QString::fromStdString(default_ds->name()));
-        }
-        if (!rel::Environment::PythonPlugins().empty() &&
-            !rel::Environment::IsPythonAvailable())
-        {
-            status += "  (python_plugins ignored: no Python support in this build)";
-        }
-        status_label_->setText(status);
+        LoadProjectOrThrow(path);
     }
     catch (const std::exception &e)
     {
@@ -771,7 +721,355 @@ void DemoWidget::LoadProject(const QString &path)
     }
 }
 
-void DemoWidget::RefreshDatasetCombo()
+void PostprocessWidget::LoadProjectOrThrow(const QString &path)
+{
+    // Drop the datasets of a previously loaded project so re-opening
+    // REPLACES the active set (rel::Environment::LoadFromConfig itself
+    // preserves existing registries).  A Block tab's frame is owned and
+    // cached by the Block, which RemoveDataset destroys -- close any open
+    // block tabs first so they do not dangle.
+    data_frame_view_->ClearBlockTabs();
+    for (const std::string &name : rel::Environment::DatasetNames())
+    {
+        rel::Environment::RemoveDataset(name);
+    }
+
+    // EquationManager::LoadFromFile clears equations/expressions, loads
+    // the referenced datasets (relative dataset paths are resolved against
+    // the project file's directory), restores equations/expressions, then
+    // Update()s to recompute all values.  Host signal connections survive
+    // (LoadFromFile does not disconnect external observers).
+    EquationManager::GetInstance().LoadFromFile(path.toStdString());
+
+    project_path_ = path;
+    RefreshDatasetCombo();
+    RefreshEquationList();
+    manager_tree_->Refresh();   // dataset tree changed
+
+    const std::vector<std::string> names = rel::Environment::DatasetNames();
+    QString status = QString("Loaded %1: %2 dataset(s)")
+                         .arg(QFileInfo(path).fileName())
+                         .arg(static_cast<int>(names.size()));
+    if (xdataset::Dataset *default_ds = rel::Environment::DefaultDataset())
+    {
+        status += QString(", default: %1")
+                      .arg(QString::fromStdString(default_ds->name()));
+    }
+    if (!rel::Environment::PythonPlugins().empty() &&
+        !rel::Environment::IsPythonAvailable())
+    {
+        status += "  (python_plugins ignored: no Python support in this build)";
+    }
+    status_label_->setText(status);
+}
+
+// =========================================================================
+// Programmatic API (JSON-RPC surface + GUI share these)
+// =========================================================================
+
+void PostprocessWidget::ApplyStartupConfig(const QJsonObject &config,
+                                           QStringList *errors)
+{
+    auto fail = [errors](const QString &what) {
+        if (errors)
+        {
+            errors->append(what);
+        }
+    };
+
+    // ---- datasets (name / format / path) --------------------------------
+    for (const QJsonValue &value : config.value("datasets").toArray())
+    {
+        if (!value.isObject())
+        {
+            continue;
+        }
+        const QJsonObject o = value.toObject();
+        const QString name = o.value("name").toString().trimmed();
+        const QString path = o.value("path").toString().trimmed();
+        if (name.isEmpty() || path.isEmpty())
+        {
+            fail(QStringLiteral("dataset entry needs \"name\" and \"path\""));
+            continue;
+        }
+        const QString format = o.value("format").toString().trimmed();
+        try
+        {
+            AddDataset(name, format.isEmpty() ? QStringLiteral("hdf5") : format,
+                       path, false);
+        }
+        catch (const std::exception &e)
+        {
+            fail(QStringLiteral("dataset %1: %2").arg(name, QString::fromUtf8(e.what())));
+        }
+    }
+
+    // ---- default dataset -------------------------------------------------
+    const QString default_dataset = config.value("default_dataset").toString().trimmed();
+    if (!default_dataset.isEmpty())
+    {
+        try
+        {
+            SetDefaultDataset(default_dataset);
+        }
+        catch (const std::exception &e)
+        {
+            fail(QStringLiteral("default_dataset %1: %2")
+                     .arg(default_dataset, QString::fromUtf8(e.what())));
+        }
+    }
+
+    // ---- equations (name / content / tag) --------------------------------
+    for (const QJsonValue &value : config.value("equations").toArray())
+    {
+        if (!value.isObject())
+        {
+            continue;
+        }
+        const QJsonObject o = value.toObject();
+        const QString name = o.value("name").toString().trimmed();
+        const QString content = o.value("content").toString().trimmed();
+        if (name.isEmpty() || content.isEmpty())
+        {
+            fail(QStringLiteral("equation entry needs \"name\" and \"content\""));
+            continue;
+        }
+        try
+        {
+            AddEquation(name, content, o.value("tag").toString(), true);
+        }
+        catch (const std::exception &e)
+        {
+            fail(QStringLiteral("equation %1: %2").arg(name, QString::fromUtf8(e.what())));
+        }
+    }
+
+    // ---- expressions (content / tag) -------------------------------------
+    for (const QJsonValue &value : config.value("expressions").toArray())
+    {
+        if (!value.isObject())
+        {
+            continue;
+        }
+        const QJsonObject o = value.toObject();
+        const QString content = o.value("content").toString().trimmed();
+        if (content.isEmpty())
+        {
+            fail(QStringLiteral("expression entry needs \"content\""));
+            continue;
+        }
+        try
+        {
+            AddExpression(content, o.value("tag").toString());
+        }
+        catch (const std::exception &e)
+        {
+            fail(QStringLiteral("expression %1: %2")
+                     .arg(content, QString::fromUtf8(e.what())));
+        }
+    }
+
+    RefreshEquationList();
+    RefreshDatasetCombo();
+    manager_tree_->Refresh();
+}
+
+ObjectId PostprocessWidget::AddEquation(const QString &name, const QString &content,
+                                        const QString &tag, bool redefine)
+{
+    const std::string name_std = name.trimmed().toStdString();
+    const std::string content_std = content.trimmed().toStdString();
+    if (content_std.empty())
+    {
+        throw std::runtime_error("equation content must not be empty");
+    }
+
+    EquationManager &mgr = EquationManager::GetInstance();
+    const std::string tag_std =
+        tag.isEmpty() ? std::string(kEquationTagDefault) : tag.toStdString();
+
+    ObjectId id;
+    if (mgr.IsEquationExist(name_std))
+    {
+        if (!redefine)
+        {
+            throw std::runtime_error("equation already exists: " + name_std);
+        }
+        id = mgr.EditEquation(name_std, content_std);
+    }
+    else
+    {
+        if (!EquationManager::IsValidEquationIdentifier(name_std))
+        {
+            throw std::runtime_error("invalid or reserved equation name: " + name_std);
+        }
+        // A parse error / cycle does NOT throw: the equation is created with
+        // status kError and stays off the dependency graph until it heals.
+        id = mgr.AddEquation(name_std, content_std, tag_std);
+    }
+    mgr.Update();
+
+    RefreshEquationList();
+    SelectEquationByName(name.trimmed());
+    return id;
+}
+
+ObjectId PostprocessWidget::AddExpression(const QString &content, const QString &tag)
+{
+    const std::string content_std = content.trimmed().toStdString();
+    if (content_std.empty())
+    {
+        throw std::runtime_error("expression content must not be empty");
+    }
+
+    const std::string tag_std =
+        tag.isEmpty() ? std::string(kWatchTagDefault) : tag.toStdString();
+
+    const ObjectId id =
+        EquationManager::GetInstance().AddExpression(content_std, tag_std);
+    if (!id.is_nil())
+    {
+        data_frame_view_->AddExpression(id);
+    }
+    return id;
+}
+
+void PostprocessWidget::AddDataset(const QString &name, const QString &format,
+                                   const QString &path, bool make_default)
+{
+    const std::string name_std = name.trimmed().toStdString();
+    if (name_std.empty())
+    {
+        throw std::runtime_error("dataset name must not be empty");
+    }
+    if (!QFileInfo::exists(path))
+    {
+        throw std::runtime_error("dataset file not found: " + path.toStdString());
+    }
+
+    // A Block tab's frame is owned by the Block; replacing a dataset of the
+    // same name destroys those Blocks, so close block tabs first.
+    if (rel::Environment::FindDataset(name_std) != nullptr)
+    {
+        data_frame_view_->ClearBlockTabs();
+        rel::Environment::RemoveDataset(name_std);
+    }
+
+    const std::string format_std =
+        format.isEmpty() ? std::string("hdf5") : format.toStdString();
+    xdataset::Dataset loaded = xdataset::DatasetIO::Load(
+        format_std, QDir::toNativeSeparators(path).toStdString(), name_std);
+    rel::Environment::AddDataset(std::unique_ptr<xdataset::Dataset>(
+        new xdataset::Dataset(std::move(loaded))));
+
+    if (make_default || rel::Environment::DefaultDatasetName().empty())
+    {
+        rel::Environment::SetDefaultDataset(name_std);
+    }
+
+    // Bare DataArray names resolve against the default dataset, and a new
+    // dataset can heal equations that were detached -- recompute everything.
+    EquationManager::GetInstance().Update();
+
+    RefreshDatasetCombo();
+    RefreshEquationList();
+    manager_tree_->Refresh();
+    status_label_->setText(
+        QString("Added dataset %1 (%2)").arg(name, format_std.c_str()));
+}
+
+void PostprocessWidget::RemoveDataset(const QString &name)
+{
+    const std::string name_std = name.trimmed().toStdString();
+    if (rel::Environment::FindDataset(name_std) == nullptr)
+    {
+        throw std::runtime_error("no such dataset: " + name_std);
+    }
+
+    // Block tabs hold a pointer into the Block's cached frame -- drop them
+    // before the Dataset (and its Blocks) are destroyed.
+    data_frame_view_->ClearBlockTabs();
+    rel::Environment::RemoveDataset(name_std);
+    EquationManager::GetInstance().Update();
+
+    RefreshDatasetCombo();
+    RefreshEquationList();
+    manager_tree_->Refresh();
+    status_label_->setText(QString("Removed dataset %1").arg(name));
+}
+
+void PostprocessWidget::SetDefaultDataset(const QString &name)
+{
+    const std::string name_std = name.trimmed().toStdString();
+    if (rel::Environment::FindDataset(name_std) == nullptr)
+    {
+        throw std::runtime_error("no such dataset: " + name_std);
+    }
+
+    // Route through the combo so the UI state and the REL default stay in
+    // sync (the combo handler performs SetDefaultDataset + Update + refresh).
+    const int index = dataset_combo_->findText(name.trimmed());
+    if (index >= 0 && index != dataset_combo_->currentIndex())
+    {
+        dataset_combo_->setCurrentIndex(index);
+        return;  // currentIndexChanged -> OnDatasetSelectionChanged did the work
+    }
+    OnDatasetSelectionChanged(index >= 0 ? index : -1);
+    if (index < 0)
+    {
+        rel::Environment::SetDefaultDataset(name_std);
+        EquationManager::GetInstance().Update();
+        RefreshDatasetCombo();
+        manager_tree_->Refresh();
+    }
+}
+
+std::vector<std::string> PostprocessWidget::DatasetNames() const
+{
+    std::vector<std::string> names = rel::Environment::DatasetNames();
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+QString PostprocessWidget::DefaultDatasetName() const
+{
+    return QString::fromStdString(rel::Environment::DefaultDatasetName());
+}
+
+void PostprocessWidget::RaiseWindow()
+{
+    // A raise request from another process needs the full dance: un-minimize,
+    // re-assert the window, then activate.  On Windows a plain raise() from a
+    // background process is ignored, so the always-on-top flag is toggled to
+    // force the Z-order change without leaving the window pinned.
+    QWidget *window = this->window();
+    if (window->isMinimized() || !window->isVisible())
+    {
+        window->showNormal();
+    }
+    window->raise();
+
+#ifdef Q_OS_WIN
+    const bool was_on_top = window->windowFlags().testFlag(Qt::WindowStaysOnTopHint);
+    if (!was_on_top)
+    {
+        window->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+        window->show();
+        window->setWindowFlag(Qt::WindowStaysOnTopHint, false);
+        window->show();
+    }
+#endif
+
+    window->activateWindow();
+    QApplication::alert(window);
+}
+
+void PostprocessWidget::SetStatusText(const QString &text)
+{
+    status_label_->setText(text);
+}
+
+void PostprocessWidget::RefreshDatasetCombo()
 {
     dataset_combo_->blockSignals(true);
     dataset_combo_->clear();
@@ -798,7 +1096,7 @@ void DemoWidget::RefreshDatasetCombo()
     dataset_combo_->blockSignals(false);
 }
 
-void DemoWidget::OnDatasetSelectionChanged(int index)
+void PostprocessWidget::OnDatasetSelectionChanged(int index)
 {
     if (index < 0)
     {
@@ -830,7 +1128,7 @@ void DemoWidget::OnDatasetSelectionChanged(int index)
     status_label_->setText(QString("Default dataset: %1").arg(name));
 }
 
-void DemoWidget::RefreshEquationList()
+void PostprocessWidget::RefreshEquationList()
 {
     // Remember the current selection so a refresh (insert / rename / delete)
     // keeps the same equations selected and their tabs stable.
@@ -904,14 +1202,14 @@ void DemoWidget::RefreshEquationList()
     OnEquationListSelectionChanged();
 }
 
-void DemoWidget::UpdateEquationButtons(bool enabled)
+void PostprocessWidget::UpdateEquationButtons(bool enabled)
 {
     redefine_button_->setEnabled(enabled);
     rename_button_->setEnabled(enabled);
     delete_button_->setEnabled(enabled);
 }
 
-void DemoWidget::OnEquationListSelectionChanged()
+void PostprocessWidget::OnEquationListSelectionChanged()
 {
     // The equation LIST is the last-clicked panel (mirrors from the tree
     // block this widget's signals).  Per the rules:
@@ -968,7 +1266,7 @@ void DemoWidget::OnEquationListSelectionChanged()
     data_frame_view_->SyncTabs(selected_ids);
 }
 
-QString DemoWidget::CurrentSelectedEquationName() const
+QString PostprocessWidget::CurrentSelectedEquationName() const
 {
     const QListWidgetItem *item = equation_list_->currentItem();
     if (!item)
@@ -979,7 +1277,7 @@ QString DemoWidget::CurrentSelectedEquationName() const
     return item->text();
 }
 
-void DemoWidget::SelectEquationByName(const QString &name)
+void PostprocessWidget::SelectEquationByName(const QString &name)
 {
     const QList<QListWidgetItem *> items =
         equation_list_->findItems(name, Qt::MatchExactly);
@@ -993,7 +1291,7 @@ void DemoWidget::SelectEquationByName(const QString &name)
 // Manager tree panel routing
 // =========================================================================
 
-void DemoWidget::OnManagerTreeClicked()
+void PostprocessWidget::OnManagerTreeClicked()
 {
     // Selection changes are already routed through OnManagerTreeSelectionChanged
     // (the selectionModel's selectionChanged fires on click too).  Because the
@@ -1003,7 +1301,7 @@ void DemoWidget::OnManagerTreeClicked()
     manager_tree_->setFocus();
 }
 
-void DemoWidget::OnManagerTreeSelectionChanged()
+void PostprocessWidget::OnManagerTreeSelectionChanged()
 {
     using SelectionInfo = ExplorerView::SelectionInfo;
     using NodeKind = ExplorerView::NodeKind;

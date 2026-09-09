@@ -2,9 +2,11 @@ cmake_minimum_required(VERSION 3.15)
 project(xequation LANGUAGES CXX)
 
 if(ENABLE_GUI_SUPPORT)
-    find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Svg)
+    # Network is needed by the RPC layer: QLocalServer / QLocalSocket (the
+    # local-socket transport) live there.
+    find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Svg Network)
     add_library(qt_config INTERFACE)
-    target_link_libraries(qt_config INTERFACE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Svg)
+    target_link_libraries(qt_config INTERFACE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Svg Qt5::Network)
 endif()
 
 set(CMAKE_CXX_STANDARD 11)

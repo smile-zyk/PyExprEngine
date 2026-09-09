@@ -1,8 +1,15 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
 
+#include <string>
+#include <vector>
+
+#include "core/equation_common.h"
+#include "core/equation_manager.h"
 #include "core/equation_signals_manager.h"
 
 class QComboBox;
@@ -17,7 +24,7 @@ namespace gui
 {
 
 // =========================================================================
-// DemoWidget -- a REL-engine demo built on EquationManager::GetInstance().
+// PostprocessWidget -- a REL-engine demo built on EquationManager::GetInstance().
 //
 // Features:
 //   + Input: name + expression (e.g. `y = [1, 2, 3]`); "Insert" inserts a
@@ -28,13 +35,60 @@ namespace gui
 //     DataFrame table (lazy loading, fetchMore).
 // =========================================================================
 
-class DemoWidget : public QWidget
+class PostprocessWidget : public QWidget
 {
     Q_OBJECT
 
   public:
-    explicit DemoWidget(QWidget *parent = nullptr);
-    ~DemoWidget() override;
+    explicit PostprocessWidget(QWidget *parent = nullptr);
+    ~PostprocessWidget() override;
+
+    // =====================================================================
+    // Programmatic API (shared by the GUI buttons and the RPC service)
+    //
+    // Every method reports failures by throwing std::runtime_error (or an
+    // xequation::EquationException) instead of popping up a dialog, so the
+    // RPC layer can turn them into JSON-RPC error objects.  The interactive
+    // On*() slots below wrap them and show a QMessageBox instead.
+    // =====================================================================
+
+    /// Load a project file (datasets + python plugins + equations +
+    /// expressions), replacing the currently loaded one.  Throws on failure.
+    void LoadProjectOrThrow(const QString &path);
+
+    /// Apply the inline parts of a startup config (the same schema as
+    /// demo_project.json): datasets / default_dataset / equations /
+    /// expressions.  Failures are collected into @p errors instead of thrown.
+    void ApplyStartupConfig(const QJsonObject &config, QStringList *errors = nullptr);
+
+    /// Add (or redefine, when @p redefine is true and the name exists) an
+    /// equation.  Returns its ObjectId.
+    xequation::ObjectId AddEquation(const QString &name, const QString &content,
+                                    const QString &tag, bool redefine);
+
+    /// Register a watch expression and open a tab for it.  Returns its id.
+    xequation::ObjectId AddExpression(const QString &content, const QString &tag);
+
+    /// Load one dataset file into the REL environment (format: "hdf5" /
+    /// "touchstone") under @p name.  Throws on failure.
+    void AddDataset(const QString &name, const QString &format, const QString &path,
+                    bool make_default);
+
+    /// Remove a dataset from the REL environment.
+    void RemoveDataset(const QString &name);
+
+    /// Make @p name the REL default dataset and recompute.
+    void SetDefaultDataset(const QString &name);
+
+    /// Names of all registered datasets (sorted), and the default one.
+    std::vector<std::string> DatasetNames() const;
+    QString DefaultDatasetName() const;
+
+    /// Bring this window to the front (de-iconify + raise + activate).
+    void RaiseWindow();
+
+    /// Set the status-bar text.
+    void SetStatusText(const QString &text);
 
   private:
     void SetupUI();
