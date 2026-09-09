@@ -20,13 +20,15 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 enable_testing()
 
 # ---- REL runtime (rel::Value) -------------------------------------------
-# xdataset 和 REL 以 git submodule 形式引入（3rd/xdataset、3rd/REL），
-# 但是【不 invoke 上游的 CMakeLists.txt】—— 上游以独立 project() 组织，
-# 会污染导出 target / CTest。这里由 3rd/vendor 重写构建，只构造 xequation
-# 需要的 target：xdataset / rel。
-# Python bridge 可选：BUILD_PYTHON=ON（默认开）时 rel 编译嵌入式 CPython
-# 绑定（pybind11::embed + python_loader），env.json 的 python_plugins 才可加载；
-# 宿主（demo）通过 python_manager 初始化/销毁解释器。
+# xdataset and REL are git submodules (3rd/xdataset, 3rd/REL), but their
+# upstream CMakeLists.txt is NOT invoked: upstream is organized as a standalone
+# project() and would pollute the exported targets / CTest.  3rd/vendor
+# rewrites the build and only creates the targets xequation needs: xdataset,
+# rel.
+# Python bridge is optional: with BUILD_PYTHON=ON (default) rel compiles the
+# embedded CPython bindings (pybind11::embed + python_loader) and env.json's
+# python_plugins can load; the host (demo) initializes / shuts down the
+# interpreter via python_manager.
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/3rd/REL/include/value.h")
     message(FATAL_ERROR
         "REL submodule not found at ${CMAKE_CURRENT_SOURCE_DIR}/3rd/REL. "

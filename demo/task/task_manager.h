@@ -28,9 +28,10 @@ class TaskManager : public QObject
 
     void EnqueueTask(std::unique_ptr<Task> task);
 
-    // 便捷重载：直接传入可调用对象（lambda / 函数指针 / std::function 等）
-    // SFINAE 约束：仅当参数能构造成 FuncTask::Callback（即 std::function<void()>）时参与重载，
-    // 避免抢走 EnqueueTask(std::unique_ptr<Task>) 的匹配（如 EnqueueTask(std::move(task))）。
+    // Convenience overload taking a callable (lambda / function pointer /
+    // std::function).  SFINAE-restricted to callables convertible to
+    // FuncTask::Callback so it never steals the unique_ptr<Task> overload
+    // (e.g. EnqueueTask(std::move(task))).
     template <typename Callable,
               typename std::enable_if<std::is_constructible<FuncTask::Callback, Callable>::value, int>::type = 0>
     void EnqueueTask(Callable &&callable, const QString &title = QString())

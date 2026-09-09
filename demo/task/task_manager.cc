@@ -70,7 +70,8 @@ void TaskManager::CancelTask(const QUuid &task_id)
         if (task_it != all_tasks_.end() && task_it->second)
         {
             task_it->second->state_.store(Task::State::kCanceling);
-            // RequestCancel 只是原子置位，直接同步调用即可，避免后续任务被清理后的悬垂指针
+            // RequestCancel only sets an atomic flag, so calling it directly
+            // is safe and avoids a dangling pointer if the queue is cleared.
             task_it->second->RequestCancel();
         }
         return;
@@ -130,7 +131,7 @@ void TaskManager::Shutdown()
         if (task_it != all_tasks_.end() && task_it->second)
         {
             task_it->second->state_.store(Task::State::kCanceling);
-            // RequestCancel 只是原子置位，直接同步调用即可
+            // RequestCancel only sets an atomic flag; a direct call is fine.
             task_it->second->RequestCancel();
         }
     }
@@ -228,7 +229,8 @@ void TaskManager::ExecuteTask(Task *task)
     }
     catch (const std::exception &e)
     {
-        // QtConcurrent 会静默吞掉异常，这里记录错误信息并确保任务能正常收尾
+        // QtConcurrent swallows exceptions, so record the error here and make
+        // sure the task still finishes cleanly.
         task->error_message_ = QString::fromUtf8(e.what());
     }
     catch (...)

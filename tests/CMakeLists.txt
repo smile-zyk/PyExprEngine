@@ -17,8 +17,9 @@ function(add_gtest_executable target_name test_label source_file)
         GTest::gmock_main
     )
 
-    # REL 运行时 DLL（rel / xdataset）拷贝到测试可执行文件目录，
-    # 否则 ctest 运行时找不到（MSYS2 报 "error while loading shared libraries"）。
+    # Copy the REL runtime DLLs (rel / xdataset) next to the test executable,
+    # otherwise ctest cannot find them (MSYS2 reports "error while loading
+    # shared libraries").
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:rel>"

@@ -13,7 +13,8 @@ ToastProgressBar::ToastProgressBar(const QString &title, int duration, QWidget *
     : QDialog(parent), duration_(duration), y_offset_(0), is_completed_(false), is_cancel_requested_(false), is_busy_(false)
 {
     setWindowTitle(title);
-    // frameless：无系统标题栏，窗口 geometry 与 move 坐标一致，位置计算才正确
+    // Frameless: no system title bar, so the window geometry matches the move
+    // coordinates and the position math is correct.
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     setMinimumWidth(500);
     SetupUI();
@@ -82,8 +83,9 @@ void ToastProgressBar::Cancel()
     if (is_completed_)
         return;
 
-    // 可能是按钮触发的取消（is_cancel_requested_ 已置位），
-    // 也可能是 TaskManager::CancelTask 等外部主动取消，此时补标记并直接淡出
+    // Either the cancel button was clicked (is_cancel_requested_ already set)
+    // or something external cancelled us (e.g. TaskManager::CancelTask); mark
+    // it and fade out.
     if (!is_cancel_requested_)
     {
         is_cancel_requested_ = true;

@@ -96,13 +96,13 @@ class Task : public QObject
     friend class TaskManager;
 };
 
-// 通用任务：包装任意可调用对象，便于直接 Enqueue 一个 lambda
+// Generic task: wraps any callable so a lambda can be enqueued directly.
 class FuncTask : public Task
 {
     Q_OBJECT
   public:
     using Callback = std::function<void()>;
-    // call 为 null 时仅作为跑空任务的占位
+    // A null call makes this a no-op placeholder task.
     explicit FuncTask(const QString &title, Callback call = nullptr, QObject *parent = nullptr)
         : Task(title, parent), call_(std::move(call))
     {
